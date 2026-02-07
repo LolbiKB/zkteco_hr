@@ -1,3 +1,6 @@
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 export interface FrappeEmployee {
   name: string // Frappe document ID
   employee_id: string // Badge number
@@ -17,17 +20,36 @@ export interface EmployeeStatus {
   totalScans: number
 }
 
-// Mock Frappe HR API - Replace with actual API call
 export async function fetchFrappeEmployees(): Promise<FrappeEmployee[]> {
-  // TODO: Replace with actual Frappe HR API call
-  // const response = await fetch('https://your-frappe.com/api/resource/Employee', {
-  //   headers: {
-  //     'Authorization': 'token YOUR_API_KEY:YOUR_API_SECRET'
-  //   }
-  // })
-  // return response.json()
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/frappe-employees`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    })
 
-  // Mock data for now
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`)
+    }
+
+    const result = await response.json()
+    
+    // If API returns error, use mock data
+    if (result.error || result.useMock) {
+      console.warn('Using mock data:', result.error)
+      return getMockEmployees()
+    }
+
+    return result.data
+  } catch (error) {
+    console.error('Error fetching Frappe HR employees:', error)
+    console.warn('Falling back to mock data')
+    return getMockEmployees()
+  }
+}
+
+function getMockEmployees(): FrappeEmployee[] {
   return [
     {
       name: "EMP001",

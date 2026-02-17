@@ -1,6 +1,5 @@
 import type { BaseFilters } from '@/components/ui/generic-data-table'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+import { supabase } from '@/lib/supabase'
 
 // Attendance Log Filters
 export interface AttendanceLogFilters extends BaseFilters {
@@ -45,61 +44,72 @@ export interface AttendanceLogsResponse {
 }
 
 /**
- * Build query string from filters
- */
-function buildQueryString(filters: AttendanceLogFilters): string {
-  const params = new URLSearchParams()
-
-  if (filters.page) params.append('page', filters.page.toString())
-  if (filters.limit) params.append('limit', filters.limit.toString())
-  if (filters.sort) params.append('sort', filters.sort)
-  if (filters.order) params.append('order', filters.order)
-  if (filters.search) params.append('search', filters.search)
-  if (filters.device_sn) params.append('device_sn', filters.device_sn)
-  if (filters.user_pin) params.append('user_pin', filters.user_pin)
-  if (filters.status !== undefined) params.append('status', filters.status.toString())
-  if (filters.verify_type !== undefined) params.append('verify_type', filters.verify_type.toString())
-  if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-  if (filters.dateTo) params.append('dateTo', filters.dateTo)
-
-  return params.toString()
-}
-
-/**
- * Get auth headers for API requests
- */
-function getAuthHeaders(): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-  }
-}
-
-/**
- * Handle API response with error checking
- */
-async function handleApiResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      message: 'An error occurred while fetching data'
-    }))
-    throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`)
-  }
-
-  return response.json()
-}
-
-/**
- * Fetch attendance logs from API
+ * Fetch attendance logs from database with RLS
  */
 export async function fetchAttendanceLogs(
   filters: AttendanceLogFilters
 ): Promise<AttendanceLogsResponse> {
-  const queryString = buildQueryString(filters)
-  const response = await fetch(`${API_BASE_URL}/api-attendance-logs?${queryString}`, {
-    headers: getAuthHeaders(),
-  })
+  const page = filters.page || 1
+  const limit = filters.limit || 20
+  const sortBy = filters.sort || 'check_time'
+  const sortOrder = filters.order || 'desc'
+  const from = (page - 1) * limit
+  const to = from + limit - 1
 
-  return handleApiResponse<AttendanceLogsResponse>(response)
+  // Build query
+  let query = supabase
+    .from('attendance_logs')
+    .select('*, devices(serial_number, name, location)', { count: 'exact' })
+
+  // Apply filters
+  if (filters.search) {
+    query = query.or(`device_sn.ilike.%${filters.search}%,user_pin.ilike.%${filters.search}%`)
+  }
+  if (filters.device_sn) {
+    query = query.eq('device_sn', filters.device_sn)
+  }
+  if (filters.user_pin) {
+    query = query.ilike('user_pin', `%${filters.user_pin}%`)
+  }
+  if (filters.status !== undefined) {
+    query = query.eq('status', filters.status)
+  }
+  if (filters.verify_type !== undefined) {
+    query = query.eq('verify_type', filters.verify_type)
+  }
+  if (filters.dateFrom) {
+    query = query.gte('check_time', filters.dateFrom)
+  }
+  if (filters.dateTo) {
+    query = query.lte('check_time', filters.dateTo)
+  }
+
+  // Apply sorting and pagination
+  query = query
+    .order(sortBy, { ascending: sortOrder === 'asc' })
+    .range(from, to)
+
+  const { data, error, count } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch attendance logs: ${error.message}`)
+  }
+
+  const total = count || 0
+  const totalPages = Math.ceil(total / limit)
+
+  return {
+    success: true,
+    data: data || [],
+    meta: {
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    },
+  }
 }
 
 /**
@@ -108,17 +118,61 @@ export async function fetchAttendanceLogs(
 export async function exportAttendanceLogs(
   filters: AttendanceLogFilters
 ): Promise<Blob> {
-  const queryString = buildQueryString(filters)
-  const response = await fetch(`${API_BASE_URL}/api-attendance-logs/export?${queryString}`, {
-    headers: {
-      ...getAuthHeaders(),
-      'Accept': 'text/csv',
-    },
-  })
+  // Fetch all matching records (no pagination for export)
+  let query = supabase
+    .from('attendance_logs')
+    .select('*, devices(serial_number, name, location)')
 
-  if (!response.ok) {
-    throw new Error(`Export failed: ${response.statusText}`)
+  // Apply same filters
+  if (filters.search) {
+    query = query.or(`device_sn.ilike.%${filters.search}%,user_pin.ilike.%${filters.search}%`)
+  }
+  if (filters.device_sn) {
+    query = query.eq('device_sn', filters.device_sn)
+  }
+  if (filters.user_pin) {
+    query = query.ilike('user_pin', `%${filters.user_pin}%`)
+  }
+  if (filters.status !== undefined) {
+    query = query.eq('status', filters.status)
+  }
+  if (filters.verify_type !== undefined) {
+    query = query.eq('verify_type', filters.verify_type)
+  }
+  if (filters.dateFrom) {
+    query = query.gte('check_time', filters.dateFrom)
+  }
+  if (filters.dateTo) {
+    query = query.lte('check_time', filters.dateTo)
   }
 
-  return response.blob()
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to export attendance logs: ${error.message}`)
+  }
+
+  // Convert to CSV
+  const csv = convertToCSV(data || [])
+  return new Blob([csv], { type: 'text/csv' })
+}
+
+/**
+ * Convert attendance logs to CSV format
+ */
+function convertToCSV(logs: AttendanceLogEntry[]): string {
+  const headers = ['ID', 'Device SN', 'Device Name', 'User PIN', 'Check Time', 'Status', 'Verify Type']
+  const rows = logs.map(log => [
+    log.id,
+    log.device_sn,
+    log.devices?.name || '',
+    log.user_pin,
+    log.check_time,
+    log.status,
+    log.verify_type,
+  ])
+
+  return [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n')
 }

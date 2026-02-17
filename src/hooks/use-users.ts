@@ -11,6 +11,7 @@ export const userKeys = {
   detail: (id: string) => [...userKeys.details(), id] as const,
   syncStatus: (id: string) => [...userKeys.detail(id), 'sync-status'] as const,
   commandQueue: (id: string) => [...userKeys.detail(id), 'command-queue'] as const,
+  biometrics: (id: string) => [...userKeys.detail(id), 'biometrics'] as const,
 }
 
 // Hook: Fetch users with filters
@@ -108,6 +109,44 @@ export function useSyncUser() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to sync user: ${error.message}`)
+    },
+  })
+}
+
+// Hook: Get biometric inventory for a user
+export function useUserBiometrics(userId: string) {
+  return useQuery({
+    queryKey: userKeys.biometrics(userId),
+    queryFn: () => UserService.getUserBiometrics(userId),
+    enabled: !!userId,
+  })
+}
+
+// Hook: Start biometric enrollment on a device
+export function useStartEnrollment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      deviceSn,
+      biometricType,
+      fingerId,
+    }: {
+      userId: string
+      deviceSn: string
+      biometricType: 'fingerprint' | 'face'
+      fingerId?: number
+    }) => {
+      return UserService.startEnrollment(userId, deviceSn, biometricType, fingerId)
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(variables.userId) })
+      const label = variables.biometricType === 'fingerprint' ? 'Fingerprint' : 'Face'
+      toast.success(`${label} enrollment sent to device`)
+    },
+    onError: (error: Error) => {
+      toast.error(`Enrollment failed: ${error.message}`)
     },
   })
 }

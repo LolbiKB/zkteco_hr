@@ -4,24 +4,22 @@ import {
   type BaseTableMeta,
 } from '@/components/ui/generic-data-table'
 import type {
-  AttendanceLogEntry,
-  AttendanceLogFilters,
-} from '@/services/attendance-log-service'
+  DeviceEntry,
+  DeviceFilters,
+} from '@/services/device-service'
 
-interface AttendanceLogDataTableProps {
-  columns: ColumnDef<AttendanceLogEntry, any>[]
-  data: AttendanceLogEntry[]
+interface DeviceDataTableProps {
+  columns: ColumnDef<DeviceEntry, any>[]
+  data: DeviceEntry[]
   meta?: BaseTableMeta
   loading?: boolean
   isFetching?: boolean
-  filters: AttendanceLogFilters
-  onFiltersChange: (filters: AttendanceLogFilters) => void
+  filters: DeviceFilters
+  onFiltersChange: (filters: DeviceFilters) => void
   onRefresh?: () => void
-  onExportLogs?: () => void
-  isExporting?: boolean
 }
 
-export function AttendanceLogDataTable({
+export function DeviceDataTable({
   columns,
   data,
   meta,
@@ -30,9 +28,7 @@ export function AttendanceLogDataTable({
   filters,
   onFiltersChange,
   onRefresh,
-  onExportLogs,
-  isExporting = false,
-}: AttendanceLogDataTableProps) {
+}: DeviceDataTableProps) {
   return (
     <GenericDataTable
       columns={columns}
@@ -42,9 +38,9 @@ export function AttendanceLogDataTable({
       filters={filters}
       onFiltersChange={onFiltersChange}
       config={{
-        entityName: 'attendance logs',
-        entityNameSingular: 'attendance log',
-        searchPlaceholder: 'Search by user PIN or device...',
+        entityName: 'devices',
+        entityNameSingular: 'device',
+        searchPlaceholder: 'Search by serial number, name, or location...',
       }}
       actions={{
         onRefresh,

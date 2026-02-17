@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { X, ChevronsUpDown } from "lucide-react"
 
 // ========================================
@@ -167,4 +167,92 @@ export function BadgeCell({
   variant = 'secondary'
 }: BadgeCellProps) {
   return <Badge variant={variant}>{text}</Badge>
+}
+
+interface AvatarCellProps {
+  photoUrl?: string | null
+  fallbackText: string
+  size?: 'sm' | 'md' | 'lg'
+}
+
+export function AvatarCell({
+  photoUrl,
+  fallbackText,
+  size = 'md'
+}: AvatarCellProps) {
+  const sizeClasses = {
+    sm: 'h-8 w-8 text-xs',
+    md: 'h-10 w-10 text-sm',
+    lg: 'h-12 w-12 text-base'
+  }
+
+  // Get initials from fallback text (max 2 characters)
+  const getInitials = (text: string) => {
+    return text
+      .split(' ')
+      .map(part => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
+  }
+
+  // Get pixel size for image optimization
+  const pixelSizes = {
+    sm: 32,
+    md: 40,
+    lg: 48
+  }
+
+  // Optimize image URL with size parameter if it's a pravatar or similar service
+  const optimizedPhotoUrl = photoUrl ? (
+    photoUrl.includes('pravatar.cc') || photoUrl.includes('placeholder')
+      ? `${photoUrl.split('?')[0]}?s=${pixelSizes[size]}`
+      : photoUrl
+  ) : null
+
+  return (
+    <Avatar className={sizeClasses[size]}>
+      {optimizedPhotoUrl && (
+        <AvatarImage
+          src={optimizedPhotoUrl}
+          alt={fallbackText}
+          className="object-cover"
+        />
+      )}
+      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+        {getInitials(fallbackText)}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+interface UserCellProps {
+  photoUrl?: string | null
+  name: string
+  secondaryText?: string
+  avatarSize?: 'sm' | 'md' | 'lg'
+}
+
+export function UserCell({
+  photoUrl,
+  name,
+  secondaryText,
+  avatarSize = 'sm'
+}: UserCellProps) {
+  return (
+    <div className="flex items-center gap-3">
+      <AvatarCell
+        photoUrl={photoUrl}
+        fallbackText={name}
+        size={avatarSize}
+      />
+      <div className="flex flex-col">
+        <span className="font-medium">{name}</span>
+        {secondaryText && (
+          <span className="text-sm text-muted-foreground">{secondaryText}</span>
+        )}
+      </div>
+    </div>
+  )
 }

@@ -165,6 +165,7 @@ export function GenericDataTable<TData, TFilters extends BaseFilters>({
       }
     },
     onSortingChange: handleSortingChange,
+    meta: actions,
   })
 
   const searchPlaceholder = config.searchPlaceholder || `Search ${config.entityName}...`

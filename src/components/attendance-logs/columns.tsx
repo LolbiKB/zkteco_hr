@@ -4,7 +4,6 @@ import {
   SelectFilterHeader,
   DateFilterHeader,
   TwoLineTextCell,
-  BadgeCell,
 } from '@/components/ui/table-components'
 import type { AttendanceLogEntry } from '@/services/attendance-log-service'
 
@@ -21,18 +20,18 @@ interface CreateAttendanceLogColumnsProps {
 }
 
 // Verify type mapping
-const VERIFY_TYPES: Record<number, { label: string; variant: 'default' | 'secondary' }> = {
-  0: { label: 'Password', variant: 'secondary' },
-  1: { label: 'Fingerprint', variant: 'default' },
-  15: { label: 'Face', variant: 'default' },
-  255: { label: 'Other', variant: 'secondary' },
+const VERIFY_TYPES: Record<number, string> = {
+  0: 'Password',
+  1: 'Fingerprint',
+  15: 'Face',
+  255: 'Other',
 }
 
 // Status mapping
-const STATUS_TYPES: Record<number, { label: string; variant: 'default' | 'secondary' | 'destructive' }> = {
-  0: { label: 'Check-In', variant: 'default' },
-  1: { label: 'Check-Out', variant: 'secondary' },
-  255: { label: 'Unknown', variant: 'destructive' },
+const STATUS_TYPES: Record<number, string> = {
+  0: 'Check-In',
+  1: 'Check-Out',
+  255: 'Unknown',
 }
 
 export function createAttendanceLogColumns({
@@ -62,13 +61,11 @@ export function createAttendanceLogColumns({
       cell: ({ row }) => {
         const timestamp = parseISO(row.getValue('check_time'))
         return (
-          <div className="py-2">
-            <TwoLineTextCell
-              mainText={format(timestamp, 'MMM d, yyyy')}
-              secondaryText={format(timestamp, 'h:mm a')}
-              mainClassName="font-medium"
-            />
-          </div>
+          <TwoLineTextCell
+            mainText={format(timestamp, 'MMM d, yyyy')}
+            secondaryText={format(timestamp, 'h:mm a')}
+            mainClassName="font-medium"
+          />
         )
       },
     },
@@ -88,8 +85,8 @@ export function createAttendanceLogColumns({
       cell: ({ row }) => {
         const device = row.original.devices
         return (
-          <div className="py-2 space-y-1">
-            <div className="font-mono text-sm font-medium">{row.getValue('device_sn')}</div>
+          <div className="space-y-1">
+            <div className="font-mono font-medium">{row.getValue('device_sn')}</div>
             {device?.name && (
               <div className="text-sm text-muted-foreground">{device.name}</div>
             )}
@@ -105,9 +102,7 @@ export function createAttendanceLogColumns({
       accessorKey: 'user_pin',
       header: 'User PIN',
       cell: ({ row }) => (
-        <div className="py-2">
-          <span className="font-semibold text-base">{row.getValue('user_pin')}</span>
-        </div>
+        <div className="font-mono font-medium">{row.getValue('user_pin')}</div>
       ),
     },
     {
@@ -129,12 +124,8 @@ export function createAttendanceLogColumns({
         : 'Verify Type',
       cell: ({ row }) => {
         const type = row.getValue('verify_type') as number
-        const config = VERIFY_TYPES[type] || { label: `Type ${type}`, variant: 'secondary' as const }
-        return (
-          <div className="py-2">
-            <BadgeCell text={config.label} variant={config.variant} />
-          </div>
-        )
+        const label = VERIFY_TYPES[type] || `Type ${type}`
+        return <span className="text-sm text-muted-foreground">{label}</span>
       },
     },
     {
@@ -156,12 +147,8 @@ export function createAttendanceLogColumns({
         : 'Status',
       cell: ({ row }) => {
         const status = row.getValue('status') as number
-        const config = STATUS_TYPES[status] || { label: `Status ${status}`, variant: 'secondary' as const }
-        return (
-          <div className="py-2">
-            <BadgeCell text={config.label} variant={config.variant} />
-          </div>
-        )
+        const label = STATUS_TYPES[status] || `Status ${status}`
+        return <span className="text-sm text-muted-foreground">{label}</span>
       },
     },
   ]

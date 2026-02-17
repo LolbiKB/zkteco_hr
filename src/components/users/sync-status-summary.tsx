@@ -3,7 +3,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Check, X, Loader2, AlertTriangle, HelpCircle } from 'lucide-react'
+import { Check, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { UserService } from '@/services/user-service'
 
@@ -17,7 +17,7 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
     queryKey: ['user-sync-summary', userId],
     queryFn: () => UserService.getUserSyncSummary(userId),
     enabled: !!userId,
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
   })
 
   if (isLoading || !summary) {
@@ -29,8 +29,8 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
     )
   }
 
-  const { total_devices, synced, not_synced, syncing, failed, drift_detected } = summary
-  const hasIssues = failed > 0 || drift_detected > 0
+  const { total_devices, synced, partial, not_synced, syncing, failed } = summary
+  const hasIssues = failed > 0
   const isFullySynced = synced === total_devices && total_devices > 0
   const isSyncing = syncing > 0
 
@@ -45,7 +45,9 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
                   ? 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950 dark:text-green-400'
                   : hasIssues
                     ? 'bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-950 dark:text-red-400'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300'
+                    : partial > 0
+                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-400'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300'
                 }`}
             >
               {isFullySynced && <Check className="h-3 w-3" />}
@@ -63,6 +65,13 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
               <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                 <span className="text-muted-foreground">Synced:</span>
                 <span className="text-green-600 font-medium">{synced}</span>
+
+                {partial > 0 && (
+                  <>
+                    <span className="text-muted-foreground">Partial:</span>
+                    <span className="text-amber-600 font-medium">{partial}</span>
+                  </>
+                )}
 
                 {not_synced > 0 && (
                   <>
@@ -84,14 +93,12 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
                     <span className="text-destructive font-medium">{failed}</span>
                   </>
                 )}
-
-                {drift_detected > 0 && (
-                  <>
-                    <span className="text-muted-foreground">Drift:</span>
-                    <span className="text-orange-600 font-medium">{drift_detected}</span>
-                  </>
-                )}
               </div>
+              {partial > 0 && (
+                <div className="text-muted-foreground pt-0.5 border-t">
+                  Partial = user data on device but biometrics missing
+                </div>
+              )}
             </div>
           </TooltipContent>
         </Tooltip>
@@ -117,8 +124,15 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
         )}
       </div>
 
-      {(not_synced > 0 || syncing > 0 || failed > 0 || drift_detected > 0) && (
+      {(partial > 0 || not_synced > 0 || syncing > 0 || failed > 0) && (
         <div className="grid grid-cols-2 gap-2 text-xs">
+          {partial > 0 && (
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-600" />
+              <span>{partial} partial (missing biometrics)</span>
+            </div>
+          )}
+
           {not_synced > 0 && (
             <div className="flex items-center gap-1.5">
               <X className="h-3 w-3 text-muted-foreground" />
@@ -138,26 +152,6 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
               <AlertTriangle className="h-3 w-3 text-destructive" />
               <span>{failed} failed</span>
             </div>
-          )}
-
-          {drift_detected > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1.5 cursor-help">
-                    <HelpCircle className="h-3 w-3 text-orange-600" />
-                    <span>{drift_detected} drift detected</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-xs max-w-xs">
-                    Drift means the device has different data than expected.
-                    <br />
-                    This will be automatically corrected.
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           )}
         </div>
       )}

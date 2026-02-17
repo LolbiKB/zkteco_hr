@@ -85,40 +85,14 @@ export interface CommandQueueEntry {
   }
 }
 
-// User Device Sync Status (Desired State Reconciliation)
-export interface UserDeviceSyncStatus {
-  id: string
-  user_id: string
-  device_id: string
-  expected_state: 'synced' | 'deleted'
-  actual_state: 'not_synced' | 'syncing' | 'synced' | 'failed' | 'drift_detected' | 'unknown'
-  last_sync_attempt?: string
-  last_successful_sync?: string
-  retry_count: number
-  next_retry_at?: string
-  error_message?: string
-  drift_detected_at?: string
-  drift_details?: any
-  created_at: string
-  updated_at: string
-  devices?: {
-    id: string
-    name: string
-    ip_address: string
-    status: string
-    is_registrar?: boolean
-  }
-}
-
 // Sync Status Summary
 export interface SyncStatusSummary {
   total_devices: number
   synced: number
+  partial: number
   not_synced: number
   syncing: number
   failed: number
-  drift_detected: number
-  unknown: number
 }
 
 // API Responses
@@ -449,126 +423,85 @@ export class UserService {
   }
 
   /**
-   * Get detailed sync status for a user across all devices
-   */
-  static async getUserDeviceSyncStatus(userId: string): Promise<UserDeviceSyncStatus[]> {
-    const { data, error } = await supabase
-      .from('user_device_sync_status')
-      .select(`
-        *,
-        devices (
-          id,
-          name,
-          ip_address,
-          status,
-          is_registrar
-        )
-      `)
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
-  }
-
-  /**
-   * Get sync status summary for a user
+   * Get sync status summary for a user.
+   * A device is "synced" when it has the user data AND all the biometrics
+   * (fingerprints/face) that are enrolled in the bridge database.
+   * "partial" means the user data is on the device but biometrics are missing.
    */
   static async getUserSyncSummary(userId: string): Promise<SyncStatusSummary> {
-    // Get all devices
-    const { data: devices, error: devicesError } = await supabase
-      .from('devices')
-      .select('serial_number')
-    
-    if (devicesError) throw devicesError
+    // Parallel queries: devices, sync flags, biometric counts, commands
+    const [devicesRes, syncRes, biometricsRes, failedRes, pendingRes] = await Promise.all([
+      supabase.from('devices').select('serial_number'),
+      supabase.from('device_sync_status')
+        .select('device_sn, has_user, has_fingerprint, has_face')
+        .eq('user_id', userId),
+      supabase.from('user_biometrics')
+        .select('type')
+        .eq('user_id', userId),
+      supabase.from('command_queue')
+        .select('device_sn, retry_count, max_retries')
+        .eq('related_user_id', userId)
+        .eq('status', 'failed'),
+      supabase.from('command_queue')
+        .select('device_sn')
+        .eq('related_user_id', userId)
+        .in('status', ['pending', 'sent']),
+    ])
 
-    // Get sync status for this user
-    const { data: syncData, error: syncError } = await supabase
-      .from('device_sync_status')
-      .select('device_sn, has_user, has_fingerprint, has_face')
-      .eq('user_id', userId)
+    if (devicesRes.error) throw devicesRes.error
+    if (syncRes.error) throw syncRes.error
 
-    if (syncError) throw syncError
+    // Determine what biometrics the user has enrolled in the bridge
+    const biometrics = biometricsRes.data || []
+    const userHasFingerprints = biometrics.some(b => b.type === 'fingerprint')
+    const userHasFace = biometrics.some(b => b.type === 'face')
 
-    // Get failed commands that maxed out retries (NEEDS FIX)
-    const { data: failedCommands, error: failedError } = await supabase
-      .from('command_queue')
-      .select('device_sn, status, retry_count, max_retries')
-      .eq('related_user_id', userId)
-      .eq('status', 'failed')
-
-    if (failedError) throw failedError
-
-    // Get pending/sent commands (currently syncing)
-    const { data: pendingCommands, error: pendingError } = await supabase
-      .from('command_queue')
-      .select('device_sn')
-      .eq('related_user_id', userId)
-      .in('status', ['pending', 'sent'])
-
-    if (pendingError) throw pendingError
-
-    // Create maps/sets for quick lookup
+    // Build lookup maps
     const syncMap = new Map(
-      (syncData || []).map(s => [s.device_sn, s])
+      (syncRes.data || []).map(s => [s.device_sn, s])
     )
-
-    // Devices with maxed-out failed commands (drift/error state)
     const failedDevices = new Set(
-      (failedCommands || [])
+      (failedRes.data || [])
         .filter(cmd => (cmd.retry_count || 0) >= (cmd.max_retries || 3))
         .map(cmd => cmd.device_sn)
     )
-
     const syncingDevices = new Set(
-      (pendingCommands || []).map(cmd => cmd.device_sn)
+      (pendingRes.data || []).map(cmd => cmd.device_sn)
     )
 
-    // Count statuses
-    const total = devices?.length || 0
+    const total = devicesRes.data?.length || 0
     let synced = 0
+    let partial = 0
     let failed = 0
     let syncing = 0
 
-    for (const device of devices || []) {
-      const sync = syncMap.get(device.serial_number)
-      
-      if (failedDevices.has(device.serial_number)) {
-        // Device has failed commands that maxed out retries - treat as failed/drift
+    for (const device of devicesRes.data || []) {
+      const sn = device.serial_number
+      const sync = syncMap.get(sn)
+
+      if (failedDevices.has(sn)) {
         failed++
-      } else if (syncingDevices.has(device.serial_number)) {
-        // Device has pending/sent commands - currently syncing
+      } else if (syncingDevices.has(sn)) {
         syncing++
-      } else if (sync?.has_user === true) {
-        // Device has user and no active/failed commands - truly synced
-        synced++
+      } else if (sync?.has_user) {
+        // Check if biometrics are also on the device
+        const fpOk = !userHasFingerprints || sync.has_fingerprint
+        const faceOk = !userHasFace || sync.has_face
+        if (fpOk && faceOk) {
+          synced++
+        } else {
+          partial++ // user data present but biometrics missing
+        }
       }
     }
 
     return {
       total_devices: total,
-      synced: synced,
-      not_synced: total - synced - syncing - failed,
-      syncing: syncing,
-      failed: failed,
-      drift_detected: failedDevices.size,
-      unknown: 0,
-    }
-  }
-
-  /**
-   * Manually trigger reconciliation for a specific user
-   */
-  static async triggerUserReconciliation(userId: string): Promise<void> {
-    const headers = await this.getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/sync-reconciliation`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ user_id: userId }),
-    })
-    
-    if (!response.ok) {
-      throw new Error('Failed to trigger reconciliation')
+      synced,
+      partial,
+      not_synced: total - synced - partial - syncing - failed,
+      syncing,
+      failed,
     }
   }
 
@@ -625,42 +558,4 @@ export class UserService {
     }
   }
 
-  /**
-   * Check if a user can be deleted from cloud
-   * Returns whether deletion is allowed and which devices still have the user
-   */
-  static async canDeleteUser(userId: string): Promise<{
-    allowed: boolean
-    deviceCount: number
-    devices: Array<{ sn: string; name: string }>
-  }> {
-    const { data, error } = await supabase
-      .from('user_device_sync_status')
-      .select(`
-        device_id,
-        devices!inner (
-          serial_number,
-          name
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('expected_state', 'synced')
-      .eq('actual_state', 'synced')
-
-    if (error) {
-      console.error('Error checking user device status:', error)
-      return { allowed: false, deviceCount: 0, devices: [] }
-    }
-
-    const devices = (data || []).map(item => ({
-      sn: (item.devices as any).serial_number,
-      name: (item.devices as any).name || (item.devices as any).serial_number
-    }))
-
-    return {
-      allowed: devices.length === 0,
-      deviceCount: devices.length,
-      devices
-    }
-  }
 }

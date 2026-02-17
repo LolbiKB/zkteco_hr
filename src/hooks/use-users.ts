@@ -59,39 +59,6 @@ export function useCreateUser() {
   })
 }
 
-// Hook: Update user
-export function useUpdateUser() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ userId, user }: { userId: string; user: Partial<UserEntry> }) =>
-      UserService.updateUser(userId, user),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.lists() })
-      toast.success('User updated successfully')
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update user: ${error.message}`)
-    },
-  })
-}
-
-// Hook: Delete user
-export function useDeleteUser() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (userId: string) => UserService.deleteUser(userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.lists() })
-      toast.success('User deleted successfully')
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to delete user: ${error.message}`)
-    },
-  })
-}
-
 // Hook: Sync user to devices
 export function useSyncUser() {
   const queryClient = useQueryClient()
@@ -213,15 +180,6 @@ export function useDeviceState(deviceSn: string) {
     queryFn: () => UserService.getDeviceState(deviceSn),
     enabled: !!deviceSn,
     refetchInterval: 3000, // Check every 3 seconds
-  })
-}
-
-// Hook: Check if user can be deleted
-export function useCanDeleteUser(userId: string) {
-  return useQuery({
-    queryKey: ['users', userId, 'can-delete'] as const,
-    queryFn: () => UserService.canDeleteUser(userId),
-    enabled: !!userId,
   })
 }
 

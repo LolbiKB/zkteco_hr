@@ -39,6 +39,22 @@ import type { UserEntry } from '@/services/user-service'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
+// Finger labels (ZKTeco finger ID 0-9)
+// ---------------------------------------------------------------------------
+const FINGER_LABELS: Record<number, string> = {
+  0: 'Right Thumb',
+  1: 'Right Index',
+  2: 'Right Middle',
+  3: 'Right Ring',
+  4: 'Right Little',
+  5: 'Left Thumb',
+  6: 'Left Index',
+  7: 'Left Middle',
+  8: 'Left Ring',
+  9: 'Left Little',
+}
+
+// ---------------------------------------------------------------------------
 // Error code mapping from ZKTeco ENROLL_FP protocol
 // ---------------------------------------------------------------------------
 const ENROLL_ERROR_CODES: Record<string, { label: string; description: string }> = {
@@ -58,7 +74,8 @@ function parseEnrollError(errorMessage: string | null | undefined): {
   if (!errorMessage)
     return { code: null, label: 'Unknown Error', description: 'The command failed with no error details.' }
 
-  const match = errorMessage.match(/error code:\s*(\d+)/i)
+  // Match "error code: 5", "Error 5", or just a standalone number
+  const match = errorMessage.match(/error\s*(?:code:?)?\s*(\d+)/i)
   if (match) {
     const code = match[1]
     const mapped = ENROLL_ERROR_CODES[code]
@@ -200,6 +217,7 @@ export function EnrollBiometricDialog({
   const startEnrollment = useStartEnrollment()
 
   const [biometricType, setBiometricType] = useState<'fingerprint' | 'face'>('fingerprint')
+  const [fingerId, setFingerId] = useState<number>(0)
   const [deviceSn, setDeviceSn] = useState<string>('')
   const [activeCommandId, setActiveCommandId] = useState<number | null>(null)
 
@@ -220,6 +238,12 @@ export function EnrollBiometricDialog({
   const hasFingerprint = biometrics.some((b) => b.type === 'fingerprint')
   const hasFace = biometrics.some((b) => b.type === 'face')
 
+  // Set of enrolled finger IDs
+  const enrolledFingers = useMemo(
+    () => new Set(biometrics.filter((b) => b.type === 'fingerprint' && b.finger_id !== null).map((b) => b.finger_id!)),
+    [biometrics],
+  )
+
   // Derive enrollment phase
   const phase = getPhase(commandData?.status, startEnrollment.isPending)
   const isTerminal = phase === 'success' || phase === 'failed'
@@ -236,7 +260,7 @@ export function EnrollBiometricDialog({
         userId: user.id,
         deviceSn,
         biometricType,
-        fingerId: biometricType === 'fingerprint' ? 0 : undefined,
+        fingerId: biometricType === 'fingerprint' ? fingerId : undefined,
       },
       {
         onSuccess: (result) => {
@@ -360,13 +384,46 @@ export function EnrollBiometricDialog({
                 </button>
               </div>
 
+              {/* Finger selection (fingerprint only) */}
+              {biometricType === 'fingerprint' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Finger</Label>
+                  <Select value={String(fingerId)} onValueChange={(v) => setFingerId(Number(v))}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(FINGER_LABELS).map(([id, label]) => {
+                        const isEnrolled = enrolledFingers.has(Number(id))
+                        return (
+                          <SelectItem key={id} value={id}>
+                            <span className="flex items-center gap-2">
+                              {label}
+                              {isEnrolled && (
+                                <Badge variant="outline" className="h-4 px-1 text-[9px] bg-green-50 text-green-700 border-green-200">
+                                  enrolled
+                                </Badge>
+                              )}
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Overwrite warning */}
-              {((biometricType === 'fingerprint' && hasFingerprint) ||
-                (biometricType === 'face' && hasFace)) && (
-                  <p className="text-[11px] text-yellow-600">
-                    Already enrolled — re-enrolling will overwrite the existing {biometricType}.
-                  </p>
-                )}
+              {biometricType === 'fingerprint' && enrolledFingers.has(fingerId) && (
+                <p className="text-[11px] text-yellow-600">
+                  This finger is already enrolled — re-enrolling will overwrite the existing template.
+                </p>
+              )}
+              {biometricType === 'face' && hasFace && (
+                <p className="text-[11px] text-yellow-600">
+                  Already enrolled — re-enrolling will overwrite the existing face template.
+                </p>
+              )}
 
               {/* Device selection */}
               <div className="space-y-1.5">
@@ -417,7 +474,9 @@ export function EnrollBiometricDialog({
             <div className="space-y-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">
-                  {biometricType === 'fingerprint' ? 'Fingerprint' : 'Face'} Enrollment
+                  {biometricType === 'fingerprint'
+                    ? `Fingerprint — ${FINGER_LABELS[fingerId] || `Finger ${fingerId}`}`
+                    : 'Face'} Enrollment
                 </h4>
                 <Badge variant="outline" className="text-[10px]">
                   {deviceSn}

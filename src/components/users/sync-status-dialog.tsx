@@ -116,11 +116,22 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
     const deviceCommands = commands.filter(cmd => cmd.device_sn === deviceSn)
     const pendingCmd = deviceCommands.find(cmd => cmd.status === 'pending')
     const sentCmd = deviceCommands.find(cmd => cmd.status === 'sent')
-    const failedCmd = deviceCommands.find(cmd =>
-      cmd.status === 'failed' && (cmd.retry_count || 0) >= (cmd.max_retries || 3)
+
+    // Only consider failed commands that are MORE RECENT than the last success.
+    // This prevents old failures (e.g. Error 5) from showing after a later successful sync.
+    const sortedDesc = [...deviceCommands].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     )
-    const retryingCmd = deviceCommands.find(cmd =>
-      cmd.status === 'failed' && (cmd.retry_count || 0) < (cmd.max_retries || 3)
+    const lastSuccessTime = sortedDesc.find(c => c.status === 'success')?.created_at
+    const recentFailed = sortedDesc.filter(cmd =>
+      cmd.status === 'failed' &&
+      (!lastSuccessTime || new Date(cmd.created_at) > new Date(lastSuccessTime))
+    )
+    const failedCmd = recentFailed.find(cmd =>
+      (cmd.retry_count || 0) >= (cmd.max_retries || 3)
+    )
+    const retryingCmd = recentFailed.find(cmd =>
+      (cmd.retry_count || 0) < (cmd.max_retries || 3)
     )
     const status = syncStatus.find(s => s.device_sn === deviceSn)
 

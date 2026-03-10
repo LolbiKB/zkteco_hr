@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { createDeviceColumns } from '@/components/devices/columns'
 import { DeviceDataTable } from '@/components/devices/data-table'
-import { useDevices, useSetMasterDevice, useDeviceCommand, useUpdateDevice } from '@/hooks/use-devices'
+import { useDevices, useDeviceCommand, useUpdateDevice } from '@/hooks/use-devices'
 import { EditDeviceDialog } from '@/components/devices/edit-device-dialog'
 import type { DeviceFilters, DeviceEntry } from '@/services/device-service'
 
@@ -27,9 +27,6 @@ export function Devices() {
   // Fetch devices
   const { data: response, isLoading, isError, error, refetch, isFetching } = useDevices(filters)
 
-  // Set master device mutation
-  const setMasterMutation = useSetMasterDevice()
-
   // Device command mutation
   const deviceCommandMutation = useDeviceCommand()
 
@@ -40,20 +37,6 @@ export function Devices() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editDevice, setEditDevice] = useState<DeviceEntry | null>(null)
   const [editOpen, setEditOpen] = useState(false)
-
-  // Handle set master
-  const handleSetMaster = async (serialNumber: string) => {
-    try {
-      await setMasterMutation.mutateAsync(serialNumber)
-      toast.success('Master device updated', {
-        description: `Device ${serialNumber} is now the master device.`,
-      })
-    } catch (err) {
-      toast.error('Error', {
-        description: 'Failed to set master device. Please try again.',
-      })
-    }
-  }
 
   // Handle device command
   const handleDeviceCommand = async (
@@ -118,7 +101,6 @@ export function Devices() {
             page: 1,
           })),
         currentStatusFilter: filters.status,
-        onSetMaster: handleSetMaster,
         onDeviceCommand: handleDeviceCommand,
         onShowHistory: (sn: string) => {
           setHistoryDevice(sn)

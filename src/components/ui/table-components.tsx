@@ -260,13 +260,11 @@ export function UserCell({
 interface DeviceCellProps {
   name?: string | null
   location?: string | null
-  isMaster?: boolean
 }
 
 export function DeviceCell({
   name,
   location,
-  isMaster,
 }: DeviceCellProps) {
   return (
     <div className="flex items-center gap-3">
@@ -279,11 +277,6 @@ export function DeviceCell({
           <span className="text-sm text-muted-foreground">{location}</span>
         )}
       </div>
-      {isMaster && (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 shadow-sm shrink-0">
-          Master
-        </span>
-      )}
     </div>
   )
 }

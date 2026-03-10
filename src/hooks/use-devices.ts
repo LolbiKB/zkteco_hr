@@ -22,20 +22,6 @@ export function useDevices(filters: DeviceFilters = {}) {
 }
 
 /**
- * Hook to set master device
- */
-export function useSetMasterDevice() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (serialNumber: string) => DeviceService.setMasterDevice(serialNumber),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: deviceKeys.lists() })
-    },
-  })
-}
-
-/**
  * Hook to queue a device command (REBOOT, INFO, CHECK, LOG, etc.)
  */
 export function useDeviceCommand() {

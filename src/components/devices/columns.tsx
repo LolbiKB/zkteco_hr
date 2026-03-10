@@ -3,7 +3,6 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { 
-  Check, 
   MoreHorizontal, 
   RotateCcw, 
   Info, 
@@ -12,7 +11,6 @@ import {
   History,
   Wifi,
   WifiOff,
-  Crown,
   Edit
 } from 'lucide-react'
 import {
@@ -32,7 +30,6 @@ import type { DeviceEntry } from '@/services/device-service'
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
   currentStatusFilter?: string
-  onSetMaster?: (serialNumber: string) => void
   onDeviceCommand?: (serialNumber: string, commandType: string, commandBody: string) => void
   onShowHistory?: (serialNumber: string) => void
   onEdit?: (device: DeviceEntry) => void
@@ -47,7 +44,6 @@ const STATUS_OPTIONS = [
 export function createDeviceColumns({
   onFilterByStatus,
   currentStatusFilter,
-  onSetMaster,
   onDeviceCommand,
   onShowHistory,
   onEdit,
@@ -62,7 +58,6 @@ export function createDeviceColumns({
           <DeviceCell
             name={device.name}
             location={device.location}
-            isMaster={device.is_master}
           />
         )
       },
@@ -134,7 +129,6 @@ export function createDeviceColumns({
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-        const isMaster = row.original.is_master
         const serialNumber = row.original.serial_number
         const name = row.original.name
 
@@ -154,22 +148,6 @@ export function createDeviceColumns({
                   <p className="text-xs text-muted-foreground">{serialNumber}</p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              
-              {/* Master Device Section */}
-              <DropdownMenuLabel className="text-xs">Master Device</DropdownMenuLabel>
-              {!isMaster ? (
-                <DropdownMenuItem onClick={() => onSetMaster?.(serialNumber)}>
-                  <Crown className="mr-2 h-4 w-4" />
-                  Set as Master
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem disabled>
-                  <Check className="mr-2 h-4 w-4" />
-                  Current Master
-                </DropdownMenuItem>
-              )}
-              
               <DropdownMenuSeparator />
               
               {/* Quick Commands Section */}

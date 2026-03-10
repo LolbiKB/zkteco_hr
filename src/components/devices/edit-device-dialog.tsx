@@ -11,8 +11,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { X, Plus } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { X, Plus, Loader2 } from 'lucide-react'
 import type { DeviceEntry } from '@/services/device-service'
+import { useFrappeBranches } from '@/hooks/use-frappe-branches'
 
 interface EditDeviceDialogProps {
   device: DeviceEntry | null
@@ -40,6 +48,8 @@ export function EditDeviceDialog({
   onSave,
   isSaving = false,
 }: EditDeviceDialogProps) {
+  const { data: branches = [], isLoading: isLoadingBranches } = useFrappeBranches()
+  
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [isRegistrar, setIsRegistrar] = useState(false)
@@ -109,13 +119,26 @@ export function EditDeviceDialog({
 
           {/* Location */}
           <div className="grid gap-2">
-            <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g., Building A, Floor 1"
-            />
+            <Label htmlFor="location">Location (Branch)</Label>
+            {isLoadingBranches ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading branches...
+              </div>
+            ) : (
+              <Select value={location} onValueChange={setLocation}>
+                <SelectTrigger id="location">
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.value} value={branch.value}>
+                      {branch.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Registrar Toggle */}

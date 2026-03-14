@@ -120,23 +120,32 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
             isActive && "text-primary-foreground"
           )} 
         />
-        <div className="flex flex-col gap-0.5 overflow-hidden flex-1">
+        
+        {/* Text container with smooth width transition */}
+        <div 
+          className={cn(
+            "flex flex-col gap-0.5 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+            isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100 flex-1"
+          )}
+        >
           <span 
             className={cn(
-              "text-sm font-medium truncate",
+              "text-sm font-medium truncate whitespace-nowrap",
               isActive && "text-primary-foreground"
             )}
           >
             {item.title}
           </span>
           {item.description && !isActive && (
-            <span className="text-xs text-muted-foreground truncate group-hover:text-accent-foreground/70">
+            <span className="text-xs text-muted-foreground truncate whitespace-nowrap group-hover:text-accent-foreground/70">
               {item.description}
             </span>
           )}
         </div>
-        {isActive && (
-          <div className="ml-auto flex items-center gap-1">
+        
+        {/* Active indicator - only show when expanded */}
+        {!isCollapsed && isActive && (
+          <div className="ml-auto flex items-center gap-1 shrink-0">
             <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
           </div>
         )}

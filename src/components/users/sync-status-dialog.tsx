@@ -35,7 +35,8 @@ interface SyncStatusDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-const DATA_TYPES = [
+// All possible sync items (some may not apply to all users)
+const ALL_DATA_TYPES = [
   { key: 'user', icon: User, label: 'User' },
   { key: 'fingerprint', icon: Fingerprint, label: 'FP' },
   { key: 'face', icon: ScanFace, label: 'Face' },
@@ -91,11 +92,41 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
   }
 
   const getSyncState = (status: any, deviceSn: string) => {
-    const items = DATA_TYPES.map(({ key, icon, label }) => {
-      const hasData = key === 'user' ? true : 
+    // Check for active commands (pending/sent) for each data type
+    const hasActiveCommandsForType = (type: string) => {
+      return commands.some(cmd => 
+        cmd.device_sn === deviceSn && 
+        cmd.command_type?.includes(type === 'user' ? 'user' : type) &&
+        (cmd.status === 'pending' || cmd.status === 'sent')
+      )
+    }
+    
+    // Determine which items to show:
+    // - User: Always show (reliable sync)
+    // - FP/Face: Show if user has them (we can detect sync status reliably)
+    // - Photo: ONLY show if there are ACTIVE commands (photo sync not robust, don't show stuck state)
+    const items = ALL_DATA_TYPES.map(({ key, icon, label }) => {
+      const userHasData = key === 'user' ? true : 
         key === 'fingerprint' ? user?.has_fingerprint :
         key === 'face' ? user?.has_face :
         !!user?.photo_url
+      
+      const hasActiveCommands = hasActiveCommandsForType(key)
+      
+      // Photo: Only show if there are active commands (not just because user has photo)
+      if (key === 'photo' && !hasActiveCommands) {
+        return null
+      }
+      
+      // FP/Face: Show if user has them (can detect sync status from DB)
+      if ((key === 'fingerprint' || key === 'face') && !userHasData) {
+        return null
+      }
+      
+      // User: Always show
+      const shouldShow = key === 'user' || userHasData || hasActiveCommands
+      
+      if (!shouldShow) return null
       
       const isSynced = key === 'user' ? status?.has_user :
         key === 'fingerprint' ? status?.has_fingerprint :
@@ -106,10 +137,10 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
         key,
         icon,
         label,
-        hasData,
-        status: !hasData ? 'na' : getItemStatus(deviceSn, key, isSynced)
+        hasData: userHasData,
+        status: getItemStatus(deviceSn, key, isSynced)
       }
-    })
+    }).filter((item): item is NonNullable<typeof item> => item !== null)
 
     const relevant = items.filter(i => i.hasData)
     const synced = relevant.filter(i => i.status === 'synced').length
@@ -153,32 +184,13 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto p-0">
           <DialogHeader className="px-4 py-3 border-b">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="text-base">Device Sync</DialogTitle>
-                <DialogDescription className="text-xs">
-                  {user.name} · {user.pin}
-                </DialogDescription>
-              </div>
-              {!isLoading && syncStatus.length > 0 && (
-                <Button
-                  onClick={handleSyncToAll}
-                  disabled={syncUser.isPending}
-                  size="sm"
-                  className="h-7 text-xs"
-                >
-                  {syncUser.isPending ? (
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                  )}
-                  Sync All
-                </Button>
-              )}
-            </div>
+            <DialogTitle className="text-base">Device Sync</DialogTitle>
+            <DialogDescription className="text-xs">
+              {user.name} · {user.pin}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="p-3">
+          <div className="p-3 space-y-3">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -322,6 +334,21 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
                   })}
                 </div>
               </TooltipProvider>
+            )}
+            
+            {/* Sync All button at bottom */}
+            {!isLoading && syncStatus.length > 0 && !syncUser.isPending && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  onClick={handleSyncToAll}
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Sync All Devices
+                </Button>
+              </div>
             )}
           </div>
         </DialogContent>

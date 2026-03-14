@@ -121,11 +121,11 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           )} 
         />
         
-        {/* Text container with smooth width transition */}
+        {/* Text container with smooth width transition using max-width */}
         <div 
           className={cn(
-            "flex flex-col gap-0.5 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
-            isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100 flex-1"
+            "flex flex-col gap-0.5 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-1",
+            isCollapsed ? "max-w-0 opacity-0" : "max-w-[200px] opacity-100"
           )}
         >
           <span 
@@ -183,8 +183,8 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                   className={cn(
                     "flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden",
                     isOpen 
-                      ? "opacity-100 translate-x-0 w-auto" 
-                      : "opacity-0 -translate-x-4 w-0"
+                      ? "opacity-100 max-w-[180px]" 
+                      : "opacity-0 max-w-0"
                   )}
                 >
                   <span className="text-sm font-bold leading-tight whitespace-nowrap">ZKTeco ADMS</span>
@@ -207,7 +207,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 className={cn(
                   "mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider",
                   "transition-all duration-500 overflow-hidden whitespace-nowrap",
-                  isOpen ? "opacity-100 max-w-full" : "opacity-0 max-w-0 px-0"
+                  isOpen ? "opacity-100 max-w-[200px]" : "opacity-0 max-w-0 px-0"
                 )}
               >
                 Main
@@ -238,7 +238,7 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 className={cn(
                   "mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider",
                   "transition-all duration-500 overflow-hidden whitespace-nowrap",
-                  isOpen ? "opacity-100 max-w-full" : "opacity-0 max-w-0 px-0"
+                  isOpen ? "opacity-100 max-w-[200px]" : "opacity-0 max-w-0 px-0"
                 )}
               >
                 Management
@@ -264,8 +264,8 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
             {/* Version text - animates out when collapsed */}
             <span 
               className={cn(
-                "text-xs text-muted-foreground transition-all duration-500 whitespace-nowrap",
-                isOpen ? "opacity-100 max-w-full" : "opacity-0 max-w-0"
+                "text-xs text-muted-foreground transition-all duration-500 whitespace-nowrap overflow-hidden",
+                isOpen ? "opacity-100 max-w-[100px]" : "opacity-0 max-w-0"
               )}
             >
               v1.0.0

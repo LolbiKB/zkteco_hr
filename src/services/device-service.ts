@@ -32,6 +32,8 @@ export interface DeviceEntry {
   last_seen?: string
   registration_data?: string
   created_at: string
+  fp_algorithm_version?: string
+  face_algorithm_version?: string
   status?: 'online' | 'offline' // derived field
   last_seen_minutes?: number | null // derived field
 }
@@ -347,6 +349,34 @@ export class DeviceService {
       status: lastSeenMinutes !== null && lastSeenMinutes < 5 ? 'online' : 'offline',
       last_seen_minutes: lastSeenMinutes,
     } as DeviceEntry
+  }
+
+  /**
+   * Query device fingerprint algorithm version
+   * Queues a GET OPTION ~ZKFPVersion command to the device
+   */
+  static async queryFingerprintVersion(serialNumber: string): Promise<{ 
+    success: boolean
+    message: string
+    command_id: number
+  }> {
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/api-devices/${serialNumber}/query-fp-version`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(error.error || `HTTP ${response.status}`)
+    }
+
+    return response.json()
   }
 }
 

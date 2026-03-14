@@ -215,13 +215,25 @@ export function EnrollBiometricDialog({
   onOpenChange,
 }: EnrollBiometricDialogProps) {
   const { data: bioData, isLoading: bioLoading } = useUserBiometrics(user?.id || '')
-  const { data: syncData } = useSyncStatus(user?.id || '')
+  const { data: syncData, refetch: refetchSyncStatus } = useSyncStatus(user?.id || '')
   const startEnrollment = useStartEnrollment()
+
+  // Poll device status every second when modal is open
+  useEffect(() => {
+    if (!open) return
+    
+    const interval = setInterval(() => {
+      refetchSyncStatus()
+    }, 1000)
+    
+    return () => clearInterval(interval)
+  }, [open, refetchSyncStatus])
 
   const [biometricType, setBiometricType] = useState<'fingerprint' | 'face'>('fingerprint')
   const [fingerId, setFingerId] = useState<number>(0)
   const [deviceSn, setDeviceSn] = useState<string>('')
   const [activeCommandId, setActiveCommandId] = useState<number | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
 
   // Poll active enrollment command
   const { data: commandData } = useEnrollmentCommandStatus(
@@ -229,20 +241,66 @@ export function EnrollBiometricDialog({
     user?.id || '',
   )
 
+  // When delete succeeds and we have pendingDeleteId, trigger enrollment
+  useEffect(() => {
+    if (pendingDeleteId && commandData?.status === 'success') {
+      // Delete succeeded, wait before triggering enrollment
+      setReenrollDelay(true)
+      const timer = setTimeout(() => {
+        setReenrollDelay(false)
+        startEnrollment.mutate({
+          userId: user?.id || '',
+          deviceSn,
+          biometricType,
+          fingerId: biometricType === 'fingerprint' ? fingerId : undefined,
+        })
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [commandData?.status, pendingDeleteId, deviceSn, biometricType, fingerId, startEnrollment, user])
+
+  // Delay before triggering reenrollment after delete
+  const [reenrollDelay, setReenrollDelay] = useState(false)
+
+  useEffect(() => {
+    if (pendingDeleteId && commandData?.status === 'success') {
+      // Wait 2 seconds for device to settle after delete
+      setReenrollDelay(true)
+      const timer = setTimeout(() => {
+        setReenrollDelay(false)
+        startEnrollment.mutate({
+          userId: user?.id || '',
+          deviceSn,
+          biometricType,
+          fingerId: biometricType === 'fingerprint' ? fingerId : undefined,
+        })
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [commandData?.status, pendingDeleteId])
+
   const biometrics = bioData?.data || []
   const syncStatus = syncData?.data || []
 
-  // Filter to only registrar devices with capabilities
-  const registrarDevices = useMemo(
-    () => syncStatus.filter((s) => s.is_online && s.devices?.is_registrar),
-    [syncStatus],
-  )
+  // Filter to only registrar devices that are ONLINE
+  // Must be both online AND have registrar capabilities
+  const registrarDevices = useMemo(() => {
+    return syncStatus.filter((s) => s.is_online && s.devices?.is_registrar)
+  }, [syncStatus])
+
+  // Check if there are any offline registrar devices (for better error messages)
+  const offlineRegistrarDevices = useMemo(() => {
+    return syncStatus.filter((s) => !s.is_online && s.devices?.is_registrar)
+  }, [syncStatus])
 
   // Get selected device capabilities
   const selectedDevice = useMemo(
     () => registrarDevices.find((d) => d.device_sn === deviceSn),
     [registrarDevices, deviceSn]
   )
+
+  // Check if selected device is still online (important for real-time polling)
+  const isSelectedDeviceOnline = !!selectedDevice
 
   const selectedDeviceCapabilities = selectedDevice?.devices?.registrar_capabilities || []
   const supportsFingerprint = selectedDeviceCapabilities.includes('fingerprint')
@@ -258,12 +316,14 @@ export function EnrollBiometricDialog({
   )
 
   // Derive enrollment phase
+  // For live enrollment, poll the command status
   const phase = getPhase(commandData?.status, startEnrollment.isPending, !!activeCommandId)
-  const isTerminal = phase === 'success' || phase === 'failed'
-  const isInProgress = phase === 'queued' || phase === 'enrolling'
+  const displayPhase = reenrollDelay ? 'queued' : phase  // Show "queued" during delay
+  const isTerminal = displayPhase === 'success' || displayPhase === 'failed'
+  const isInProgress = displayPhase === 'queued' || displayPhase === 'enrolling'
 
   // Parse error details for failed enrollments
-  const errorInfo = phase === 'failed' ? parseEnrollError(commandData?.error_message) : null
+  const errorInfo = displayPhase === 'failed' ? parseEnrollError(commandData?.error_message) : null
 
   const handleStartEnrollment = useCallback(() => {
     if (!user?.id || !deviceSn) return
@@ -276,8 +336,14 @@ export function EnrollBiometricDialog({
         fingerId: biometricType === 'fingerprint' ? fingerId : undefined,
       },
       {
-        onSuccess: (result) => {
-          setActiveCommandId(result.commandId)
+        onSuccess: (result: any) => {
+          // If needsReenroll=true, delete was queued - poll for delete success then trigger enrollment
+          if (result.needsReenroll) {
+            setPendingDeleteId(result.commandId)
+            setActiveCommandId(result.commandId)
+          } else {
+            setActiveCommandId(result.commandId)
+          }
         },
       },
     )
@@ -485,11 +551,23 @@ export function EnrollBiometricDialog({
                   <div className="flex items-start gap-2 rounded-md border border-dashed border-orange-300 bg-orange-50 p-3 text-xs">
                     <WifiOff className="h-4 w-4 text-orange-600 mt-0.5" />
                     <div>
-                      <p className="font-medium text-orange-800">No registrar devices available</p>
-                      <p className="text-orange-700 mt-0.5">
-                        A device must be configured as a registrar with biometric capabilities.
-                        Go to Device Management → Edit Device to enable.
-                      </p>
+                      {offlineRegistrarDevices.length > 0 ? (
+                        <>
+                          <p className="font-medium text-orange-800">Registrar devices offline</p>
+                          <p className="text-orange-700 mt-0.5">
+                            {offlineRegistrarDevices.length} registrar device(s) are configured but currently offline.
+                            Please check device power and network connection.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium text-orange-800">No registrar devices available</p>
+                          <p className="text-orange-700 mt-0.5">
+                            A device must be configured as a registrar with biometric capabilities.
+                            Go to Device Management → Edit Device to enable.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -539,6 +617,19 @@ export function EnrollBiometricDialog({
                         Card
                       </Badge>
                     )}
+                  </div>
+                )}
+
+                {/* Warning when selected device goes offline */}
+                {deviceSn && !isSelectedDeviceOnline && (
+                  <div className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-2 text-xs mt-2">
+                    <WifiOff className="h-4 w-4 text-red-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-red-800">Device went offline</p>
+                      <p className="text-red-700 mt-0.5">
+                        The selected device is no longer online. Please select a different device or wait for it to come back online.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -646,7 +737,7 @@ export function EnrollBiometricDialog({
                 </Button>
                 <Button
                   onClick={handleStartEnrollment}
-                  disabled={!deviceSn || startEnrollment.isPending || registrarDevices.length === 0}
+                  disabled={!deviceSn || !isSelectedDeviceOnline || startEnrollment.isPending || registrarDevices.length === 0}
                 >
                   {startEnrollment.isPending && (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />

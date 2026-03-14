@@ -33,6 +33,7 @@ export function useSyncStatus(userId: string) {
     queryKey: userKeys.syncStatus(userId),
     queryFn: () => UserService.getSyncStatus(userId),
     enabled: !!userId,
+    refetchInterval: 10000, // Refresh every 10 seconds
   })
 }
 

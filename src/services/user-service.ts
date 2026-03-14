@@ -449,14 +449,11 @@ export class UserService {
    * "drifted" means expected_state !== actual_state in user_device_sync_status.
    */
   static async getUserSyncSummary(userId: string): Promise<SyncStatusSummary> {
-    // Parallel queries: devices, sync flags, biometric counts, commands, drift status
-    const [devicesRes, syncRes, biometricsRes, failedRes, pendingRes, driftRes] = await Promise.all([
+    // Parallel queries: devices, sync status, commands
+    const [devicesRes, syncRes, failedRes, pendingRes] = await Promise.all([
       supabase.from('devices').select('serial_number'),
-      supabase.from('device_sync_status')
-        .select('device_sn, has_user, has_fingerprint, has_face')
-        .eq('user_id', userId),
-      supabase.from('user_biometrics')
-        .select('type')
+      supabase.from('user_device_sync_status')
+        .select('device_sn, expected_state, actual_state, last_successful_sync')
         .eq('user_id', userId),
       supabase.from('command_queue')
         .select('device_sn, retry_count, max_retries')
@@ -466,18 +463,10 @@ export class UserService {
         .select('device_sn')
         .eq('related_user_id', userId)
         .in('status', ['pending', 'sent']),
-      supabase.from('user_device_sync_status')
-        .select('device_sn, expected_state, actual_state, drift_detected_at')
-        .eq('user_id', userId),
     ])
 
     if (devicesRes.error) throw devicesRes.error
     if (syncRes.error) throw syncRes.error
-
-    // Determine what biometrics the user has enrolled in the bridge
-    const biometrics = biometricsRes.data || []
-    const userHasFingerprints = biometrics.some(b => b.type === 'fingerprint')
-    const userHasFace = biometrics.some(b => b.type === 'face')
 
     // Build lookup maps
     const syncMap = new Map(
@@ -491,10 +480,10 @@ export class UserService {
     const syncingDevices = new Set(
       (pendingRes.data || []).map(cmd => cmd.device_sn)
     )
-    
+
     // Build drift map from user_device_sync_status
     const driftMap = new Map(
-      (driftRes.data || [])
+      (syncRes.data || [])
         .filter(d => d.expected_state !== d.actual_state)
         .map(d => [d.device_sn, d])
     )
@@ -510,6 +499,7 @@ export class UserService {
       const sn = device.serial_number
       const sync = syncMap.get(sn)
       const hasDrift = driftMap.has(sn)
+      const isSynced = sync?.actual_state === 'synced'
 
       if (hasDrift) {
         drifted++
@@ -517,15 +507,10 @@ export class UserService {
         failed++
       } else if (syncingDevices.has(sn)) {
         syncing++
-      } else if (sync?.has_user) {
-        // Check if biometrics are also on the device
-        const fpOk = !userHasFingerprints || sync.has_fingerprint
-        const faceOk = !userHasFace || sync.has_face
-        if (fpOk && faceOk) {
-          synced++
-        } else {
-          partial++ // user data present but biometrics missing
-        }
+      } else if (isSynced) {
+        // User is synced - check if biometrics should also be synced
+        // In the new system, when actual_state='synced', we assume all data including biometrics is synced
+        synced++
       }
     }
 

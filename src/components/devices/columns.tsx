@@ -33,6 +33,7 @@ interface CreateDeviceColumnsProps {
   onDeviceCommand?: (serialNumber: string, commandType: string, commandBody: string) => void
   onShowHistory?: (serialNumber: string) => void
   onEdit?: (device: DeviceEntry) => void
+  onShowInfo?: (serialNumber: string) => void
 }
 
 // Status options for filter
@@ -47,6 +48,7 @@ export function createDeviceColumns({
   onDeviceCommand,
   onShowHistory,
   onEdit,
+  onShowInfo,
 }: CreateDeviceColumnsProps): ColumnDef<DeviceEntry>[] {
   return [
     {
@@ -107,6 +109,48 @@ export function createDeviceColumns({
       },
     },
     {
+      id: 'fp_algorithm_version',
+      accessorKey: 'fp_algorithm_version',
+      header: 'FP Version',
+      cell: ({ row }) => {
+        const fpVersion = row.original.fp_algorithm_version
+        const faceVersion = row.original.face_algorithm_version
+        const device = row.original
+        
+        return (
+          <div className="flex items-center gap-2">
+            {fpVersion ? (
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className="font-mono text-xs">
+                  FP: {fpVersion}
+                </Badge>
+                {faceVersion && (
+                  <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
+                    Face: {faceVersion}
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                Unknown
+              </Badge>
+            )}
+            {onShowInfo && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => onShowInfo(device.serial_number)}
+                title="View device info"
+              >
+                <Info className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
+    {
       id: 'last_seen',
       accessorKey: 'last_seen',
       header: 'Last Seen',
@@ -152,12 +196,14 @@ export function createDeviceColumns({
               
               {/* Quick Commands Section */}
               <DropdownMenuLabel className="text-xs">Quick Commands</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => onDeviceCommand?.(serialNumber, 'info', 'INFO')}
-              >
-                <Info className="mr-2 h-4 w-4" />
-                Request Info
-              </DropdownMenuItem>
+              {onShowInfo && (
+                <DropdownMenuItem
+                  onClick={() => onShowInfo(serialNumber)}
+                >
+                  <Info className="mr-2 h-4 h-4" />
+                  Device Info
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => onDeviceCommand?.(serialNumber, 'check', 'CHECK')}
               >

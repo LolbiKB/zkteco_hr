@@ -6,6 +6,7 @@ import { createDeviceColumns } from '@/components/devices/columns'
 import { DeviceDataTable } from '@/components/devices/data-table'
 import { useDevices, useDeviceCommand, useUpdateDevice } from '@/hooks/use-devices'
 import { EditDeviceDialog } from '@/components/devices/edit-device-dialog'
+import { DeviceInfoDialog } from '@/components/devices/device-info-dialog'
 import type { DeviceFilters, DeviceEntry } from '@/services/device-service'
 
 const COMMAND_LABELS: Record<string, string> = {
@@ -37,6 +38,8 @@ export function Devices() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editDevice, setEditDevice] = useState<DeviceEntry | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [infoDevice, setInfoDevice] = useState<string | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
 
   // Handle device command
   const handleDeviceCommand = async (
@@ -90,6 +93,12 @@ export function Devices() {
     }
   }
 
+  // Handle show device info
+  const handleShowInfo = (serialNumber: string) => {
+    setInfoDevice(serialNumber)
+    setInfoOpen(true)
+  }
+
   // Column definitions with filter callbacks
   const columns = useMemo(
     () =>
@@ -107,6 +116,7 @@ export function Devices() {
           setHistoryOpen(true)
         },
         onEdit: handleEditDevice,
+        onShowInfo: handleShowInfo,
       }),
     [filters]
   )
@@ -149,6 +159,11 @@ export function Devices() {
         onOpenChange={setEditOpen}
         onSave={handleUpdateDevice}
         isSaving={updateDeviceMutation.isPending}
+      />
+      <DeviceInfoDialog
+        deviceSn={infoDevice}
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
       />
     </div>
   )

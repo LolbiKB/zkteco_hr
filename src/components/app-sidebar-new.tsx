@@ -121,27 +121,24 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           )} 
         />
         
-        {/* Text container with smooth width transition using max-width */}
-        <div 
-          className={cn(
-            "flex flex-col gap-0.5 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] flex-1",
-            isCollapsed ? "max-w-0 opacity-0" : "max-w-[200px] opacity-100"
-          )}
-        >
-          <span 
-            className={cn(
-              "text-sm font-medium truncate whitespace-nowrap",
-              isActive && "text-primary-foreground"
-            )}
-          >
-            {item.title}
-          </span>
-          {item.description && !isActive && (
-            <span className="text-xs text-muted-foreground truncate whitespace-nowrap group-hover:text-accent-foreground/70">
-              {item.description}
+        {/* Text container - simple fade only */}
+        {!isCollapsed && (
+          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+            <span 
+              className={cn(
+                "text-sm font-medium truncate",
+                isActive && "text-primary-foreground"
+              )}
+            >
+              {item.title}
             </span>
-          )}
-        </div>
+            {item.description && !isActive && (
+              <span className="text-xs text-muted-foreground truncate group-hover:text-accent-foreground/70">
+                {item.description}
+              </span>
+            )}
+          </div>
+        )}
         
         {/* Active indicator - only show when expanded */}
         {!isCollapsed && isActive && (
@@ -179,17 +176,12 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
                 </div>
                 
                 {/* Animated text container */}
-                <div 
-                  className={cn(
-                    "flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden",
-                    isOpen 
-                      ? "opacity-100 max-w-[180px]" 
-                      : "opacity-0 max-w-0"
-                  )}
-                >
-                  <span className="text-sm font-bold leading-tight whitespace-nowrap">ZKTeco ADMS</span>
-                  <span className="text-[10px] text-muted-foreground leading-tight whitespace-nowrap">Bridge</span>
-                </div>
+                {isOpen && (
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold leading-tight whitespace-nowrap">ZKTeco ADMS</span>
+                    <span className="text-[10px] text-muted-foreground leading-tight whitespace-nowrap">Bridge</span>
+                  </div>
+                )}
               </div>
             </TooltipTrigger>
             <TooltipContent side="right">
@@ -203,55 +195,30 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           <nav className={cn("grid gap-1 px-2", !isOpen && "justify-center")}>
             {/* Main Navigation */}
             <div className={cn("mb-4", !isOpen && "mb-2")}>
-              <h3 
-                className={cn(
-                  "mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider",
-                  "transition-all duration-500 overflow-hidden whitespace-nowrap",
-                  isOpen ? "opacity-100 max-w-[200px]" : "opacity-0 max-w-0 px-0"
-                )}
-              >
-                Main
-              </h3>
+              {isOpen && (
+                <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                  Main
+                </h3>
+              )}
               <div className="grid gap-1">
-                {mainNavItems.map((item, index) => (
-                  <div 
-                    key={item.href}
-                    className="animate-in fade-in slide-in-from-left-2 duration-500"
-                    style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'backwards' }}
-                  >
-                    <NavItemComponent item={item} isCollapsed={!isOpen} />
-                  </div>
+                {mainNavItems.map((item) => (
+                  <NavItemComponent key={item.href} item={item} isCollapsed={!isOpen} />
                 ))}
               </div>
             </div>
 
-            <Separator 
-              className={cn(
-                "my-2 transition-all duration-500",
-                !isOpen && "mx-auto w-8"
-              )} 
-            />
+            <Separator className="my-2" />
 
             {/* Management Navigation */}
             <div className={cn("mb-4", !isOpen && "mb-2")}>
-              <h3 
-                className={cn(
-                  "mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider",
-                  "transition-all duration-500 overflow-hidden whitespace-nowrap",
-                  isOpen ? "opacity-100 max-w-[200px]" : "opacity-0 max-w-0 px-0"
-                )}
-              >
-                Management
-              </h3>
+              {isOpen && (
+                <h3 className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                  Management
+                </h3>
+              )}
               <div className="grid gap-1">
-                {managementNavItems.map((item, index) => (
-                  <div 
-                    key={item.href}
-                    className="animate-in fade-in slide-in-from-left-2 duration-500"
-                    style={{ animationDelay: `${(index + 2) * 100}ms`, animationFillMode: 'backwards' }}
-                  >
-                    <NavItemComponent item={item} isCollapsed={!isOpen} />
-                  </div>
+                {managementNavItems.map((item) => (
+                  <NavItemComponent key={item.href} item={item} isCollapsed={!isOpen} />
                 ))}
               </div>
             </div>
@@ -261,15 +228,12 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
         {/* Footer */}
         <div className={cn("border-t p-4 overflow-hidden", !isOpen && "p-2")}>
           <div className="flex items-center justify-between">
-            {/* Version text - animates out when collapsed */}
-            <span 
-              className={cn(
-                "text-xs text-muted-foreground transition-all duration-500 whitespace-nowrap overflow-hidden",
-                isOpen ? "opacity-100 max-w-[100px]" : "opacity-0 max-w-0"
-              )}
-            >
-              v1.0.0
-            </span>
+            {/* Version text - hidden when collapsed */}
+            {isOpen && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                v1.0.0
+              </span>
+            )}
             
             {/* Settings button */}
             <Tooltip>

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import { useSyncStatus, useSyncUser, useCommandQueue, useClearPendingCommands } from '@/hooks/use-users'
 import type { UserEntry } from '@/services/user-service'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { ClearCommandsModal } from './clear-commands-modal'
 import { isSyncCommand } from '@/lib/command-types'
 import { cn } from '@/lib/utils'
@@ -43,11 +43,25 @@ const DATA_TYPES = [
 ] as const
 
 export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogProps) {
-  const { data, isLoading } = useSyncStatus(user?.id || '')
-  const { data: commandData } = useCommandQueue(user?.id || '', 50)
+  // Use more aggressive polling when modal is open (3s for sync, 1s for commands)
+  const { data, isLoading, refetch: refetchSyncStatus } = useSyncStatus(user?.id || '', {
+    refetchInterval: open ? 3000 : 10000, // 3s when open, 10s when closed
+  })
+  const { data: commandData, refetch: refetchCommands } = useCommandQueue(user?.id || '', 50, {
+    refetchInterval: open ? 1000 : 3000, // 1s when open, 3s when closed
+  })
   const syncUser = useSyncUser()
   const clearCommands = useClearPendingCommands()
   const [clearModalState, setClearModalState] = useState<{ deviceSn: string; deviceName: string; count: number } | null>(null)
+
+  // Immediate refetch when modal opens
+  useEffect(() => {
+    if (open && user?.id) {
+      console.log('[SyncDialog] Modal opened, refetching...')
+      refetchSyncStatus()
+      refetchCommands()
+    }
+  }, [open, user?.id, refetchSyncStatus, refetchCommands])
   
   const syncStatus = data?.data || []
   const allCommands = commandData?.data || []
@@ -72,6 +86,7 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
   }
 
   const getSyncState = (status: any, deviceSn: string) => {
+    console.log('[SyncDialog] getSyncState:', { deviceSn, status, commandsCount: commands.length })
     const items = DATA_TYPES.map(({ key, icon, label }) => {
       const hasData = key === 'user' ? true : 
         key === 'fingerprint' ? user?.has_fingerprint :
@@ -102,7 +117,11 @@ export function SyncStatusDialog({ user, open, onOpenChange }: SyncStatusDialogP
   }
 
   const handleSyncToDevice = (deviceSn: string) => {
-    if (!user?.id) return
+    console.log('[SyncDialog] handleSyncToDevice called:', { deviceSn, userId: user?.id })
+    if (!user?.id) {
+      console.error('[SyncDialog] No user.id available')
+      return
+    }
     syncUser.mutate({ userId: user.id, deviceSns: [deviceSn] })
   }
 

@@ -28,22 +28,22 @@ export function useUsers(filters: UserFilters = {}) {
 }
 
 // Hook: Get sync status for a user
-export function useSyncStatus(userId: string) {
+export function useSyncStatus(userId: string, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: userKeys.syncStatus(userId),
     queryFn: () => UserService.getSyncStatus(userId),
     enabled: !!userId,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: options?.refetchInterval ?? 10000, // Refresh every 10 seconds by default
   })
 }
 
 // Hook: Get command queue for a user
-export function useCommandQueue(userId: string, limit: number = 10) {
+export function useCommandQueue(userId: string, limit: number = 10, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: userKeys.commandQueue(userId),
     queryFn: () => UserService.getCommandQueue(userId, limit),
     enabled: !!userId,
-    refetchInterval: 3000, // Auto-refresh every 3 seconds
+    refetchInterval: options?.refetchInterval ?? 3000, // Auto-refresh every 3 seconds by default
   })
 }
 

@@ -73,7 +73,8 @@ export function BiometricViewDialog({
 
   const formatHash = (hash: string | null) => {
     if (!hash) return 'N/A'
-    return hash.substring(0, 8) + '...'
+    // Base64 data - show more for better identification
+    return hash.length > 32 ? hash.substring(0, 32) + '...' : hash
   }
 
   const formatDate = (date: string | null) => {

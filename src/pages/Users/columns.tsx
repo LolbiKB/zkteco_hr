@@ -76,17 +76,43 @@ export const columns: ColumnDef<UserEntry>[] = [
   {
     id: 'biometrics',
     header: 'Biometrics',
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
+      const user = row.original
+      const meta = table.options.meta as any
       const fingerprintCount = row.original.fingerprint_count || 0
       const faceCount = row.original.face_count || 0
+      const hasBiometrics = fingerprintCount > 0 || faceCount > 0
+
+      if (hasBiometrics) {
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto p-1 gap-1 hover:bg-accent"
+            onClick={(e) => {
+              e.stopPropagation()
+              meta?.onViewBiometric?.(user)
+            }}
+          >
+            <Badge variant={fingerprintCount > 0 ? 'default' : 'outline'} className="gap-1">
+              <Fingerprint className="h-3 w-3" />
+              {fingerprintCount}
+            </Badge>
+            <Badge variant={faceCount > 0 ? 'default' : 'outline'} className="gap-1">
+              <ScanFace className="h-3 w-3" />
+              {faceCount}
+            </Badge>
+          </Button>
+        )
+      }
 
       return (
         <div className="flex gap-2">
-          <Badge variant={fingerprintCount > 0 ? 'default' : 'outline'} className="gap-1">
+          <Badge variant="outline" className="gap-1">
             <Fingerprint className="h-3 w-3" />
             {fingerprintCount}
           </Badge>
-          <Badge variant={faceCount > 0 ? 'default' : 'outline'} className="gap-1">
+          <Badge variant="outline" className="gap-1">
             <ScanFace className="h-3 w-3" />
             {faceCount}
           </Badge>

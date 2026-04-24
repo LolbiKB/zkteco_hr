@@ -83,40 +83,28 @@ export const columns: ColumnDef<UserEntry>[] = [
       const faceCount = row.original.face_count || 0
       const hasBiometrics = fingerprintCount > 0 || faceCount > 0
 
-      if (hasBiometrics) {
-        return (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto p-1 gap-1 hover:bg-accent [&>svg]:h-3 [&>svg]:w-3"
-            onClick={(e) => {
-              e.stopPropagation()
-              meta?.onViewBiometric?.(user)
-            }}
-          >
-            <Badge variant={fingerprintCount > 0 ? 'default' : 'outline'} className="gap-1 text-[10px] h-5">
-              <Fingerprint className="h-2 w-2" />
-              {fingerprintCount}
-            </Badge>
-            <Badge variant={faceCount > 0 ? 'default' : 'outline'} className="gap-1 text-[10px] h-5">
-              <ScanFace className="h-2 w-2" />
-              {faceCount}
-            </Badge>
-          </Button>
-        )
-      }
-
       return (
-        <div className="flex gap-2">
-          <Badge variant="outline" className="gap-1 text-[10px] h-5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-auto p-1 gap-1 hover:bg-accent [&>svg]:h-3 [&>svg]:w-3 ${hasBiometrics ? 'cursor-pointer' : 'cursor-default'}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (hasBiometrics) {
+              meta?.onViewBiometric?.(user)
+            }
+          }}
+          disabled={!hasBiometrics}
+        >
+          <Badge variant={fingerprintCount > 0 ? 'default' : 'outline'} className="gap-1 text-[10px] h-5">
             <Fingerprint className="h-2 w-2" />
             {fingerprintCount}
           </Badge>
-          <Badge variant="outline" className="gap-1 text-[10px] h-5">
+          <Badge variant={faceCount > 0 ? 'default' : 'outline'} className="gap-1 text-[10px] h-5">
             <ScanFace className="h-2 w-2" />
             {faceCount}
           </Badge>
-        </div>
+        </Button>
       )
     },
   },

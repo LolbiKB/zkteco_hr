@@ -114,7 +114,7 @@ export const columns: ColumnDef<UserEntry>[] = [
     header: 'Privilege',
     cell: ({ row }) => {
       const privilege = row.getValue('privilege') as number | null
-      if (privilege === null) return <span className="text-muted-foreground text-sm">-</span>
+      if (privilege === null || privilege === undefined) return <span className="text-muted-foreground text-sm">-</span>
 
       const labels: Record<number, string> = {
         0: 'User',
@@ -134,7 +134,7 @@ export const columns: ColumnDef<UserEntry>[] = [
     header: 'Created',
     cell: ({ row }) => {
       const createdAt = row.getValue('created_at') as string | null
-      if (!createdAt) return <span className="text-muted-foreground text-sm">-</span>
+      if (!createdAt || createdAt === undefined) return <span className="text-muted-foreground text-sm">-</span>
 
       const date = new Date(createdAt)
       return (
@@ -175,8 +175,12 @@ export const columns: ColumnDef<UserEntry>[] = [
                   <RefreshCw className="mr-2 h-4 w-4" />
                   View Sync Status
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => meta?.onEnrollBiometric?.(user)}>
+                <DropdownMenuItem onClick={() => meta?.onViewBiometric?.(user)}>
                   <Fingerprint className="mr-2 h-4 w-4" />
+                  View Biometrics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => meta?.onEnrollBiometric?.(user)}>
+                  <ScanFace className="mr-2 h-4 w-4" />
                   Enroll Biometric
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => meta?.onRefreshPhoto?.(user)}>

@@ -1,0 +1,151 @@
+import { useQuery } from '@tanstack/react-query'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
+import { Fingerprint, ScanFace, X } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useEffect, useState } from 'react'
+
+interface BiometricViewDialogProps {
+  userId: string | null
+  userName: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+const FINGER_LABELS: Record<number, string> = {
+  0: 'Right Thumb',
+  1: 'Right Index',
+  2: 'Right Middle',
+  3: 'Right Ring',
+  4: 'Right Little',
+  5: 'Left Thumb',
+  6: 'Left Index',
+  7: 'Left Middle',
+  8: 'Left Ring',
+  9: 'Left Little',
+}
+
+interface BiometricRecord {
+  id: string
+  type: string
+  finger_id: number | null
+  template_data: string | null
+  enrolled_at: string | null
+  enrolled_device_sn: string | null
+}
+
+export function BiometricViewDialog({
+  userId,
+  userName,
+  open,
+  onOpenChange,
+}: BiometricViewDialogProps) {
+  const [biometrics, setBiometrics] = useState<BiometricRecord[]>([])
+
+  // Fetch biometrics for this user
+  useEffect(() => {
+    if (!userId || !open) return
+
+    const fetchBiometrics = async () => {
+      const { data, error } = await supabase
+        .from('user_biometrics')
+        .select('*')
+        .eq('user_id', userId)
+        .order('enrolled_at', { ascending: false })
+
+      if (!error && data) {
+        setBiometrics(data)
+      }
+    }
+
+    fetchBiometrics()
+  }, [userId, open])
+
+  // Group by type
+  const fingerprints = biometrics.filter(b => b.type === 'fingerprint')
+  const faces = biometrics.filter(b => b.type === 'face')
+
+  const formatHash = (hash: string | null) => {
+    if (!hash) return 'N/A'
+    return hash.substring(0, 8) + '...'
+  }
+
+  const formatDate = (date: string | null) => {
+    if (!date) return 'N/A'
+    return new Date(date).toLocaleDateString()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Biometrics Summary</DialogTitle>
+          <DialogDescription>{userName || 'User'}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Fingerprints */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Fingerprint className="h-4 w-4" />
+              <span className="text-sm font-medium">Fingerprints</span>
+              <Badge variant="outline">{fingerprints.length}</Badge>
+            </div>
+
+            {fingerprints.length === 0 ? (
+              <p className="text-sm text-muted-foreground pl-6">Not enrolled</p>
+            ) : (
+              <div className="space-y-1 pl-6">
+                {fingerprints.map(bio => (
+                  <div key={bio.id} className="flex items-center justify-between text-sm">
+                    <span className="font-mono text-muted-foreground">
+                      {formatHash(bio.template_data)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {FINGER_LABELS[bio.finger_id || 0]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t" />
+
+          {/* Face */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ScanFace className="h-4 w-4" />
+              <span className="text-sm font-medium">Face</span>
+              <Badge variant={faces.length > 0 ? 'default' : 'outline'}>
+                {faces.length > 0 ? 'Enrolled' : 'Not enrolled'}
+              </Badge>
+            </div>
+
+            {faces.length > 0 && (
+              <div className="space-y-1 pl-6">
+                {faces.map(bio => (
+                  <div key={bio.id} className="flex items-center justify-between text-sm">
+                    <span className="font-mono text-muted-foreground">
+                      {formatHash(bio.template_data)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {bio.enrolled_device_sn || 'N/A'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

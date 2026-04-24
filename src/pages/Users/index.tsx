@@ -7,6 +7,7 @@ import { SyncStatusDialog } from '@/components/users/sync-status-dialog'
 import { RegisterDialog } from '@/components/users/register-dialog'
 import { ChangeStatusDialog } from '@/components/users/change-status-dialog'
 import { EnrollBiometricDialog } from '@/components/users/enroll-biometric-dialog'
+import { BiometricViewDialog } from '@/components/users/biometric-view-dialog'
 import { PhotoService } from '@/services/photo-service'
 import type { UserFilters, UserEntry } from '@/services/user-service'
 import {
@@ -32,6 +33,7 @@ export function Users() {
   const [registerEmployee, setRegisterEmployee] = useState<UserEntry | null>(null)
   const [changeStatusUser, setChangeStatusUser] = useState<UserEntry | null>(null)
   const [enrollBiometricUser, setEnrollBiometricUser] = useState<UserEntry | null>(null)
+  const [viewBiometricUser, setViewBiometricUser] = useState<UserEntry | null>(null)
   
   const { data, isLoading, isFetching, refetch } = useUsers(filters)
 
@@ -50,6 +52,11 @@ export function Users() {
   const handleEnrollBiometric = (user: UserEntry) => {
     if (!user.id) return
     setEnrollBiometricUser(user)
+  }
+
+  const handleViewBiometric = (user: UserEntry) => {
+    if (!user.id) return
+    setViewBiometricUser(user)
   }
 
   const handleRegister = (user: UserEntry) => {
@@ -145,6 +152,7 @@ export function Users() {
         meta={{
           onViewSyncStatus: handleViewSyncStatus,
           onEnrollBiometric: handleEnrollBiometric,
+          onViewBiometric: handleViewBiometric,
           onRegister: handleRegister,
           onChangeStatus: handleChangeStatus,
           onRefreshPhoto: handleRefreshPhoto,
@@ -174,6 +182,13 @@ export function Users() {
         user={enrollBiometricUser}
         open={!!enrollBiometricUser}
         onOpenChange={(open) => !open && setEnrollBiometricUser(null)}
+      />
+
+      <BiometricViewDialog
+        userId={viewBiometricUser?.id || null}
+        userName={viewBiometricUser?.name || null}
+        open={!!viewBiometricUser}
+        onOpenChange={(open) => !open && setViewBiometricUser(null)}
       />
     </div>
   )

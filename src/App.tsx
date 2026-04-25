@@ -9,7 +9,7 @@ import { LoginPage } from './pages/Login'
 import { AuthProvider, useAuth } from '@/contexts/auth-context'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { LogOut, Loader2 } from 'lucide-react'
+import { Loader2, LogOut } from 'lucide-react'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -21,6 +21,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
+import { HeaderConnection } from '@/components/header-connection'
+import { HeaderDeviceStatus } from '@/components/header-device-status'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -117,10 +119,9 @@ function AppContent() {
                 </Breadcrumb>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{user?.email}</span>
-                <Button onClick={signOut} variant="ghost" size="sm">
-                  <LogOut className="h-4 w-4" />
-                </Button>
+                <HeaderDeviceStatus />
+                <Separator orientation="vertical" className="h-4" />
+                <HeaderConnection userEmail={user?.email} onSignOut={signOut} />
               </div>
             </div>
           </header>

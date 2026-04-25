@@ -607,27 +607,47 @@ export class UserService {
   }
 
   static async clearPendingCommands(deviceSn: string, userId?: string): Promise<{ cleared: number }> {
-    let lookupQuery = supabase.from('command_queue').select('related_user_id').eq('device_sn', deviceSn).in('status', ['pending', 'sent'])
+    console.log('[clearPendingCommands] deviceSn:', deviceSn, 'userId:', userId)
+    
+    let lookupQuery = supabase.from('command_queue').select('id, related_user_id, status').eq('device_sn', deviceSn).in('status', ['pending', 'sent', 'success'])
     if (userId) lookupQuery = lookupQuery.eq('related_user_id', userId)
-    const { data: commandsToClear } = await lookupQuery
-    const userIds = [...new Set(commandsToClear?.map(c => c.related_user_id).filter(Boolean) || [])]
+    const { data: commandsToClear, error: lookupError } = await lookupQuery
+    
+    console.log('[clearPendingCommands] Found:', commandsToClear, 'error:', lookupError)
+    
     const deleted = commandsToClear?.length || 0
 
-    let deleteQuery = supabase.from('command_queue').delete().eq('device_sn', deviceSn).in('status', ['pending', 'sent'])
+    let deleteQuery = supabase.from('command_queue').delete().eq('device_sn', deviceSn).in('status', ['pending', 'sent', 'success'])
     if (userId) deleteQuery = deleteQuery.eq('related_user_id', userId)
-    await deleteQuery
+    const { error: deleteError } = await deleteQuery
+    
+    console.log('[clearPendingCommands] Delete error:', deleteError)
+    
+    // Check remaining commands for this user+device and update sync status
+    if (userId) {
+      const { data: remaining } = await supabase.from('command_queue').select('status', { count: 'exact' }).eq('device_sn', deviceSn).eq('related_user_id', userId)
+      const remainingCount = remaining?.length || 0
+      
+      console.log('[clearPendingCommands] Remaining commands:', remainingCount)
 
-    for (const uid of userIds) {
-      if (!uid) continue
-      const { data: remaining } = await supabase.from('command_queue').select('status').eq('device_sn', deviceSn).eq('related_user_id', uid).in('status', ['pending', 'sent', 'dispatched'])
-      const { data: completed } = await supabase.from('command_queue').select('status').eq('device_sn', deviceSn).eq('related_user_id', uid).eq('status', 'success')
-
-      if (remaining && remaining.length > 0) {
-        await supabase.from('user_device_sync_status').upsert({ device_sn: deviceSn, user_id: uid, expected_state: 'synced', actual_state: 'syncing', retry_count: 0 }, { onConflict: 'device_sn,user_id' })
-      } else if (completed && completed.length > 0) {
-        await supabase.from('user_device_sync_status').upsert({ device_sn: deviceSn, user_id: uid, expected_state: 'synced', actual_state: 'synced', last_successful_sync: new Date().toISOString(), retry_count: 0 }, { onConflict: 'device_sn,user_id' })
+      // Update sync status based on remaining commands
+      if (remainingCount === 0) {
+        // No more commands - mark as not_synced (need re-sync)
+        await supabase.from('user_device_sync_status').upsert({ 
+          device_sn: deviceSn, 
+          user_id: userId, 
+          expected_state: 'synced', 
+          actual_state: 'not_synced', 
+          retry_count: 0 
+        }, { onConflict: 'device_sn,user_id' })
       } else {
-        await supabase.from('user_device_sync_status').upsert({ device_sn: deviceSn, user_id: uid, expected_state: 'synced', actual_state: 'not_synced', retry_count: 0 }, { onConflict: 'device_sn,user_id' })
+        await supabase.from('user_device_sync_status').upsert({ 
+          device_sn: deviceSn, 
+          user_id: userId, 
+          expected_state: 'synced', 
+          actual_state: 'syncing', 
+          retry_count: 0 
+        }, { onConflict: 'device_sn,user_id' })
       }
     }
     return { cleared: deleted }
@@ -660,24 +680,44 @@ export class UserService {
     return 'timeout'
   }
   
-  static async clearPendingCommandsForDevice(deviceSn: string): Promise<number> {
+  static async clearPendingCommandsForDevice(deviceSn: string, userId: string): Promise<number> {
+    // Clear pending, sent, and success (stuck) commands for this user+device
     const { count } = await supabase
       .from('command_queue')
       .delete()
       .eq('device_sn', deviceSn)
-      .in('status', ['pending'])
+      .eq('related_user_id', userId)
+      .in('status', ['pending', 'sent', 'success'])
     
     return count || 0
   }
   
   static async clearPendingCommandsForUser(userId: string): Promise<number> {
-    const { count } = await supabase
-      .from('command_queue')
-      .delete()
-      .eq('related_user_id', userId)
-      .in('status', ['pending'])
+    // Clear pending AND sent (stuck) commands - include older than 5 minutes to be safe
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     
-    return count || 0
+    // First get count of what will be deleted for logging
+    const { data: existing } = await supabase
+      .from('command_queue')
+      .select('id')
+      .eq('related_user_id', userId)
+      .in('status', ['pending', 'sent'])
+      .lte('created_at', fiveMinutesAgo)
+    
+    const count = existing?.length || 0
+    
+    if (count > 0) {
+      const { count: deleted } = await supabase
+        .from('command_queue')
+        .delete()
+        .eq('related_user_id', userId)
+        .in('status', ['pending', 'sent'])
+        .lte('created_at', fiveMinutesAgo)
+      
+      return deleted || count
+    }
+    
+    return 0
   }
 
   static async getDeviceState(deviceSn: string): Promise<{ state: 'idle' | 'syncing' | 'unknown'; activeCommand?: CommandQueueEntry }> {

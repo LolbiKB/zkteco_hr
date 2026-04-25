@@ -1,8 +1,4 @@
 import { supabase } from '@/lib/supabase'
-import type { ProcessedImage } from '@/lib/image-processor'
-import { processImageFromUrl, validateImageForDevice } from '@/lib/image-processor'
-
-const API_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
 export interface PhotoCacheEntry {
   userId: string
@@ -15,26 +11,16 @@ export interface PhotoCacheEntry {
 export interface ProcessPhotoResult {
   success: boolean
   message: string
-  processedImage?: ProcessedImage
   errors?: string[]
+  processedImage?: any // Kept for compatibility
 }
+
+const API_URL = import.meta.env.VITE_API_URL || '' // Empty uses Vite proxy in dev
 
 export class PhotoService {
   /**
-   * Get auth headers for API requests
-   */
-  private static async getAuthHeaders(): Promise<HeadersInit> {
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    return {
-      'Content-Type': 'application/json',
-      ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
-    }
-  }
-
-  /**
-   * Fetch and process photo from Frappe URL
-   * This is the main method for processing photos for device sync
+   * Process and store photo via Fastify backend (server-side processing)
+   * Fetches from Frappe, resizes, uploads to Supabase Storage
    */
   static async processAndStorePhoto(
     userId: string,
@@ -43,100 +29,48 @@ export class PhotoService {
     try {
       console.log(`[PhotoService] Processing photo for user ${userId}`)
 
-      // Step 1: Process the image client-side
-      const processedImage = await processImageFromUrl(imageUrl, userId, {
-        backgroundColor: '#F5F5F5',
-        targetSize: 240,
-        maxFileSizeMB: 0.5,
-        quality: 0.9,
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const response = await fetch(`${API_URL}/admin/photo/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          photo_url: imageUrl,
+        }),
       })
 
-      console.log(`[PhotoService] Processed: ${processedImage.width}x${processedImage.height}, ${processedImage.size} bytes`)
-
-      // Step 2: Validate the processed image
-      const validation = validateImageForDevice(processedImage)
-      if (!validation.valid) {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('[PhotoService] Fastify error:', error)
         return {
           success: false,
-          message: 'Image validation failed',
-          processedImage,
-          errors: validation.errors,
+          message: error.error || `Failed: ${response.status}`,
         }
       }
 
-      // Step 3: Upload to Supabase Storage via backend
-      const uploadResult = await this.uploadProcessedPhoto(userId, processedImage.base64)
-
-      if (!uploadResult.success) {
-        return {
-          success: false,
-          message: uploadResult.message,
-          processedImage,
-        }
-      }
+      const result = await response.json()
+      console.log(`[PhotoService] Success: ${result.photo_url}`)
 
       return {
         success: true,
         message: 'Photo processed and stored successfully',
-        processedImage,
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.error('[PhotoService] Photo processing failed:', errorMessage)
       
-      // Provide more helpful error messages
       let userMessage = `Photo processing failed: ${errorMessage}`
-      if (errorMessage.includes('text/html') || errorMessage.includes('content type')) {
-        userMessage = 'The photo URL is no longer valid or the image was removed from Frappe. Please refresh the user data from Frappe to get a new photo URL.'
-      } else if (errorMessage.includes('base64') || errorMessage.includes('InvalidCharacterError')) {
-        userMessage = 'Could not fetch the photo from Frappe. The photo may have been deleted or the URL has expired. Please refresh the user data from Frappe.'
-      } else if (errorMessage.includes('CORS')) {
-        userMessage = 'Cannot access the photo due to security restrictions. Please refresh the user data from Frappe to update the photo.'
+      if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+        userMessage = 'Cannot connect to backend. Please try again.'
       }
       
       return {
         success: false,
         message: userMessage,
-        errors: [errorMessage],
-      }
-    }
-  }
-
-  /**
-   * Upload processed photo to Supabase Storage
-   */
-  private static async uploadProcessedPhoto(
-    userId: string,
-    base64Image: string
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const headers = await this.getAuthHeaders()
-      const response = await fetch(
-        `${API_BASE_URL}/api-users/${userId}/upload-processed-photo`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ photo_base64: base64Image }),
-        }
-      )
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        return {
-          success: false,
-          message: error.error || `Upload failed: ${response.status}`,
-        }
-      }
-
-      const data = await response.json()
-      return {
-        success: true,
-        message: data.message || 'Upload successful',
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Upload failed',
       }
     }
   }
@@ -146,7 +80,6 @@ export class PhotoService {
    */
   static async getPhotoUrl(userId: string): Promise<string | null> {
     try {
-      // Check if photo is cached
       const { data: user, error } = await supabase
         .from('users')
         .select('photo_storage_path, photo_synced_at')
@@ -157,7 +90,6 @@ export class PhotoService {
         return null
       }
 
-      // Get public URL (bucket is public)
       const { data } = supabase
         .storage
         .from('user-photos')
@@ -223,11 +155,9 @@ export class PhotoService {
 
   /**
    * Get the raw base64 photo for device sync
-   * This fetches from storage and returns base64
    */
   static async getPhotoBase64ForDeviceSync(userId: string): Promise<string | null> {
     try {
-      // Get the storage path
       const { data: user, error } = await supabase
         .from('users')
         .select('photo_storage_path')
@@ -238,7 +168,6 @@ export class PhotoService {
         return null
       }
 
-      // Download from storage
       const { data: blob, error: downloadError } = await supabase
         .storage
         .from('user-photos')
@@ -249,9 +178,17 @@ export class PhotoService {
         return null
       }
 
-      // Convert to base64
-      const { blobToBase64 } = await import('@/lib/image-processor')
-      return await blobToBase64(blob)
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1])
+        }
+        reader.onerror = () => resolve('')
+        reader.readAsDataURL(blob)
+      })
+
+      return base64
     } catch (error) {
       console.error('[PhotoService] Failed to get photo base64:', error)
       return null

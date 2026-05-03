@@ -91,6 +91,7 @@ export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolea
 
 /**
  * Realtime subscription for device status updates (especially last_seen for online status)
+ * Uses setQueryData for smooth updates without full refetch
  */
 export function useRealtimeDevices() {
   const queryClient = useQueryClient()
@@ -101,13 +102,34 @@ export function useRealtimeDevices() {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'devices',
         },
-        () => {
-          // Just refetch all devices queries when any device changes
-          queryClient.invalidateQueries({ queryKey: ['devices'] })
+        (payload) => {
+          // Only update the cache for the specific device that changed
+          queryClient.setQueryData(['devices', 'list', {}], (old: any) => {
+            if (!old || !old.devices) return old
+            
+            const updatedDevices = old.devices.map((d: any) => 
+              d.serial_number === payload.new.serial_number 
+                ? { ...d, ...payload.new }
+                : d
+            )
+            return { ...old, devices: updatedDevices }
+          })
+          
+          // Also update any paginated queries for devices
+          queryClient.setQueryData(['devices', 'list'], (old: any) => {
+            if (!old || !old.devices) return old
+            
+            const updatedDevices = old.devices.map((d: any) => 
+              d.serial_number === payload.new.serial_number 
+                ? { ...d, ...payload.new }
+                : d
+            )
+            return { ...old, devices: updatedDevices }
+          })
         }
       )
       .subscribe()

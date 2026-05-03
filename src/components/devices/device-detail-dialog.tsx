@@ -413,7 +413,7 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
             </div>
 
             <div className="flex-1 min-h-0">
-              {paginatedUsers.isLoading && allUsers.length === 0 ? (
+              {(paginatedUsers.isLoading || paginatedUsers.isFetching) && allUsers.length === 0 ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>

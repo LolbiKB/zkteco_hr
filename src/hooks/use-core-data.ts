@@ -113,12 +113,10 @@ export function useUsersList(filters?: {
         search: filters?.search,
         status: filters?.status,
       })
+      // Return same structure as legacy useUsers for compatibility
       return {
-        users: result.data || [],
-        total: result.meta?.total || 0,
-        page: result.meta?.page || 1,
-        limit: result.meta?.limit || 20,
-        totalPages: result.meta?.totalPages || 0,
+        data: result.data || [],
+        meta: result.meta,
       }
     },
     staleTime: 1000 * 60 * 2, // 2 min

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useUsers } from '@/hooks/use-users'
+import { useUsersList } from '@/hooks'
 import { UserDataTable } from '@/components/users/data-table'
 import { columns } from './columns'
 import { SyncStatusDialog } from '@/components/users/sync-status-dialog'
@@ -34,7 +34,12 @@ export function Users() {
   const [viewBiometricUser, setViewBiometricUser] = useState<UserEntry | null>(null)
   const [refreshPhotoUser, setRefreshPhotoUser] = useState<UserEntry | null>(null)
   
-  const { data, isLoading, isFetching, refetch } = useUsers(filters)
+  const { data, isLoading, isFetching, refetch } = useUsersList({
+    page: filters.page,
+    limit: filters.limit,
+    search: filters.search,
+    status: filters.status,
+  })
 
   const compromisedCount = useMemo(() => {
     return data?.data?.filter(user => user.status === 'compromised').length || 0

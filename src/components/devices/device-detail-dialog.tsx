@@ -164,14 +164,20 @@ function CommandList({ commands }: { commands: any[] }) {
 function StatusIcon({
   synced,
   hasData = true,
+  isPending = false,
   isSyncing = false
 }: {
   synced: boolean
   hasData?: boolean
+  isPending?: boolean
   isSyncing?: boolean
 }) {
   if (!hasData) {
     return <span className="text-gray-300">-</span>
+  }
+
+  if (isPending) {
+    return <Clock className="h-5 w-5 text-amber-500 mx-auto" />
   }
 
   if (isSyncing) {
@@ -210,6 +216,7 @@ function UserSyncRow({
         <StatusIcon
           synced={user.userSynced}
           hasData={true}
+          isPending={user.isUserPending}
           isSyncing={user.isUserSyncing}
         />
       </td>
@@ -217,6 +224,7 @@ function UserSyncRow({
         <StatusIcon
           synced={user.fingerprintSynced}
           hasData={user.hasFingerprint}
+          isPending={user.isFingerprintPending}
           isSyncing={user.isFingerprintSyncing}
         />
       </td>
@@ -224,6 +232,7 @@ function UserSyncRow({
         <StatusIcon
           synced={user.faceSynced}
           hasData={user.hasFace}
+          isPending={user.isFacePending}
           isSyncing={user.isFaceSyncing}
         />
       </td>
@@ -231,6 +240,7 @@ function UserSyncRow({
         <StatusIcon
           synced={user.photoSynced}
           hasData={user.hasPhoto}
+          isPending={user.isPhotoPending}
           isSyncing={user.isPhotoSyncing}
         />
       </td>
@@ -284,17 +294,25 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
     return flatUsers.map(user => {
       const userCommands = recentCommandsForDevice.filter(c => c.related_user_id === user.userId)
       
-      const hasPendingSyncUser = userCommands.some(c => c.command_type === 'sync_user' && (c.status === 'pending' || c.status === 'sent'))
-      const hasPendingFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && (c.status === 'pending' || c.status === 'sent'))
-      const hasPendingFace = userCommands.some(c => c.command_type === 'enroll_face' && (c.status === 'pending' || c.status === 'sent'))
-      const hasPendingPhoto = userCommands.some(c => c.command_type === 'upload_photo' && (c.status === 'pending' || c.status === 'sent'))
+      const hasPendingSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'pending')
+      const hasSentSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'sent')
+      const hasPendingFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'pending')
+      const hasSentFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'sent')
+      const hasPendingFace = userCommands.some(c => c.command_type === 'enroll_face' && c.status === 'pending')
+      const hasSentFace = userCommands.some(c => c.command_type === 'enroll_face' && c.status === 'sent')
+      const hasPendingPhoto = userCommands.some(c => c.command_type === 'upload_photo' && c.status === 'pending')
+      const hasSentPhoto = userCommands.some(c => c.command_type === 'upload_photo' && c.status === 'sent')
       
       return {
         ...user,
-        isUserSyncing: hasPendingSyncUser,
-        isFingerprintSyncing: hasPendingFingerprint,
-        isFaceSyncing: hasPendingFace,
-        isPhotoSyncing: hasPendingPhoto,
+        isUserSyncing: hasPendingSyncUser || hasSentSyncUser,
+        isUserPending: hasPendingSyncUser,
+        isFingerprintSyncing: hasPendingFingerprint || hasSentFingerprint,
+        isFingerprintPending: hasPendingFingerprint,
+        isFaceSyncing: hasPendingFace || hasSentFace,
+        isFacePending: hasPendingFace,
+        isPhotoSyncing: hasPendingPhoto || hasSentPhoto,
+        isPhotoPending: hasPendingPhoto,
       }
     })
   }, [paginatedUsers.data, commands])

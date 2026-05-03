@@ -176,12 +176,12 @@ function StatusIcon({
     return <span className="text-gray-300">-</span>
   }
 
-  if (isPending) {
-    return <Clock className="h-5 w-5 text-amber-500 mx-auto" />
-  }
-
   if (isInProgress) {
     return <Loader2 className="h-5 w-5 text-blue-500 animate-spin mx-auto" />
+  }
+
+  if (isPending) {
+    return <Clock className="h-5 w-5 text-amber-500 mx-auto" />
   }
 
   if (synced) {

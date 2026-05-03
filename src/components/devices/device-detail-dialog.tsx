@@ -165,15 +165,25 @@ function StatusIcon({
   synced,
   hasData = true,
   isPending = false,
-  isSyncing = false
+  isSyncing = false,
+  isWaiting = false
 }: {
   synced: boolean
   hasData?: boolean
   isPending?: boolean
   isSyncing?: boolean
+  isWaiting?: boolean
 }) {
   if (!hasData) {
     return <span className="text-gray-300">-</span>
+  }
+
+  if (isWaiting) {
+    return (
+      <div className="h-5 w-5 mx-auto flex items-center justify-center">
+        <div className="w-4 h-4 rounded-full border-2 border-dashed border-amber-400" />
+      </div>
+    )
   }
 
   if (isPending) {
@@ -227,6 +237,7 @@ function UserSyncRow({
           hasData={user.hasFingerprint}
           isPending={user.isFingerprintPending}
           isSyncing={user.isFingerprintSyncing}
+          isWaiting={user.isFingerprintWaiting}
         />
       </td>
       <td className="px-4 py-3 text-center">
@@ -235,6 +246,7 @@ function UserSyncRow({
           hasData={user.hasFace}
           isPending={user.isFacePending}
           isSyncing={user.isFaceSyncing}
+          isWaiting={user.isFaceWaiting}
         />
       </td>
       <td className="px-4 py-3 text-center">
@@ -243,6 +255,7 @@ function UserSyncRow({
           hasData={user.hasPhoto}
           isPending={user.isPhotoPending}
           isSyncing={user.isPhotoSyncing}
+          isWaiting={user.isPhotoWaiting}
         />
       </td>
       <td className="px-4 py-3 text-right">
@@ -297,6 +310,8 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       
       const hasPendingSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'pending')
       const hasSentSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'sent')
+      const userSyncPending = hasPendingSyncUser || hasSentSyncUser // user sync in progress
+      
       const hasPendingFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'pending')
       const hasSentFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'sent')
       const hasPendingFace = userCommands.some(c => c.command_type === 'enroll_face' && c.status === 'pending')
@@ -306,14 +321,17 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       
       return {
         ...user,
-        isUserSyncing: hasPendingSyncUser || hasSentSyncUser,
+        isUserSyncing: userSyncPending,
         isUserPending: hasPendingSyncUser,
         isFingerprintSyncing: hasPendingFingerprint || hasSentFingerprint,
         isFingerprintPending: hasPendingFingerprint,
+        isFingerprintWaiting: userSyncPending && !hasPendingFingerprint && !hasSentFingerprint, // waiting on user
         isFaceSyncing: hasPendingFace || hasSentFace,
         isFacePending: hasPendingFace,
+        isFaceWaiting: userSyncPending && !hasPendingFace && !hasSentFace, // waiting on user
         isPhotoSyncing: hasPendingPhoto || hasSentPhoto,
         isPhotoPending: hasPendingPhoto,
+        isPhotoWaiting: userSyncPending && !hasPendingPhoto && !hasSentPhoto, // waiting on user
       }
     })
   }, [paginatedUsers.data, commands])

@@ -272,24 +272,29 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
     if (!paginatedUsers.data?.pages) return []
     const flatUsers = paginatedUsers.data.pages.flatMap(page => page.data || [])
     
-    // Get pending commands for this device (fresh ones < 2 minutes)
+    // Get recent commands for this device (within 2 minutes - both for spinner and checkmark)
     const TWO_MINUTES = 2 * 60 * 1000
     const now = Date.now()
-    const pendingCommandsForDevice = (commands || []).filter(c => {
-      if (c.status !== 'pending' && c.status !== 'sent') return false
+    const recentCommandsForDevice = (commands || []).filter(c => {
       const commandAge = now - new Date(c.created_at).getTime()
       return commandAge < TWO_MINUTES
     })
     
     // Compute syncing flags per user from pending commands
     return flatUsers.map(user => {
-      const userCommands = pendingCommandsForDevice.filter(c => c.related_user_id === user.userId)
+      const userCommands = recentCommandsForDevice.filter(c => c.related_user_id === user.userId)
+      
+      const hasPendingSyncUser = userCommands.some(c => c.command_type === 'sync_user' && (c.status === 'pending' || c.status === 'sent'))
+      const hasPendingFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && (c.status === 'pending' || c.status === 'sent'))
+      const hasPendingFace = userCommands.some(c => c.command_type === 'enroll_face' && (c.status === 'pending' || c.status === 'sent'))
+      const hasPendingPhoto = userCommands.some(c => c.command_type === 'upload_photo' && (c.status === 'pending' || c.status === 'sent'))
+      
       return {
         ...user,
-        isUserSyncing: userCommands.some(c => c.command_type === 'sync_user'),
-        isFingerprintSyncing: userCommands.some(c => c.command_type === 'enroll_fingerprint'),
-        isFaceSyncing: userCommands.some(c => c.command_type === 'enroll_face'),
-        isPhotoSyncing: userCommands.some(c => c.command_type === 'upload_photo'),
+        isUserSyncing: hasPendingSyncUser,
+        isFingerprintSyncing: hasPendingFingerprint,
+        isFaceSyncing: hasPendingFace,
+        isPhotoSyncing: hasPendingPhoto,
       }
     })
   }, [paginatedUsers.data, commands])

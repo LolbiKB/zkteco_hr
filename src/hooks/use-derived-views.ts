@@ -122,13 +122,15 @@ export function useDeviceWithUsers(deviceSn: string) {
       .slice(0, 50)
     
     // Calculate stats - smarter logic for sync status
-    // - synced: actual_state='synced' OR has last_successful_sync (successfully synced before)
-    // - failed: actual_state='not_synced' AND has error_message (real failure)
-    // - syncing: actual_state='syncing' (actively syncing now)
+    // Count stats based on pending commands (real-time), not database state
+    const syncingCount = users.filter(u => 
+      u.isUserSyncing || u.isFingerprintSyncing || u.isFaceSyncing || u.isPhotoSyncing
+    ).length
+    
     const stats = {
       total: users.length,
       synced: users.filter(u => u.actualState === 'synced' || u.lastSuccessfulSync).length,
-      syncing: users.filter(u => u.actualState === 'syncing').length,
+      syncing: syncingCount,
       failed: users.filter(u => u.actualState === 'not_synced' && u.errorMessage).length,
     }
     

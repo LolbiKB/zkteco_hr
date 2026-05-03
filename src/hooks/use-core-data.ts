@@ -4,6 +4,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { queryKeys } from '@/lib/query-keys'
+import { UserService } from '@/services/user-service'
 import { useEffect } from 'react'
 
 // =====================================================
@@ -99,44 +100,28 @@ export function useUsersList(filters?: {
   page?: number
   limit?: number
   search?: string
-  status?: string
+  status?: 'active' | 'inactive' | 'compromised' | 'archived'
 }, options?: { enabled?: boolean }) {
   const filterKey = filters || {}
   
   return useQuery({
     queryKey: queryKeys.users.list(filterKey),
     queryFn: async () => {
-      const page = filters?.page || 1
-      const limit = filters?.limit || 20
-      const from = (page - 1) * limit
-      const to = from + limit - 1
-      
-      let query = supabase
-        .from('users')
-        .select('*, user_biometrics(type, finger_id)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-      
-      if (filters?.search) {
-        query = query.or(`pin.ilike.%${filters.search}%,name.ilike.%${filters.search}%`)
-      }
-      
-      if (filters?.status) {
-        query = query.eq('status', filters.status)
-      }
-      
-      const { data, error, count } = await query.range(from, to)
-      
-      if (error) throw error
-      
+      const result = await UserService.getUsers({
+        page: filters?.page,
+        limit: filters?.limit,
+        search: filters?.search,
+        status: filters?.status,
+      })
       return {
-        users: data || [],
-        total: count || 0,
-        page,
-        limit,
-        totalPages: Math.ceil((count || 0) / limit),
+        users: result.data || [],
+        total: result.meta?.total || 0,
+        page: result.meta?.page || 1,
+        limit: result.meta?.limit || 20,
+        totalPages: result.meta?.totalPages || 0,
       }
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes - reasonable for employee directory
+    staleTime: 1000 * 60 * 2, // 2 min
     ...options,
   })
 }

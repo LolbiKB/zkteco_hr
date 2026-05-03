@@ -26,6 +26,7 @@ export const queryKeys = {
     status: () => [...queryKeys.devices.all, 'status'] as const,
     syncStatus: (sn: string) => [...queryKeys.devices.detail(sn), 'sync-status'] as const,
     commands: (sn: string) => [...queryKeys.devices.detail(sn), 'commands'] as const,
+    users: (sn: string, search?: string) => [...queryKeys.devices.all, 'users', sn, search || ''] as const,
   },
   
   commands: {

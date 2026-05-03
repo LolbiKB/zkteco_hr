@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useDevices, useSyncStatus, useCommandQueue, useUser, useUserBiometrics } from './use-core-data'
 import { DeviceService } from '@/services/device-service'
+import { queryKeys } from '@/lib/query-keys'
 
 // =====================================================
 // DEVICE-CENTRIC DERIVED VIEWS
@@ -452,7 +453,7 @@ export function useDeviceUsersPaginated(
   const search = options.search || ''
   
   const query = useInfiniteQuery({
-    queryKey: ['device-users', deviceSn, search],
+    queryKey: queryKeys.devices.users(deviceSn, search),
     queryFn: async ({ pageParam = 1 }) => {
       if (!deviceSn) return { data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } }
       return DeviceService.getDeviceUsers(deviceSn, { 

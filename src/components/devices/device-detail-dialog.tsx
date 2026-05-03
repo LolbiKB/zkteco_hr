@@ -165,32 +165,22 @@ function StatusIcon({
   synced,
   hasData = true,
   isPending = false,
-  isSyncing = false,
-  isWaiting = false
+  isInProgress = false
 }: {
   synced: boolean
   hasData?: boolean
   isPending?: boolean
-  isSyncing?: boolean
-  isWaiting?: boolean
+  isInProgress?: boolean
 }) {
   if (!hasData) {
     return <span className="text-gray-300">-</span>
-  }
-
-  if (isWaiting) {
-    return (
-      <div className="h-5 w-5 mx-auto flex items-center justify-center">
-        <div className="w-4 h-4 rounded-full border-2 border-dashed border-amber-400" />
-      </div>
-    )
   }
 
   if (isPending) {
     return <Clock className="h-5 w-5 text-amber-500 mx-auto" />
   }
 
-  if (isSyncing) {
+  if (isInProgress) {
     return <Loader2 className="h-5 w-5 text-blue-500 animate-spin mx-auto" />
   }
 
@@ -198,8 +188,12 @@ function StatusIcon({
     return <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
   }
 
-  // No active command - show clock to indicate "needs sync" / "not queued yet"
-  return <Clock className="h-5 w-5 text-gray-400 mx-auto" />
+  // Not started - never synced
+  return (
+    <div className="h-5 w-5 mx-auto flex items-center justify-center">
+      <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400" />
+    </div>
+  )
 }
 
 // User row component with detailed sync breakdown
@@ -228,7 +222,7 @@ function UserSyncRow({
           synced={user.userSynced}
           hasData={true}
           isPending={user.isUserPending}
-          isSyncing={user.isUserSyncing}
+          isInProgress={user.isUserInProgress}
         />
       </td>
       <td className="px-4 py-3 text-center">
@@ -236,8 +230,7 @@ function UserSyncRow({
           synced={user.fingerprintSynced}
           hasData={user.hasFingerprint}
           isPending={user.isFingerprintPending}
-          isSyncing={user.isFingerprintSyncing}
-          isWaiting={user.isFingerprintWaiting}
+          isInProgress={user.isFingerprintInProgress}
         />
       </td>
       <td className="px-4 py-3 text-center">
@@ -245,8 +238,7 @@ function UserSyncRow({
           synced={user.faceSynced}
           hasData={user.hasFace}
           isPending={user.isFacePending}
-          isSyncing={user.isFaceSyncing}
-          isWaiting={user.isFaceWaiting}
+          isInProgress={user.isFaceInProgress}
         />
       </td>
       <td className="px-4 py-3 text-center">
@@ -254,8 +246,7 @@ function UserSyncRow({
           synced={user.photoSynced}
           hasData={user.hasPhoto}
           isPending={user.isPhotoPending}
-          isSyncing={user.isPhotoSyncing}
-          isWaiting={user.isPhotoWaiting}
+          isInProgress={user.isPhotoInProgress}
         />
       </td>
       <td className="px-4 py-3 text-right">
@@ -310,7 +301,6 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       
       const hasPendingSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'pending')
       const hasSentSyncUser = userCommands.some(c => c.command_type === 'sync_user' && c.status === 'sent')
-      const userSyncPending = hasPendingSyncUser || hasSentSyncUser // user sync in progress
       
       const hasPendingFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'pending')
       const hasSentFingerprint = userCommands.some(c => c.command_type === 'enroll_fingerprint' && c.status === 'sent')
@@ -321,17 +311,14 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       
       return {
         ...user,
-        isUserSyncing: userSyncPending,
         isUserPending: hasPendingSyncUser,
-        isFingerprintSyncing: hasPendingFingerprint || hasSentFingerprint,
+        isUserInProgress: hasSentSyncUser,
         isFingerprintPending: hasPendingFingerprint,
-        isFingerprintWaiting: userSyncPending && !hasPendingFingerprint && !hasSentFingerprint, // waiting on user
-        isFaceSyncing: hasPendingFace || hasSentFace,
+        isFingerprintInProgress: hasSentFingerprint,
         isFacePending: hasPendingFace,
-        isFaceWaiting: userSyncPending && !hasPendingFace && !hasSentFace, // waiting on user
-        isPhotoSyncing: hasPendingPhoto || hasSentPhoto,
+        isFaceInProgress: hasSentFace,
         isPhotoPending: hasPendingPhoto,
-        isPhotoWaiting: userSyncPending && !hasPendingPhoto && !hasSentPhoto, // waiting on user
+        isPhotoInProgress: hasSentPhoto,
       }
     })
   }, [paginatedUsers.data, commands])
@@ -514,7 +501,7 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                           key={user.userId}
                           user={user}
                           onForceSync={handleForceSyncUser}
-                          isSyncing={user.isUserSyncing || user.isFingerprintSyncing || user.isFaceSyncing || user.isPhotoSyncing}
+                          isSyncing={user.isUserPending || user.isUserInProgress || user.isFingerprintPending || user.isFingerprintInProgress || user.isFacePending || user.isFaceInProgress || user.isPhotoPending || user.isPhotoInProgress}
                         />
                       ))}
                     </tbody>

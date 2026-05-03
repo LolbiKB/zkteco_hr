@@ -270,8 +270,29 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
   // Flatten pages into single array
   const allUsers = useMemo(() => {
     if (!paginatedUsers.data?.pages) return []
-    return paginatedUsers.data.pages.flatMap(page => page.data || [])
-  }, [paginatedUsers.data])
+    const flatUsers = paginatedUsers.data.pages.flatMap(page => page.data || [])
+    
+    // Get pending commands for this device (fresh ones < 2 minutes)
+    const TWO_MINUTES = 2 * 60 * 1000
+    const now = Date.now()
+    const pendingCommandsForDevice = (commands || []).filter(c => {
+      if (c.status !== 'pending' && c.status !== 'sent') return false
+      const commandAge = now - new Date(c.created_at).getTime()
+      return commandAge < TWO_MINUTES
+    })
+    
+    // Compute syncing flags per user from pending commands
+    return flatUsers.map(user => {
+      const userCommands = pendingCommandsForDevice.filter(c => c.related_user_id === user.userId)
+      return {
+        ...user,
+        isUserSyncing: userCommands.some(c => c.command_type === 'sync_user'),
+        isFingerprintSyncing: userCommands.some(c => c.command_type === 'enroll_fingerprint'),
+        isFaceSyncing: userCommands.some(c => c.command_type === 'enroll_face'),
+        isPhotoSyncing: userCommands.some(c => c.command_type === 'upload_photo'),
+      }
+    })
+  }, [paginatedUsers.data, commands])
   
   // Reset when search changes
   useEffect(() => {
@@ -379,7 +400,7 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                   <span>{stats.synced} synced</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 text-blue-500" />
+                  <Loader2 className={`h-4 w-4 text-blue-500 ${stats.syncing > 0 ? 'animate-spin' : ''}`} />
                   <span>{stats.syncing} syncing</span>
                 </div>
                 <div className="flex items-center gap-2">

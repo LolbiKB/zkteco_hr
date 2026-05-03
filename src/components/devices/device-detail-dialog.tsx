@@ -8,8 +8,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/animate-ui/components/radix/accordion'
 import { 
   Wifi, 
   WifiOff, 
@@ -23,9 +28,11 @@ import {
   Fingerprint,
   ScanFace,
   Image,
+  Copy,
+  Clock,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import { 
   useDeviceWithUsers, 
   useForceSync,
@@ -36,6 +43,117 @@ interface DeviceDetailDialogProps {
   deviceSn: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+// Helper to format command display with size and truncation
+function formatCommandDisplay(command: string, maxLength: number = 200): { display: string; wasTruncated: boolean; size: string } {
+  const size = `${(command.length / 1024).toFixed(1)} KB`
+  
+  if (command.length <= maxLength) {
+    return { display: command, wasTruncated: false, size }
+  }
+  
+  if (command.includes('Content=') && command.length > maxLength) {
+    const contentIndex = command.indexOf('Content=')
+    const prefix = command.substring(0, contentIndex + 8)
+    const suffix = '... [truncated]'
+    return { display: prefix + suffix, wasTruncated: true, size }
+  }
+  
+  return { display: command.substring(0, maxLength) + '...', wasTruncated: true, size }
+}
+
+function getCommandLabel(type: string): string {
+  const labels: Record<string, string> = {
+    sync_user: 'Sync User',
+    enroll_fingerprint: 'Enroll Fingerprint',
+    enroll_face: 'Enroll Face',
+    upload_photo: 'Upload Photo',
+    delete_user: 'Delete User',
+    reboot: 'Reboot',
+    info: 'Info Request',
+    check: 'Force Check',
+  }
+  return labels[type] || type
+}
+
+// Command list with detailed view using animated accordion
+function CommandList({ commands }: { commands: any[] }) {
+  const statusConfig = {
+    pending: { icon: Clock, color: 'text-gray-500' },
+    sent: { icon: Loader2, color: 'text-blue-500' },
+    success: { icon: CheckCircle2, color: 'text-green-500' },
+    failed: { icon: AlertCircle, color: 'text-red-500' },
+  }
+  
+  return (
+    <Accordion type="multiple" className="space-y-2">
+      {commands.map((cmd) => {
+        const cfg = statusConfig[cmd.status as keyof typeof statusConfig] || statusConfig.pending
+        const StatusIcon = cfg.icon
+        const label = getCommandLabel(cmd.command_type)
+        
+        return (
+          <AccordionItem 
+            key={cmd.id} 
+            value={cmd.id.toString()}
+            className={`rounded-lg border ${cmd.status === 'success' ? 'border-green-200' : cmd.status === 'failed' ? 'border-red-200' : cmd.status === 'sent' ? 'border-blue-200' : 'border-gray-200'} bg-white overflow-hidden`}
+          >
+            <AccordionTrigger className="px-3 py-2 hover:no-underline hover:bg-muted/50 transition-colors">
+              <div className="flex items-center gap-3 flex-1">
+                <div className={cfg.color}>
+                  <StatusIcon className={`h-4 w-4 ${cmd.status === 'sent' ? 'animate-spin' : ''}`} />
+                </div>
+                <span className="font-medium text-sm flex-1 text-left">{label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {format(new Date(cmd.created_at), 'MMM d, h:mm a')}
+                </span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-3 pb-3">
+              {cmd.status === 'failed' && cmd.error_message && (
+                <div className="text-xs text-red-600 mb-3 flex items-start gap-1 bg-red-50 p-2 rounded">
+                  <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span>{cmd.error_message}</span>
+                </div>
+              )}
+              <div className="space-y-2">
+                {(() => {
+                  const { display, wasTruncated, size } = formatCommandDisplay(cmd.command)
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-muted-foreground">Command</span>
+                        <span className="text-[10px] text-muted-foreground">{size}</span>
+                      </div>
+                      <code className="text-[10px] font-mono text-muted-foreground block break-all bg-muted p-2 rounded">
+                        {display}
+                      </code>
+                      {wasTruncated && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Command truncated — use Copy to get full command
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(cmd.command)
+                    toast.success('Copied')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </button>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )
+      })}
+    </Accordion>
+  )
 }
 
 // Component to show individual sync component status
@@ -296,49 +414,13 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
           </TabsContent>
 
           <TabsContent value="commands" className="flex-1 flex flex-col min-h-0 mt-4">
-            <div className="flex-1 overflow-auto border rounded-lg">
+            <div className="flex-1 overflow-y-auto space-y-2">
               {commands.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground">
                   No recent commands
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="bg-muted sticky top-0">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium">ID</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium">Type</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium">Status</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium">User</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {commands.map((cmd: any) => (
-                      <tr key={cmd.id} className="hover:bg-muted/50">
-                        <td className="px-4 py-2 text-sm font-mono">{cmd.id}</td>
-                        <td className="px-4 py-2 text-sm">{cmd.command_type}</td>
-                        <td className="px-4 py-2">
-                          <Badge 
-                            variant="outline" 
-                            className={cn(
-                              "text-xs",
-                              cmd.status === 'success' && "bg-green-100 text-green-700",
-                              cmd.status === 'failed' && "bg-red-100 text-red-700",
-                              cmd.status === 'pending' && "bg-yellow-100 text-yellow-700",
-                              cmd.status === 'sent' && "bg-blue-100 text-blue-700",
-                            )}
-                          >
-                            {cmd.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2 text-sm">{cmd.users?.name || '-'}</td>
-                        <td className="px-4 py-2 text-xs text-muted-foreground">
-                          {new Date(cmd.created_at).toLocaleTimeString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <CommandList commands={commands} />
               )}
             </div>
           </TabsContent>

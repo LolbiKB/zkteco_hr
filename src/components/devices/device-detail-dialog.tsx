@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/animate-ui/components/radix/tabs'
 import {
   Accordion,
   AccordionContent,
@@ -200,7 +200,10 @@ function UserSyncRow({
       <td className="px-4 py-3">
         <div className="flex flex-col">
           <span className="text-sm font-medium">{user.userName}</span>
-          <span className="text-xs text-muted-foreground">PIN: {user.userPin}</span>
+          <span className="text-xs text-muted-foreground">
+            PIN: {user.userPin}
+            {user.employeeId && ` · ${user.employeeId}`}
+          </span>
         </div>
       </td>
       <td className="px-4 py-3 text-center">

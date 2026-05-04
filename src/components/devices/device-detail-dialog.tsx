@@ -25,11 +25,14 @@ import {
   Image,
   Clock,
   Search,
+  XCircle,
+  ChevronDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { 
   useDeviceWithUsers, 
   useForceSync,
@@ -44,13 +47,15 @@ interface DeviceDetailDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-// Batch history row component
+// Batch history row component with accordion
 function BatchHistoryRow({ batch }: { batch: any }) {
-  const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
-    pending: { icon: Clock, color: 'text-amber-500', label: 'Pending' },
-    processing: { icon: Loader2, color: 'text-blue-500', label: 'Processing' },
-    completed: { icon: CheckCircle2, color: 'text-green-500', label: 'Completed' },
-    failed: { icon: AlertCircle, color: 'text-red-500', label: 'Failed' },
+  const [isExpanded, setIsExpanded] = useState(false)
+  
+  const statusConfig: Record<string, { icon: any; color: string; bgColor: string, label: string }> = {
+    pending: { icon: Clock, color: 'text-amber-500', bgColor: 'bg-amber-500/10', label: 'Pending' },
+    processing: { icon: Loader2, color: 'text-blue-500', bgColor: 'bg-blue-500/10', label: 'Processing' },
+    completed: { icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/10', label: 'Completed' },
+    failed: { icon: XCircle, color: 'text-red-500', bgColor: 'bg-red-500/10', label: 'Failed' },
   }
   const config = statusConfig[batch.status] || statusConfig.pending
   const Icon = config.icon
@@ -64,26 +69,121 @@ function BatchHistoryRow({ batch }: { batch: any }) {
     if (diffMins < 60) return `${diffMins}m ago`
     const diffHours = Math.floor(diffMins / 60)
     if (diffHours < 24) return `${diffHours}h ago`
-    return format(date, 'MMM d HH:mm')
+    return format(date, 'MMM d, h:mm a')
   }, [batch.created_at])
 
-  return (
-    <div className="flex items-center gap-3 p-3 border rounded-lg bg-card">
-      <Icon className={`h-5 w-5 ${config.color} ${batch.status === 'processing' ? 'animate-spin' : ''}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-sm truncate">
-            {batch.user_id.slice(0, 8)}...
+  const commandTypeLabels: Record<string, string> = {
+    sync_user: 'User',
+    upload_photo: 'Photo',
+    enroll_fingerprint: 'Fingerprint',
+    enroll_face: 'Face',
+    enroll_fingerprint_confirm: 'FP Confirm',
+    enroll_face_confirm: 'Face Confirm',
+  }
+
+  const getCommandBadge = (type: string) => commandTypeLabels[type] || type
+
+  // Show user ID short when name not available
+  const displayName = batch.userName || batch.user_id?.slice(0, 8) || 'Unknown'
+  
+return (
+    <div className="border rounded-lg bg-card overflow-hidden">
+      {/* Header - clickable accordion toggle */}
+      <div 
+        className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <Icon className={`h-4 w-4 ${config.color} ${batch.status === 'processing' ? 'animate-spin' : ''}`} />
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span className="font-medium text-sm text-foreground">
+            {displayName}
           </span>
-          <span className={`text-xs px-1.5 py-0.5 rounded ${config.color} bg-opacity-10`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${config.color} ${config.bgColor}`}>
             {config.label}
           </span>
+          <span className="text-xs text-muted-foreground">
+            {batch.commands_count} cmd
+          </span>
         </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          {batch.batch_type} · {batch.commands_count} cmds · {batch.completed_count} ok · {batch.failed_count} fail
+        
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo}</span>
+          <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
         </div>
       </div>
-      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo}</span>
+      
+      {/* Animated expand content */}
+      <div className={`overflow-hidden transition-all duration-200 ease-in-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="px-3 pb-3 pt-2 border-t bg-muted/20">
+          {/* Components summary */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(batch.commands || []).map((cmd: any) => (
+              <span 
+                key={cmd.id}
+                className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                  cmd.status === 'completed' ? 'bg-green-500/10 text-green-600' :
+                  cmd.status === 'failed' ? 'bg-red-500/10 text-red-600' :
+                  'bg-amber-500/10 text-amber-600'
+                }`}
+              >
+                {cmd.status === 'completed' ? (
+                  <CheckCircle2 className="h-2.5 w-2.5" />
+                ) : cmd.status === 'failed' ? (
+                  <XCircle className="h-2.5 w-2.5" />
+                ) : (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                )}
+                {commandTypeLabels[cmd.type] || cmd.type}
+              </span>
+            ))}
+          </div>
+          
+          {/* Individual command details */}
+          {(batch.commands || []).length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {batch.commands.map((cmd: any) => (
+                <div 
+                  key={cmd.id} 
+                  className={`flex items-start gap-2 p-1.5 rounded text-xs ${
+                    cmd.status === 'completed' ? 'bg-green-500/5' : 
+                    cmd.status === 'failed' ? 'bg-red-500/5' : 'bg-amber-500/5'
+                  }`}
+                >
+                  {cmd.status === 'completed' ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5" />
+                  ) : cmd.status === 'failed' ? (
+                    <XCircle className="h-3.5 w-3.5 text-red-500 mt-0.5" />
+                  ) : (
+                    <Loader2 className="h-3.5 w-3.5 text-amber-500 mt-0.5 animate-spin" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-foreground">{commandTypeLabels[cmd.type] || cmd.type}</span>
+                      <span className="text-muted-foreground text-[10px]">#{cmd.id}</span>
+                    </div>
+                    {cmd.preview && (
+                      <div className="text-muted-foreground font-mono text-[10px] truncate mt-0.5">
+                        {cmd.preview}...
+                      </div>
+                    )}
+                    {cmd.error && (
+                      <div className="text-red-500 text-[10px] truncate mt-0.5">{cmd.error}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Timestamps */}
+          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+            <div>Started: {format(new Date(batch.created_at), 'h:mm a')}</div>
+            {batch.completed_at && (
+              <div>Finished: {format(new Date(batch.completed_at), 'h:mm a')}</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -169,9 +269,13 @@ function UserSyncRow({
           size="sm"
           onClick={() => onForceSync(user.userId)}
           disabled={isSyncing}
-          title="Force sync this user"
+          title={isSyncing ? 'Sync in progress - wait for completion' : 'Force sync this user'}
         >
-          <RotateCcw className="h-3 w-3" />
+          {isSyncing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RotateCcw className="h-3 w-3" />
+          )}
         </Button>
       </td>
     </tr>
@@ -228,6 +332,8 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         ...user,
         // User-level status from batch (primary - single source of truth)
         userStatus: userStatus,
+        // Batch in-progress from API - used to block sync button
+        isUserInProgress: user.isBatchInProgress || userStatus === 'syncing',
         // Component status still from persistent flags for now
         fingerprintStatus: user.hasFingerprint ? (user.fingerprintSynced ? 'synced' : 'never') : 'never',
         faceStatus: user.hasFace ? (user.faceSynced ? 'synced' : 'never') : 'never',
@@ -252,18 +358,37 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
   
   // Real-time updates for commands
   useRealtimeCommands(deviceSn || undefined)
-  
-  // Real-time updates for batches
+
+  // Real-time updates for batches, batch_commands, and sync_status
   useEffect(() => {
     if (!deviceSn) return
     const channel = supabase
-      .channel('batches-realtime')
+      .channel('device-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sync_batches', filter: `device_sn=eq.${deviceSn}` },
         () => {
-          // Refetch batches on any change
-          queryClient.invalidateQueries({ queryKey: ['batches', deviceSn] })
+          queryClient.invalidateQueries({ queryKey: ['batches-detailed', deviceSn] })
+          // Also invalidate sync status queries
+          queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
+          queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(deviceSn, '') })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'batch_commands' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['batches-detailed', deviceSn] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_device_sync_status', filter: `device_sn=eq.${deviceSn}` },
+        () => {
+          // Invalidate all relevant queries when sync status changes
+          queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
+          queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(deviceSn, '') })
+          queryClient.invalidateQueries({ queryKey: ['batches-detailed', deviceSn] })
         }
       )
       .subscribe()
@@ -272,30 +397,6 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
 
   // Mutations
   const forceSync = useForceSync()
-
-  const handleForceSyncAll = async () => {
-    if (!deviceSn || users.length === 0) return
-    
-    try {
-      let totalQueued = 0
-      
-      // Sync each user to this device
-      for (const user of users) {
-        const result = await forceSync.mutateAsync({
-          userId: user.userId,
-          deviceSns: [deviceSn],
-        })
-        if (result.success) {
-          totalQueued += result.commandsQueued
-        }
-      }
-      
-      toast.success(`Force synced ${users.length} user(s), ${totalQueued} commands queued`)
-    } catch (error) {
-      console.error('Error forcing sync:', error)
-      toast.error('Failed to force sync')
-    }
-  }
 
   const handleForceSyncUser = async (userId: string) => {
     if (!deviceSn) return
@@ -371,24 +472,12 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search name, PIN, ID..."
+                    placeholder="Search user to sync..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-8 w-48 text-sm"
+                    className="pl-9 h-8 w-64 text-sm"
                   />
                 </div>
-                <Button
-                  onClick={handleForceSyncAll}
-                  disabled={forceSync.isPending || users.length === 0}
-                  size="sm"
-                >
-                  {forceSync.isPending ? (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Zap className="h-4 w-4 mr-2" />
-                  )}
-                  {forceSync.isPending ? 'Syncing...' : 'Force Sync All'}
-                </Button>
               </div>
             </div>
 
@@ -447,6 +536,28 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
           </TabsContent>
 
           <TabsContent value="activity" className="flex-1 flex flex-col min-h-0 mt-4">
+            {batchHistory.data && batchHistory.data.length > 0 && (
+              <div className="flex items-center gap-4 mb-3 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="h-4 w-4 text-blue-500" />
+                  <span className="text-muted-foreground">
+                    {batchHistory.data.filter((b: any) => b.status === 'processing' || b.status === 'pending').length} active
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-muted-foreground">
+                    {batchHistory.data.filter((b: any) => b.status === 'completed').length} completed
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <XCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-muted-foreground">
+                    {batchHistory.data.filter((b: any) => b.status === 'failed').length} failed
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto">
               {batchHistory.isLoading ? (
                 <div className="flex items-center justify-center h-32">
@@ -460,7 +571,10 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-32 text-muted-foreground">
-                  No recent batch activity
+                  <div className="text-center">
+                    <History className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                    <p>No recent batch activity</p>
+                  </div>
                 </div>
               )}
             </div>

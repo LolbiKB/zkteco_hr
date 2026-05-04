@@ -31,7 +31,13 @@ export function useForceSync() {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.users.syncStatus(userId) })
       await queryClient.cancelQueries({ queryKey: ['sync-status', 'all'] })
-      
+      // Cancel batch queries to prevent stale data
+      await queryClient.cancelQueries({ queryKey: ['batches'] })
+      deviceSns.forEach(sn => {
+        queryClient.cancelQueries({ queryKey: ['batches', sn] })
+        queryClient.cancelQueries({ queryKey: queryKeys.devices.users(sn, '') })
+      })
+
       // Snapshot previous values
       const previousUserStatus = queryClient.getQueryData(queryKeys.users.syncStatus(userId))
       const previousAllStatus = queryClient.getQueryData(['sync-status', 'all'])
@@ -70,7 +76,95 @@ export function useForceSync() {
           )
         }
       )
-      
+
+      // Optimistically update batches to show syncing immediately
+      deviceSns.forEach(sn => {
+        queryClient.setQueryData(['batches', sn], (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+          // Add pending batch entry for this user
+          const existingIndex = old.findIndex((b: any) => b.user_id === userId && b.device_sn === sn)
+          if (existingIndex >= 0) {
+            // Update existing batch to processing
+            const newOld = [...old]
+            newOld[existingIndex] = { ...newOld[existingIndex], status: 'processing', created_at: new Date().toISOString() }
+            return newOld
+          }
+          // Add new pending batch at the top
+          return [
+            {
+              id: `temp-${Date.now()}`,
+              user_id: userId,
+              device_sn: sn,
+              status: 'pending',
+              batch_type: 'full',
+              success_mode: 'AND',
+              commands_count: 0,
+              completed_count: 0,
+              failed_count: 0,
+              created_at: new Date().toISOString(),
+            },
+            ...old
+          ]
+        })
+      })
+
+      // Optimistically reset component sync status to false
+      const componentReset = {
+        user_synced: false,
+        fingerprint_synced: false,
+        face_synced: false,
+        photo_synced: false,
+      }
+
+      // Update user-specific sync status with component reset
+      queryClient.setQueryData(
+        queryKeys.users.syncStatus(userId),
+        (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+          return old.map((status: any) =>
+            deviceSns.includes(status.device_sn)
+              ? { ...status, ...componentReset, actual_state: 'syncing' }
+              : status
+          )
+        }
+      )
+
+      // Update global sync status with component reset
+      queryClient.setQueryData(
+        ['sync-status', 'all'],
+        (old: any) => {
+          if (!old || !Array.isArray(old)) return old
+          return old.map((status: any) =>
+            status.user_id === userId && deviceSns.includes(status.device_sn)
+              ? { ...status, ...componentReset, actual_state: 'syncing' }
+              : status
+          )
+        }
+      )
+
+      // Optimistically update device users paginated data
+      deviceSns.forEach(sn => {
+        queryClient.setQueryData(queryKeys.devices.users(sn, ''), (old: any) => {
+          if (!old || !old.pages) return old
+          // Update all pages - reset sync flags for the synced user
+          const newPages = old.pages.map((page: any) => ({
+            ...page,
+            data: page.data?.map((user: any) =>
+              user.userId === userId
+                ? {
+                    ...user,
+                    userSynced: false,
+                    fingerprintSynced: false,
+                    faceSynced: false,
+                    photoSynced: false,
+                  }
+                : user
+            ),
+          }))
+          return { ...old, pages: newPages }
+        })
+      })
+
       return { previousUserStatus, previousAllStatus, deviceSns }
     },
     
@@ -85,25 +179,35 @@ export function useForceSync() {
       if (context?.previousAllStatus) {
         queryClient.setQueryData(['sync-status', 'all'], context.previousAllStatus)
       }
-      
+      // Rollback batches and device users
+      variables.deviceSns.forEach((sn: string) => {
+        queryClient.invalidateQueries({ queryKey: ['batches', sn] })
+        queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(sn, '') })
+      })
+
       toast.error(`Force sync failed: ${error.message}`)
     },
     
-    onSuccess: (data, _variables) => {
+onSuccess: (data, vars) => {
       toast.success(`Force sync started for ${data.commandsQueued} command(s)`)
     },
-    
+
     onSettled: (_data, _error, variables) => {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: queryKeys.users.syncStatus(variables.userId) })
       queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
       queryClient.invalidateQueries({ queryKey: queryKeys.commands.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.system.syncHealth })
-      
-      // Invalidate device-specific queries
-      variables.deviceSns.forEach(sn => {
+
+      // Invalidate device-specific queries and trigger immediate refetch
+      variables.deviceSns.forEach((sn: string) => {
         queryClient.invalidateQueries({ queryKey: queryKeys.devices.syncStatus(sn) })
         queryClient.invalidateQueries({ queryKey: queryKeys.devices.commands(sn) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(sn, '') })
+        queryClient.invalidateQueries({ queryKey: ['batches', sn] })
+        // Force immediate refetch
+        queryClient.refetchQueries({ queryKey: queryKeys.devices.users(sn, '') })
+        queryClient.refetchQueries({ queryKey: ['batches', sn] })
       })
     },
   })

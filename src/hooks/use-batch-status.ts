@@ -41,11 +41,11 @@ export function useLatestBatch(userId: string, deviceSn: string) {
 
 export function useDeviceBatches(deviceSn: string) {
   return useQuery({
-    queryKey: ['batches', deviceSn],
+    queryKey: ['batches-detailed', deviceSn], 
     queryFn: async () => {
       if (!deviceSn) return []
       
-      // Get batches with actual command counts from batch_commands
+      // Get batches
       const { data: batches, error } = await supabase
         .from('sync_batches')
         .select('*')
@@ -56,32 +56,86 @@ export function useDeviceBatches(deviceSn: string) {
       if (error) throw error
       if (!batches) return []
       
-      // Get command counts for each batch
+      // Get user IDs and fetch user details
+      const userIds = [...new Set(batches.map(b => b.user_id))]
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name, pin')
+        .in('id', userIds)
+      
+      const userMap = new Map((users || []).map(u => [u.id, u]))
+      
+// Get command counts and command types for each batch
       const batchIds = batches.map(b => b.id)
+      
+      // Query batch_commands for these batches
       const { data: batchCommands } = await supabase
         .from('batch_commands')
-        .select('batch_id, completed, failed')
+        .select('*')
         .in('batch_id', batchIds)
       
-      // Calculate actual counts per batch
-      const commandCounts = new Map<string, { commands: number; completed: number; failed: number }>()
+      // Extract command IDs
+      const commandIds = (batchCommands || []).map(bc => bc.command_id).filter(id => id)
+      
+      if (commandIds.length === 0) {
+        return batches.map(batch => ({ ...batch, commands: [] }))
+      }
+      
+      const { data: commands } = await supabase
+        .from('command_queue')
+        .select('id, command_type, status, error_message, sent_at, completed_at, command')
+        .in('id', commandIds)
+      
+      const commandMap = new Map((commands || []).map(c => [c.id, c]))
+      
+      // Group commands by batch for detailed view
+      const batchCommandsDetail = new Map<string, any[]>()
       for (const bc of (batchCommands || [])) {
-        const current = commandCounts.get(bc.batch_id) || { commands: 0, completed: 0, failed: 0 }
+        const cmd = commandMap.get(bc.command_id)
+        if (!cmd) continue
+        // Extract useful part from command (first 50 chars for display)
+        const cmdPreview = cmd.command ? cmd.command.substring(0, 50).replace(/[\r\n]/g, ' ') : ''
+        const list = batchCommandsDetail.get(bc.batch_id) || []
+        list.push({
+          id: cmd.id,
+          type: cmd.command_type,
+          status: bc.completed ? 'completed' : (bc.failed ? 'failed' : 'pending'),
+          error: cmd.error_message,
+          preview: cmdPreview,
+        })
+        batchCommandsDetail.set(bc.batch_id, list)
+      }
+      
+      // Calculate actual counts and types per batch
+      const batchData = new Map<string, { commands: number; completed: number; failed: number; types: Set<string> }>()
+      for (const bc of (batchCommands || [])) {
+        const current = batchData.get(bc.batch_id) || { commands: 0, completed: 0, failed: 0, types: new Set<string>() }
         current.commands++
         if (bc.completed === true) current.completed++
         if (bc.failed === true) current.failed++
-        commandCounts.set(bc.batch_id, current)
+        const cmdType = commandMap.get(bc.command_id)
+        if (cmdType) current.types.add(cmdType)
+        batchData.set(bc.batch_id, current)
       }
       
       // Merge counts into batches
-      return batches.map(batch => ({
-        ...batch,
-        commands_count: commandCounts.get(batch.id)?.commands || 0,
-        completed_count: commandCounts.get(batch.id)?.completed || 0,
-        failed_count: commandCounts.get(batch.id)?.failed || 0,
-      })) as BatchStatus[]
+      return batches.map(batch => {
+        const data = batchData.get(batch.id) || { commands: 0, completed: 0, failed: 0, types: new Set<string>() }
+        const user = userMap.get(batch.user_id)
+        return {
+          ...batch,
+          userName: user?.name || 'Unknown',
+          userPin: user?.pin || '',
+          commands_count: data.commands,
+          completed_count: data.completed,
+          failed_count: data.failed,
+          commandTypes: Array.from(data.types),
+          commands: batchCommandsDetail.get(batch.id) || [],
+        }
+      }) as BatchStatus[]
     },
     enabled: !!deviceSn,
     staleTime: 5000,
+    refetchOnMount: 'always',
   })
 }

@@ -311,11 +311,11 @@ export class UserService {
 
   static async forceUserSync(userId: string, deviceSns?: string[]): Promise<{ success: boolean; commandsQueued: number }> {
     console.log('[forceUserSync] Calling API:', `/admin/users/${userId}/sync/force`, 'devices:', deviceSns)
-    const result = await this.fetchApi<{ success: boolean; message: string; commandsQueued: number }>(
+    const result = await this.fetchApi<{ success: boolean; message: string; commandsQueued: number; skippedDevices?: number }>(
       `/admin/users/${userId}/sync/force`,
       { 
         method: 'POST',
-        body: JSON.stringify({ device_sns: deviceSns }),
+        body: JSON.stringify({ device_sns: deviceSns, reset: true }),
       }
     )
     console.log('[forceUserSync] API result:', result)

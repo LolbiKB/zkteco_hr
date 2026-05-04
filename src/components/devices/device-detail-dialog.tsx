@@ -35,6 +35,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { supabase } from '@/lib/supabase'
+import { useQueryClient } from '@tanstack/react-query'
 import { 
   useDeviceWithUsers, 
   useForceSync,
@@ -262,6 +264,8 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
     batches,
   } = useDeviceWithUsers(deviceSn || '')
   
+  const queryClient = useQueryClient()
+  
   // Infinite query for users (TanStack)
   const paginatedUsers = useDeviceUsersPaginated(deviceSn || '', {
     limit: 20,
@@ -293,10 +297,9 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       
       return {
         ...user,
-        // User-level status from batch (primary)
-        batchStatus: userStatus,
+        // User-level status from batch (primary - single source of truth)
+        userStatus: userStatus,
         // Component status still from persistent flags for now
-        userStatus: user.userSynced ? 'synced' : 'never',
         fingerprintStatus: user.hasFingerprint ? (user.fingerprintSynced ? 'synced' : 'never') : 'never',
         faceStatus: user.hasFace ? (user.faceSynced ? 'synced' : 'never') : 'never',
         photoStatus: user.hasPhoto ? (user.photoSynced ? 'synced' : 'never') : 'never',
@@ -320,6 +323,23 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
   
   // Real-time updates for commands
   useRealtimeCommands(deviceSn || undefined)
+  
+  // Real-time updates for batches
+  useEffect(() => {
+    if (!deviceSn) return
+    const channel = supabase
+      .channel('batches-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sync_batches', filter: `device_sn=eq.${deviceSn}` },
+        () => {
+          // Refetch batches on any change
+          queryClient.invalidateQueries({ queryKey: ['batches', deviceSn] })
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [deviceSn, queryClient])
 
   // Mutations
   const forceSync = useForceSync()

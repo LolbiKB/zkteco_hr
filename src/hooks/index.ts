@@ -18,6 +18,9 @@ export {
   useSyncHealth,
 } from './use-core-data'
 
+// Batch Status
+export { useLatestBatch, useDeviceBatches } from './use-batch-status'
+
 // Derived Views (Transform core data for UI)
 export {
   useDeviceWithUsers,

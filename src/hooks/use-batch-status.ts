@@ -45,14 +45,41 @@ export function useDeviceBatches(deviceSn: string) {
     queryFn: async () => {
       if (!deviceSn) return []
       
-      const { data, error } = await supabase
+      // Get batches with actual command counts from batch_commands
+      const { data: batches, error } = await supabase
         .from('sync_batches')
         .select('*')
         .eq('device_sn', deviceSn)
         .order('created_at', { ascending: false })
+        .limit(20)
       
       if (error) throw error
-      return data as BatchStatus[]
+      if (!batches) return []
+      
+      // Get command counts for each batch
+      const batchIds = batches.map(b => b.id)
+      const { data: batchCommands } = await supabase
+        .from('batch_commands')
+        .select('batch_id, completed, failed')
+        .in('batch_id', batchIds)
+      
+      // Calculate actual counts per batch
+      const commandCounts = new Map<string, { commands: number; completed: number; failed: number }>()
+      for (const bc of (batchCommands || [])) {
+        const current = commandCounts.get(bc.batch_id) || { commands: 0, completed: 0, failed: 0 }
+        current.commands++
+        if (bc.completed === true) current.completed++
+        if (bc.failed === true) current.failed++
+        commandCounts.set(bc.batch_id, current)
+      }
+      
+      // Merge counts into batches
+      return batches.map(batch => ({
+        ...batch,
+        commands_count: commandCounts.get(batch.id)?.commands || 0,
+        completed_count: commandCounts.get(batch.id)?.completed || 0,
+        failed_count: commandCounts.get(batch.id)?.failed || 0,
+      })) as BatchStatus[]
     },
     enabled: !!deviceSn,
     staleTime: 5000,

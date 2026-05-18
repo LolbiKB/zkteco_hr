@@ -73,7 +73,7 @@ interface ConfirmationDialogProps {
   message: React.ReactNode
   /** Confirm button label */
   confirmLabel?: string
-  /** Cancel button label */
+  /** Cancel button label — only renders a cancel button if provided */
   cancelLabel?: string
   /** Button variant for confirm button */
   variant?: 'default' | 'destructive' | 'ghost' | 'secondary' | "outline"
@@ -90,7 +90,7 @@ export function ConfirmationDialog({
   title,
   message,
   confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  cancelLabel,
   variant = "default",
   isProcessing = false,
   onConfirm,
@@ -112,13 +112,15 @@ export function ConfirmationDialog({
           )}
         </DialogHeader>
         <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={onCancel}
-            disabled={isProcessing}
-          >
-            {cancelLabel}
-          </Button>
+          {cancelLabel && (
+            <Button
+              variant="ghost"
+              onClick={onCancel}
+              disabled={isProcessing}
+            >
+              {cancelLabel}
+            </Button>
+          )}
           <Button
             variant={variant}
             onClick={handleConfirm}

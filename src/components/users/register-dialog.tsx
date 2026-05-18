@@ -166,13 +166,6 @@ export function RegisterDialog({ employee, open, onOpenChange }: RegisterDialogP
         footer={
           <>
             <Button
-              variant="ghost"
-              onClick={handleCloseModal}
-              disabled={registerMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
               form="register-form"
               type="submit"
               disabled={isLoading || !!pinError || !pin}

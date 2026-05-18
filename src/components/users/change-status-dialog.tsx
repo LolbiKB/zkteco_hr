@@ -132,13 +132,6 @@ export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDia
 
         <DialogFooter>
           <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={updateStatusMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
             onClick={handleSave}
             disabled={!hasChanged || updateStatusMutation.isPending}
           >

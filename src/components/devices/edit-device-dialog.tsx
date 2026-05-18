@@ -265,14 +265,7 @@ export function EditDeviceDialog({
             )}
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-end">
             <Button
               onClick={() => {
                 if (!hasChanges) { onOpenChange(false); return }
@@ -292,7 +285,6 @@ export function EditDeviceDialog({
         title="Confirm Device Changes"
         message={changesMessage}
         confirmLabel="Confirm Changes"
-        cancelLabel="Go Back"
         isProcessing={isSaving}
         onConfirm={handleConfirmSave}
         onCancel={() => setConfirmOpen(false)}

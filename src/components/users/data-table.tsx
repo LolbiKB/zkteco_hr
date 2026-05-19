@@ -9,12 +9,8 @@ import type {
 } from '@/services/user-service'
 
 interface UserTableMeta {
-  onViewSyncStatus?: (user: UserEntry) => void
-  onEnrollBiometric?: (user: UserEntry) => void
-  onViewBiometric?: (user: UserEntry) => void
+  onUserClick?: (user: UserEntry) => void
   onRegister?: (user: UserEntry) => void
-  onChangeStatus?: (user: UserEntry) => void
-  onRefreshPhoto?: (user: UserEntry) => void
 }
 
 interface UserDataTableProps {

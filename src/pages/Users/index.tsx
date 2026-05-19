@@ -1,13 +1,11 @@
+"use client"
+
 import { useState, useMemo } from 'react'
 import { useUsersList } from '@/hooks'
 import { UserDataTable } from '@/components/users/data-table'
 import { columns } from './columns'
-import { SyncStatusDialog } from '@/components/users/sync-status-dialog'
 import { RegisterDialog } from '@/components/users/register-dialog'
-import { ChangeStatusDialog } from '@/components/users/change-status-dialog'
-import { EnrollBiometricDialog } from '@/components/users/enroll-biometric-dialog'
-import { BiometricViewDialog } from '@/components/users/biometric-view-dialog'
-import { PhotoRefreshDialog } from '@/components/users/photo-refresh-dialog'
+import { UserDetailModal } from '@/components/users/user-detail-modal'
 import type { UserFilters, UserEntry } from '@/services/user-service'
 import {
   Select,
@@ -26,13 +24,9 @@ export function Users() {
     page: 1,
     limit: 20,
   })
-  const [syncStatusUser, setSyncStatusUser] = useState<UserEntry | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserEntry | null>(null)
   const [registerEmployee, setRegisterEmployee] = useState<UserEntry | null>(null)
-  const [changeStatusUser, setChangeStatusUser] = useState<UserEntry | null>(null)
-  const [enrollBiometricUser, setEnrollBiometricUser] = useState<UserEntry | null>(null)
-  const [viewBiometricUser, setViewBiometricUser] = useState<UserEntry | null>(null)
-  const [refreshPhotoUser, setRefreshPhotoUser] = useState<UserEntry | null>(null)
-  
+
   const { data, isLoading, isFetching, refetch } = useUsersList({
     page: filters.page,
     limit: filters.limit,
@@ -48,36 +42,14 @@ export function Users() {
     return data?.data?.filter(user => user.attendance_flagged_at).length || 0
   }, [data])
 
-  // Check if current filter is showing compromised users
   const showingCompromised = filters.status === 'compromised'
 
-  const handleViewSyncStatus = (user: UserEntry) => {
-    if (!user.id) return
-    setSyncStatusUser(user)
-  }
-
-  const handleEnrollBiometric = (user: UserEntry) => {
-    if (!user.id) return
-    setEnrollBiometricUser(user)
-  }
-
-  const handleViewBiometric = (user: UserEntry) => {
-    if (!user.id) return
-    setViewBiometricUser(user)
+  const handleUserClick = (user: UserEntry) => {
+    setSelectedUser(user)
   }
 
   const handleRegister = (user: UserEntry) => {
     setRegisterEmployee(user)
-  }
-
-  const handleChangeStatus = (user: UserEntry) => {
-    if (!user.id) return
-    setChangeStatusUser(user)
-  }
-
-  const handleRefreshPhoto = (user: UserEntry) => {
-    if (!user.id) return
-    setRefreshPhotoUser(user)
   }
 
   return (
@@ -88,7 +60,7 @@ export function Users() {
           <AlertTitle>Compromised Users Detected</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>
-              {compromisedCount} user{compromisedCount !== 1 ? 's' : ''} marked as compromised on this page.
+              {compromisedCount} user{compromisedCount !== 1 ? 's' : ''} marked as compromised.
               These are employees deleted from Frappe HR but still in ADMS.
             </span>
             <Button
@@ -104,14 +76,11 @@ export function Users() {
       )}
 
       {flaggedCount > 0 && (
-        <Alert variant="destructive" className="border-orange-500 bg-orange-50">
+        <Alert className="border-orange-500 bg-orange-50 text-orange-800">
           <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertTitle className="text-orange-800">Suspicious Attendance Detected</AlertTitle>
-          <AlertDescription className="flex items-center justify-between text-orange-700">
-            <span>
-              {flaggedCount} user{flaggedCount !== 1 ? 's' : ''} with suspicious attendance patterns detected.
-              These users clocked in from multiple devices at the same time.
-            </span>
+          <AlertTitle className="text-orange-900">Suspicious Attendance</AlertTitle>
+          <AlertDescription className="text-orange-700">
+            {flaggedCount} user{flaggedCount !== 1 ? 's' : ''} with suspicious attendance patterns
           </AlertDescription>
         </Alert>
       )}
@@ -128,21 +97,21 @@ export function Users() {
         toolbarActions={
           <div className="flex items-center gap-3">
             <Label htmlFor="registration-filter" className="text-sm font-medium">
-              Registration:
+              Status:
             </Label>
-            <Select 
-              value={filters.registration_status || 'all'} 
-              onValueChange={(value) => setFilters(prev => ({ 
-                ...prev, 
+            <Select
+              value={filters.registration_status || 'all'}
+              onValueChange={(value) => setFilters(prev => ({
+                ...prev,
                 registration_status: value === 'all' ? undefined : value as 'registered' | 'unregistered' | 'inactive',
-                page: 1 
+                page: 1
               }))}
             >
-              <SelectTrigger id="registration-filter" className="w-40 h-9">
+              <SelectTrigger id="registration-filter" className="w-36 h-9">
                 <SelectValue placeholder="All users" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All users</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="registered">Registered</SelectItem>
                 <SelectItem value="unregistered">Unregistered</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -151,52 +120,22 @@ export function Users() {
           </div>
         }
         meta={{
-          onViewSyncStatus: handleViewSyncStatus,
-          onEnrollBiometric: handleEnrollBiometric,
-          onViewBiometric: handleViewBiometric,
+          onUserClick: handleUserClick,
           onRegister: handleRegister,
-          onChangeStatus: handleChangeStatus,
-          onRefreshPhoto: handleRefreshPhoto,
         }}
       />
 
-      <SyncStatusDialog
-        user={syncStatusUser}
-        userId={syncStatusUser?.id || ''}
-        open={!!syncStatusUser}
-        onOpenChange={(open) => !open && setSyncStatusUser(null)}
+      <UserDetailModal
+        user={selectedUser}
+        open={!!selectedUser}
+        onOpenChange={(open) => !open && setSelectedUser(null)}
+        onRefreshList={refetch}
       />
 
       <RegisterDialog
         employee={registerEmployee}
         open={!!registerEmployee}
         onOpenChange={(open) => !open && setRegisterEmployee(null)}
-      />
-
-      <ChangeStatusDialog
-        user={changeStatusUser}
-        open={!!changeStatusUser}
-        onOpenChange={(open) => !open && setChangeStatusUser(null)}
-      />
-
-      <EnrollBiometricDialog
-        user={enrollBiometricUser}
-        open={!!enrollBiometricUser}
-        onOpenChange={(open) => !open && setEnrollBiometricUser(null)}
-      />
-
-      <BiometricViewDialog
-        userId={viewBiometricUser?.id || null}
-        userName={viewBiometricUser?.name || null}
-        open={!!viewBiometricUser}
-        onOpenChange={(open) => !open && setViewBiometricUser(null)}
-      />
-
-      <PhotoRefreshDialog
-        user={refreshPhotoUser}
-        open={!!refreshPhotoUser}
-        onOpenChange={(open) => !open && setRefreshPhotoUser(null)}
-        onSuccess={() => refetch()}
       />
     </div>
   )

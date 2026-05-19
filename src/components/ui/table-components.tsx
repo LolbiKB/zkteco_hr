@@ -195,7 +195,7 @@ export function AvatarCell({
 
   // Resolve photo URL — uses Supabase Storage URL for cached photos,
   // proxy URL for uncached private Frappe photos, or null for no photo
-  const { photoUrl: displayUrl, isCached } = useUserPhoto({
+  const { photoUrl: displayUrl } = useUserPhoto({
     photoUrl,
     hasCachedPhoto,
     userId,

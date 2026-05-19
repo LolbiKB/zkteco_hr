@@ -9,14 +9,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/animate-ui/components/radix/tabs'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from '@/components/animate-ui/components/radix/accordion'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useUserPhoto } from '@/hooks/use-user-photo'
 import {
   RefreshCw,
   Loader2,
@@ -33,9 +37,8 @@ import {
   UserPlus,
   CloudOff,
 } from 'lucide-react'
-import { Progress } from '@/components/ui/progress'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { useUserPhoto } from '@/hooks/use-user-photo'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import {
   useSyncStatus,
   useSyncUser,
@@ -50,8 +53,6 @@ import {
   useCancelEnrollment,
 } from '@/hooks/use-users'
 import type { UserEntry } from '@/services/user-service'
-import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 
 interface UserDetailModalProps {
   user: UserEntry | null
@@ -288,15 +289,16 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
                   const enrolled = enrolledFingers.has(id)
                   const isSelected = fingerId === id
                   return (
-                    <button key={id} type="button" onClick={() => setFingerId(id)} className={cn("aspect-square rounded-lg border-2 flex items-center justify-center transition-all", isSelected && "border-blue-500 bg-blue-100", !isSelected && enrolled && "border-amber-300 bg-amber-50", !isSelected && !enrolled && "border-dashed border-gray-300 text-gray-400")}>
+                    <button key={id} type="button" onClick={() => !enrolled && setFingerId(id)} disabled={enrolled} className={cn("aspect-square rounded-lg border-2 flex items-center justify-center transition-all", isSelected && "border-blue-500 bg-blue-100", !isSelected && enrolled && "border-red-200 bg-red-50 opacity-50 cursor-not-allowed", !isSelected && !enrolled && "border-dashed border-gray-300 text-gray-400 hover:border-blue-300")}>
                       <span className="text-xs font-bold">{id < 5 ? ['T', 'I', 'M', 'R', 'L'][id] : ['L', 'R', 'M', 'I', 'T'][id - 5]}</span>
+                      {enrolled && <span className="absolute text-[6px]">X</span>}
                     </button>
                   )
                 })}
               </div>
               <div className="flex justify-between text-[9px] text-muted-foreground">
                 <span>Right</span>
-                <span>{FINGER_LABELS[fingerId]}{enrolledFingers.has(fingerId) && ' (replace)'}</span>
+                <span className={cn(enrolledFingers.has(fingerId) && "text-red-500")}>{FINGER_LABELS[fingerId]}{enrolledFingers.has(fingerId) && ' (in use)'}</span>
                 <span>Left</span>
               </div>
             </div>
@@ -311,25 +313,33 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
                 <div className="text-xs font-medium">No registrar devices online</div>
               </div>
             ) : (
-              <div className="space-y-1">
-                {registrarDevices.map(s => {
-                  const caps = s.devices?.registrar_capabilities || []
-                  return (
-                    <button key={s.device_sn} type="button" onClick={() => setDeviceSn(s.device_sn)} className={cn("w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-all", deviceSn === s.device_sn ? "border-primary bg-primary/5" : "border-border")}>
-                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><Wifi className="h-4 w-4 text-green-600" /></div>
-                      <div className="flex-1 text-left">
-                        <div className="text-sm font-medium">{s.devices?.name || s.device_sn}</div>
-                        <div className="flex gap-1">{caps.includes('fingerprint') && <Fingerprint className="h-3 w-3 text-blue-500" />}{caps.includes('face') && <ScanFace className="h-3 w-3 text-purple-500" />}</div>
-                      </div>
-                      {deviceSn === s.device_sn && <CheckCircle2 className="h-4 w-4 text-primary" />}
-                    </button>
-                  )
-                })}
-              </div>
+              <Select value={deviceSn} onValueChange={setDeviceSn}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a device" />
+                </SelectTrigger>
+                <SelectContent>
+                  {registrarDevices.map(s => {
+                    const caps = s.devices?.registrar_capabilities || []
+                    return (
+                      <SelectItem key={s.device_sn} value={s.device_sn}>
+                        <div className="flex items-center gap-2">
+                          <Wifi className="h-3 w-3 text-green-600" />
+                          <span>{s.devices?.name || s.device_sn}</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {caps.includes('fingerprint') && 'FP'}
+                            {caps.includes('fingerprint') && caps.includes('face') && ' / '}
+                            {caps.includes('face') && 'Face'}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
-          <Button onClick={handleStart} disabled={!deviceSn || !capabilities.includes(biometricType) || startEnrollment.isPending} className="w-full gap-2">
+          <Button onClick={handleStart} disabled={!deviceSn || !capabilities.includes(biometricType) || (biometricType === 'fingerprint' && enrolledFingers.has(fingerId)) || startEnrollment.isPending} className="w-full gap-2">
             {startEnrollment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : biometricType === 'fingerprint' ? <Fingerprint className="h-4 w-4" /> : <ScanFace className="h-4 w-4" />}
             {biometricType === 'fingerprint' ? 'Start Fingerprint' : 'Start Face'}
           </Button>

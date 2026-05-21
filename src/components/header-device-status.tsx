@@ -189,16 +189,16 @@ export function HeaderDeviceStatus() {
                   </div>
                   <div className="flex gap-2">
                     {m.pendingCommands > 0 && (
-                      <div className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
-                        <span className="text-xs text-blue-700 dark:text-blue-400">Active</span>
-                        <span className="text-xs font-semibold text-blue-800 dark:text-blue-400 tabular-nums">{m.pendingCommands}</span>
-                      </div>
+                      <Badge variant="secondary" className="flex-1 flex items-center justify-between px-2.5 py-1.5 text-blue-700 dark:text-blue-400">
+                        <span>Active</span>
+                        <span className="font-semibold tabular-nums">{m.pendingCommands}</span>
+                      </Badge>
                     )}
                     {m.failedCommands > 0 && (
-                      <div className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-800">
-                        <span className="text-xs text-red-700 dark:text-red-400">Failed</span>
-                        <span className="text-xs font-semibold text-red-800 dark:text-red-400 tabular-nums">{m.failedCommands}</span>
-                      </div>
+                      <Badge variant="secondary" className="flex-1 flex items-center justify-between px-2.5 py-1.5 text-red-700 dark:text-red-400">
+                        <span>Failed</span>
+                        <span className="font-semibold tabular-nums">{m.failedCommands}</span>
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -216,16 +216,16 @@ export function HeaderDeviceStatus() {
                   </div>
                   <div className="space-y-1">
                     {m.failedUsers > 0 && (
-                      <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-800">
-                        <span className="text-xs text-red-700 dark:text-red-400">Failed syncs</span>
-                        <span className="text-xs font-semibold text-red-800 dark:text-red-400 tabular-nums">{m.failedUsers}</span>
-                      </div>
+                      <Badge variant="secondary" className="flex items-center justify-between px-2.5 py-1.5 w-full text-red-700 dark:text-red-400">
+                        <span>Failed syncs</span>
+                        <span className="font-semibold tabular-nums">{m.failedUsers}</span>
+                      </Badge>
                     )}
                     {m.driftCount > 0 && (
-                      <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
-                        <span className="text-xs text-amber-700 dark:text-amber-400">Drift detected</span>
-                        <span className="text-xs font-semibold text-amber-800 dark:text-amber-400 tabular-nums">{m.driftCount} devices</span>
-                      </div>
+                      <Badge variant="secondary" className="flex items-center justify-between px-2.5 py-1.5 w-full text-amber-700 dark:text-amber-400">
+                        <span>Drift detected</span>
+                        <span className="font-semibold tabular-nums">{m.driftCount} devices</span>
+                      </Badge>
                     )}
                   </div>
                 </div>

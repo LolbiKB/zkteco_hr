@@ -93,10 +93,16 @@ export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolea
   const enrichedData = useMemo(() => {
     if (!query.data) return undefined
     
+    // DEBUG: Log what we're working with
+    console.log('[useDevices] Pipeline statuses size:', statuses.size)
+    console.log('[useDevices] Devices count:', query.data.devices.length)
+    
     // If pipeline has data, use it; otherwise calculate directly from last_seen
     const devicesWithStatus = query.data.devices.map(device => {
       const status = statuses.get(device.serial_number)
+      
       if (status) {
+        console.log(`[useDevices] ${device.serial_number}: using pipeline status = ${status.isOnline}`)
         return {
           ...device,
           isOnline: status.isOnline,
@@ -104,9 +110,18 @@ export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolea
       }
       
       // Fallback: calculate directly from last_seen if pipeline hasn't synced yet
-      const isOnline = device.last_seen 
-        ? (Date.now() - new Date(device.last_seen).getTime()) < 60000 
-        : false
+      const lastSeenTime = device.last_seen ? new Date(device.last_seen).getTime() : 0
+      const now = Date.now()
+      const diff = now - lastSeenTime
+      const isOnline = device.last_seen ? diff < 60000 : false
+      
+      console.log(`[useDevices] ${device.serial_number}: fallback calculation`, {
+        last_seen: device.last_seen,
+        lastSeenTime,
+        now,
+        diff,
+        isOnline
+      })
       
       return {
         ...device,

@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { queryKeys } from '@/lib/query-keys'
 import { UserService } from '@/services/user-service'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
+import { deviceStatusPipeline, useInitializeDevicePipeline, useAllDeviceStatuses } from '@/lib/device-status-pipeline'
 
 export interface DeviceFilters {
   page?: number
@@ -20,8 +21,7 @@ export interface DeviceFilters {
 
 /**
  * Master device query - single source for all device data
- * Includes online/offline status calculation
- * Refetches every 5 seconds to keep status fresh
+ * Uses central device status pipeline for real-time online/offline status
  */
 export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolean }) {
   const page = filters?.page || 1
@@ -31,47 +31,43 @@ export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolea
   const sortBy = filters?.sortBy || 'created_at'
   const sortOrder = filters?.sortOrder || 'desc'
   
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.devices.list({ 
       page, limit, sortBy, sortOrder, 
       search: filters?.search, name: filters?.name, location: filters?.location, is_master: filters?.is_master 
     }),
     queryFn: async () => {
-      let query = supabase
+      let dbQuery = supabase
         .from('devices')
         .select('*', { count: 'exact' })
       
       // Apply filters
       if (filters?.search) {
-        query = query.or(`serial_number.ilike.%${filters.search}%,name.ilike.%${filters.search}%,location.ilike.%${filters.search}%`)
+        dbQuery = dbQuery.or(`serial_number.ilike.%${filters.search}%,name.ilike.%${filters.search}%,location.ilike.%${filters.search}%`)
       }
       if (filters?.name) {
-        query = query.ilike('name', `%${filters.name}%`)
+        dbQuery = dbQuery.ilike('name', `%${filters.name}%`)
       }
       if (filters?.location) {
-        query = query.ilike('location', `%${filters.location}%`)
+        dbQuery = dbQuery.ilike('location', `%${filters.location}%`)
       }
       if (filters?.is_master !== undefined) {
-        query = query.eq('is_master', filters.is_master)
+        dbQuery = dbQuery.eq('is_master', filters.is_master)
       }
       
       // Apply sorting
-      query = query.order(sortBy, { ascending: sortOrder === 'asc' })
+      dbQuery = dbQuery.order(sortBy, { ascending: sortOrder === 'asc' })
       
       // Apply pagination
-      query = query.range(from, to)
+      dbQuery = dbQuery.range(from, to)
       
-      const { data, error, count } = await query
+      const { data, error, count } = await dbQuery
       
       if (error) throw error
       
-      const now = Date.now()
-      const devices = (data || []).map(device => ({
-        ...device,
-        isOnline: device.last_seen 
-          ? now - new Date(device.last_seen).getTime() < 60000 
-          : false,
-      }))
+      // Initialize pipeline with fetched data (isOnline calculated from pipeline)
+      const devices = data || []
+      deviceStatusPipeline.initializeFromDevices(devices)
       
       return {
         devices,
@@ -83,10 +79,38 @@ export function useDevices(filters?: DeviceFilters, options?: { enabled?: boolea
         hasPrev: page > 1,
       }
     },
-    staleTime: 30000, // 30 seconds - longer since we have realtime
-    // No refetchInterval - rely on realtime for live updates
+    staleTime: 30000,
     ...options,
   })
+  
+  // Initialize pipeline with query data
+  useInitializeDevicePipeline(query.data?.devices)
+  
+  // Get real-time statuses from pipeline
+  const statuses = useAllDeviceStatuses()
+  
+  // Merge pipeline statuses with device data
+  const enrichedData = useMemo(() => {
+    if (!query.data) return undefined
+    
+    const devicesWithStatus = query.data.devices.map(device => {
+      const status = statuses.get(device.serial_number)
+      return {
+        ...device,
+        isOnline: status?.isOnline ?? false,
+      }
+    })
+    
+    return {
+      ...query.data,
+      devices: devicesWithStatus,
+    }
+  }, [query.data, statuses])
+  
+  return {
+    ...query,
+    data: enrichedData,
+  }
 }
 
 /**

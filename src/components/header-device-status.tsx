@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useDevices, useSyncStatus, useCommandQueue } from '@/hooks/use-core-data'
+import { useAllDeviceStatuses } from '@/lib/device-status-pipeline'
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,9 @@ const STATUS = {
 
 type StatusType = typeof STATUS[keyof typeof STATUS]
 
+// Failed command threshold - only show failures from last hour
+const FAILED_COMMAND_WINDOW_MS = 60 * 60 * 1000 // 1 hour
+
 export function HeaderDeviceStatus() {
   const navigate = useNavigate()
   
@@ -38,12 +42,21 @@ export function HeaderDeviceStatus() {
   const { data: syncData, isLoading: syncLoading } = useSyncStatus()
   const { data: commands, isLoading: commandsLoading } = useCommandQueue()
   
+  // Get real-time statuses from central pipeline
+  const deviceStatuses = useAllDeviceStatuses()
+  
   const devices = devicesResponse?.devices || []
 
   // Calculate derived metrics using centralized data
   const metrics = useMemo(() => {
     const total = devices?.length ?? 0
-    const online = devices?.filter((d: any) => d.isOnline).length ?? 0
+    
+    // Use real-time statuses from pipeline for accurate online count
+    let online = 0
+    devices.forEach((d: any) => {
+      const status = deviceStatuses.get(d.serial_number)
+      if (status?.isOnline ?? false) online++
+    })
     const offline = total - online
     
     // User sync stats
@@ -52,15 +65,23 @@ export function HeaderDeviceStatus() {
       s.actual_state === 'not_synced' && s.error_message !== null
     ).length ?? 0
     
-    // Command stats - only count fresh commands (< 2 minutes old)
+    // Command stats
     const now = Date.now()
+    
+    // Only count fresh pending commands (< 2 minutes old)
     const freshCommands = (commands || []).filter(c => {
       const age = now - new Date(c.created_at).getTime()
       return age < COMMAND_FRESHNESS_MS
     })
-    
     const pendingCommands = freshCommands.filter(c => c.status === 'pending' || c.status === 'sent').length
-    const failedCommands = (commands || []).filter(c => c.status === 'failed').length
+    
+    // Only count recent failed commands (< 1 hour old) to avoid showing stale failures
+    const recentFailedCommands = (commands || []).filter(c => {
+      if (c.status !== 'failed') return false
+      const age = now - new Date(c.created_at).getTime()
+      return age < FAILED_COMMAND_WINDOW_MS
+    })
+    const failedCommands = recentFailedCommands.length
     
     // Devices with drift
     const driftCount = devices?.filter(d => d.stats_drift_detected).length ?? 0
@@ -91,7 +112,7 @@ export function HeaderDeviceStatus() {
       status,
       isLoading: devicesLoading || syncLoading || commandsLoading,
     }
-  }, [devices, syncData, commands, devicesLoading, syncLoading, commandsLoading])
+  }, [devices, deviceStatuses, syncData, commands, devicesLoading, syncLoading, commandsLoading])
 
   const handleClick = () => {
     navigate('/devices')

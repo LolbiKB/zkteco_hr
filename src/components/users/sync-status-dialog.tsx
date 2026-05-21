@@ -25,7 +25,7 @@ import {
   Zap,
   ArrowRight,
 } from 'lucide-react'
-import { useSyncStatus, useSyncUser, useCommandQueue, useSyncCancel, useGlobalSyncState, useRetryUserSync, useForceUserSync } from '@/hooks/use-users'
+import { useSyncStatus, useSyncUser, useCommandQueue, useSyncCancel, useGlobalSyncState, useRetryUserSync, useForceUserSync, useUserBiometrics } from '@/hooks/use-users'
 import type { UserEntry } from '@/services/user-service'
 import React, { useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -46,10 +46,28 @@ const DATA_TYPES = [
 
 type ItemStatus = 'pending' | 'syncing' | 'synced' | 'failed'
 
-function getItemStatus(status: any, key: string, hasActiveCommands: boolean): ItemStatus {
+function getItemStatus(status: any, key: string, hasActiveCommands: boolean, fingerprints: any[] = []): ItemStatus {
+  // BULLETPROOF: For fingerprint, check mask instead of boolean
+  if (key === 'fingerprint') {
+    const fpCount = fingerprints.length
+    const hasFingerprintEnrolled = status.has_fingerprint || fpCount > 0
+    
+    // If no FP enrolled, nothing to sync
+    if (!hasFingerprintEnrolled) return 'synced'
+    
+    // If FP enrolled but data still loading (fpCount=0), show as pending
+    if (fpCount === 0) return hasActiveCommands ? 'syncing' : 'pending'
+    
+    const expectedMask = fingerprints.reduce((mask, fp) => mask | (1 << (fp.finger_id || 0)), 0)
+    const actualMask = status.fingerprint_mask || 0
+    const isSynced = (actualMask & expectedMask) === expectedMask
+    if (isSynced) return 'synced'
+    if (hasActiveCommands) return 'syncing'
+    return 'pending'
+  }
+  
   const fieldMap: Record<string, string> = {
     user: 'user_synced',
-    fingerprint: 'fingerprint_synced',
     face: 'face_synced',
     photo: 'photo_synced',
   }
@@ -91,11 +109,14 @@ export function SyncStatusDialog({ user, userId, open, onOpenChange }: SyncStatu
   const refetchInterval = open ? 3000 : undefined
   const { data, isLoading, refetch: refetchSyncStatus } = useSyncStatus(userId, { refetchInterval })
   const { data: commandData } = useCommandQueue(userId, 50, { refetchInterval })
+  const { data: biometricsData } = useUserBiometrics(user?.id || '')
   const syncUser = useSyncUser()
   const { cancel: doCancel } = useSyncCancel()
   const globalSyncState = useGlobalSyncState()
   const retryUserSync = useRetryUserSync()
   const forceUserSync = useForceUserSync()
+  
+  const fingerprints = (biometricsData?.data || []).filter((b: any) => b.type === 'fingerprint')
 
   useEffect(() => {
     if (userId && open) refetchSyncStatus()
@@ -120,7 +141,7 @@ export function SyncStatusDialog({ user, userId, open, onOpenChange }: SyncStatu
     })
 
     const items = availableItems.map(({ key, label }) => {
-      let itemStatus = getItemStatus(status, key, hasActiveCommands)
+      let itemStatus = getItemStatus(status, key, hasActiveCommands, fingerprints)
       if (!isOnline && hasActiveCommands) itemStatus = 'pending'
       return { key, label, status: itemStatus }
     })
@@ -160,8 +181,10 @@ export function SyncStatusDialog({ user, userId, open, onOpenChange }: SyncStatu
 
   if (!user) return null
 
-  const isSyncingAny = globalSyncState.active
-  const isSyncingThis = isSyncingAny && globalSyncState.userId === userId
+  // BULLETPROOF: Calculate isSyncing based on ACTUAL command status, not global state
+  const hasActiveCommandsForUser = commands.some((c: any) => c.status === 'pending' || c.status === 'sent')
+  const isSyncingAny = hasActiveCommandsForUser || syncUser.isPending || retryUserSync.isPending || forceUserSync.isPending
+  const isSyncingThis = isSyncingAny
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

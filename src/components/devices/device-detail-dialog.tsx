@@ -15,7 +15,6 @@ import {
   WifiOff, 
   Users, 
   CheckCircle2, 
-  AlertCircle,
   Loader2,
   RotateCcw,
   Zap,
@@ -52,15 +51,13 @@ function StatusIcon({
   status = 'never'
 }: {
   hasData?: boolean
-  status?: 'never' | 'syncing' | 'synced' | 'failed'
+  status?: 'never' | 'syncing' | 'synced'
 }) {
   if (!hasData) {
     return <span className="text-gray-300">-</span>
   }
 
   switch (status) {
-    case 'failed':
-      return <AlertCircle className="h-5 w-5 text-red-500 mx-auto" />
     case 'syncing':
       return <Loader2 className="h-5 w-5 text-blue-500 animate-spin mx-auto" />
     case 'synced':
@@ -134,12 +131,14 @@ function UserSyncRow({
               </div>
               <div className="text-[10px] text-muted-foreground">{user.fingerprintStatus}</div>
             </div>
-            <div className={`p-2 rounded-lg ${user.faceStatus === 'synced' ? 'bg-green-50 border border-green-200' : user.faceStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
+            <div className={`p-2 rounded-lg ${user.faceStatus === 'synced' && user.hasFace ? 'bg-green-50 border border-green-200' : user.faceStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
               <div className="flex items-center gap-1.5 mb-1">
                 <ScanFace className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium">Face</span>
               </div>
-              <div className="text-[10px] text-muted-foreground">{user.faceStatus}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {user.hasFace ? user.faceStatus : 'not enrolled'}
+              </div>
             </div>
             <div className={`p-2 rounded-lg ${user.photoStatus === 'synced' ? 'bg-green-50 border border-green-200' : user.photoStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
               <div className="flex items-center gap-1.5 mb-1">
@@ -198,17 +197,17 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
     return flatUsers.map(user => {
       const batch = batchMap.get(user.userId)
       
-      let userStatus: 'never' | 'syncing' | 'synced' | 'failed' = 'never'
+      let userStatus: 'never' | 'syncing' | 'synced' = 'never'
       
       // Batch status takes priority
+      // BULLETPROOF: Batches never fail - they retry forever
       if (batch) {
         if (batch.status === 'pending' || batch.status === 'processing') {
           userStatus = 'syncing'
         } else if (batch.status === 'completed') {
           userStatus = 'synced'
-        } else if (batch.status === 'failed') {
-          userStatus = 'failed'
         }
+        // Note: No 'failed' case - bulletproof batches never fail
       } else if (user.actualState) {
         // Fallback to actualState from sync_status table (set after successful sync)
         if (user.actualState === 'syncing') {
@@ -218,8 +217,9 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         } else if (user.actualState === 'not_synced' && user.lastSuccessfulSync) {
           // Has successfully synced before but currently not in sync
           userStatus = 'synced'
-        } else if (user.actualState === 'not_synced' && user.errorMessage) {
-          userStatus = 'failed'
+        } else if (user.actualState === 'not_synced') {
+          // BULLETPROOF: No failed state - just not synced (will retry)
+          userStatus = 'never'
         }
       }
       
@@ -350,8 +350,8 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                   <span>{stats.syncing} syncing</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                  <span>{stats.failed} failed</span>
+                  <div className="h-4 w-4 rounded-full border-2 border-dashed border-gray-400" />
+                  <span>{(stats as any).notSynced || (stats as any).failed || 0} pending</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">

@@ -62,6 +62,7 @@ export interface SyncStatusEntry {
   has_face: boolean
   user_synced: boolean
   fingerprint_synced: boolean
+  fingerprint_mask: number  // BULLETPROOF: bitmask of synced FIDs (bit N = FID N synced)
   face_synced: boolean
   photo_synced: boolean
   user_synced_at?: string | null

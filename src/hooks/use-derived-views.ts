@@ -173,11 +173,12 @@ export function useDeviceWithUsers(deviceSn: string) {
       .slice(0, 50)
     
     // Stats from sync summary API (single source of truth)
+    // BULLETPROOF: Backend returns notSynced instead of failed (no permanent failures)
     const stats = {
       total: users.length,
       synced: syncSummary?.synced ?? 0,
       syncing: syncSummary?.syncing ?? 0,
-      failed: syncSummary?.failed ?? 0,
+      notSynced: (syncSummary as any)?.notSynced ?? (syncSummary as any)?.failed ?? 0,
     }
     
     return {

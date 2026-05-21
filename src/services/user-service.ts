@@ -184,11 +184,17 @@ export class UserService {
   }
 
   private static async fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-    const headers = await this.getAuthHeaders()
+    const authHeaders = await this.getAuthHeaders() as Record<string, string>
+    const hasBody = !!options?.body
     const fullUrl = `${API_URL}${path}`
     const response = await fetch(fullUrl, {
       ...options,
-      headers: { ...headers, ...options?.headers },
+      // Fastify rejects DELETE/GET with Content-Type but no body — omit Content-Type for bodiless requests
+      headers: {
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+        ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+        ...options?.headers,
+      },
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))
@@ -318,7 +324,7 @@ export class UserService {
 
   static async deleteBiometric(userId: string, type: 'fingerprint' | 'face', fingerId?: number): Promise<{ success: boolean; commandsQueued: number }> {
     const params = new URLSearchParams({ type })
-    if (fingerId !== undefined) {
+    if (fingerId != null) {
       params.append('finger_id', String(fingerId))
     }
 

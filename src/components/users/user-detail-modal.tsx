@@ -465,7 +465,13 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       return (mask & expectedMask) === expectedMask
     }
     
+    const syncingDevices = new Set(commands.filter(c => c.status === 'pending' || c.status === 'sent').map(c => c.device_sn))
+    const syncing = syncingDevices.size
+
+    // BULLETPROOF: A device with active commands is "syncing", not "synced"
+    // Exclude syncing devices from both synced and notSynced counts
     const synced = syncStatus.filter(s => {
+      if (syncingDevices.has(s.device_sn)) return false
       const userSynced = s.user_synced
       const fpSynced = isFingerprintSynced(s)
       const faceSynced = hasFace ? s.face_synced : true
@@ -473,22 +479,14 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       return userSynced && fpSynced && faceSynced && photoSynced
     }).length
     
-    // Count unique devices with pending/sent commands (not total commands)
-    const syncingDevices = new Set(commands.filter(c => c.status === 'pending' || c.status === 'sent').map(c => c.device_sn)).size
-    const syncing = syncingDevices
-    
-    // BULLETPROOF: No failed state - only not_synced (will retry forever)
-    // A device is "not synced" if no active command AND not fully synced
     const notSynced = syncStatus.filter(s => {
-      const hasActiveCmd = commands.some(c => c.device_sn === s.device_sn && (c.status === 'pending' || c.status === 'sent'))
-      if (hasActiveCmd) return false
+      if (syncingDevices.has(s.device_sn)) return false
       const userMissing = !s.user_synced
       const fpMissing = fpCount > 0 && !isFingerprintSynced(s)
       const faceMissing = hasFace && !s.face_synced
       return userMissing || fpMissing || faceMissing
     }).length
     
-    // BULLETPROOF: Count devices in cleaning state
     const cleaning = syncStatus.filter(s => s.actual_state === 'cleaning').length
     
     return { total: syncStatus.length, synced, syncing, notSynced, cleaning }
@@ -518,8 +516,8 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       await deleteBiometric.mutateAsync({ userId: user.id, type: deleteConfirm.type!, fingerId: deleteConfirm.fingerId })
       refetchBiometrics()
       onRefreshList?.()
-    } catch (error: any) {
-      toast.error(`Failed to delete biometric: ${error.message}`)
+    } catch {
+      // mutation's onError already handles the toast
     }
     setDeleteConfirm({ open: false })
   }

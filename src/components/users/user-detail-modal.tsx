@@ -55,7 +55,7 @@ import {
   useEnrollmentCommandStatus,
   useCancelEnrollment,
 } from '@/hooks/use-users'
-import type { UserEntry, SyncStatusEntry } from '@/services/user-service'
+import { UserService, type UserEntry, type SyncStatusEntry } from '@/services/user-service'
 
 interface UserDetailModalProps {
   user: UserEntry | null
@@ -721,7 +721,12 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       </Dialog>
 
       {/* Enroll Dialog */}
-      <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
+      <Dialog open={enrollOpen} onOpenChange={(open) => {
+        if (!open && user?.id) {
+          UserService.cancelEnrollment(user.id).catch(() => {})
+        }
+        setEnrollOpen(open)
+      }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-3">

@@ -61,6 +61,11 @@ const STATUS_CONFIG = {
     color: 'text-red-500',
     border: 'border-red-300',
   },
+  cancelled: {
+    icon: Clock,
+    color: 'text-gray-400',
+    border: 'border-gray-200',
+  },
 }
 
 function getErrorMessage(errorCode: string | null | undefined): string | null {

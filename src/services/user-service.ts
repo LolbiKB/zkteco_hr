@@ -394,6 +394,17 @@ export class UserService {
     return { cancelled: result.cancelled, message: result.message }
   }
 
+  /** Re-queue registrar DELETE when cancel cleanup did not reach the device. */
+  static async forceEnrollmentCleanup(
+    userId: string,
+    deviceSn?: string
+  ): Promise<{ success: boolean; message: string; queued: number; sessions: string[] }> {
+    return this.fetchApi(`/admin/users/${userId}/enrollment/force-cleanup`, {
+      method: 'POST',
+      body: JSON.stringify(deviceSn ? { device_sn: deviceSn } : {}),
+    })
+  }
+
   static async triggerEnrollmentRecovery(userId: string): Promise<{ success: boolean; message: string }> {
     return this.fetchApi<{ success: boolean; message: string }>(
       `/admin/users/${userId}/enrollment/recovery`,

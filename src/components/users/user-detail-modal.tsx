@@ -570,6 +570,20 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
     }
   }
 
+  const handleForceCleanup = async () => {
+    if (!user?.id) return
+    try {
+      const result = await UserService.forceEnrollmentCleanup(
+        user.id,
+        deviceSn || enrollmentStatusData?.data?.session?.device_sn
+      )
+      toast.success(result.message)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Force cleanup failed'
+      toast.error(msg)
+    }
+  }
+
   const showForm = phase === 'idle'
 
   return (
@@ -811,12 +825,22 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
             )}
             {phase === 'failed' && (
               <>
+                {cleanupPending && (
+                  <Button variant="secondary" onClick={handleForceCleanup} className="w-full mb-2">
+                    Retry remove from device
+                  </Button>
+                )}
                 <Button onClick={handleReset} className="flex-1">Try Again</Button>
                 <Button variant="outline" onClick={handleDone} className="flex-1">Close</Button>
               </>
             )}
             {phase === 'cleaning_up' && (
-              <Button variant="outline" onClick={handleDone} className="w-full">Close</Button>
+              <>
+                <Button variant="secondary" onClick={handleForceCleanup} className="w-full mb-2">
+                  Retry remove from device
+                </Button>
+                <Button variant="outline" onClick={handleDone} className="w-full">Close</Button>
+              </>
             )}
           </div>
         </div>

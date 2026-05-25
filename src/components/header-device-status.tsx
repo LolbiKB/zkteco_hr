@@ -141,10 +141,8 @@ export function HeaderDeviceStatus() {
       return now - new Date(c.created_at).getTime() < CANCELLED_COMMAND_WINDOW_MS
     })
     const cancelledSuperseded = cancelledAll.filter((c: any) => isSupersededCancelled(c)).length
-    const cancelledCommands =
-      cancelledAll.length > 0 && cancelledSuperseded === cancelledAll.length
-        ? 0
-        : cancelledAll.length - cancelledSuperseded
+    const autoResolvedCancelled = cancelledSuperseded
+    const cancelledCommands = cancelledAll.length - cancelledSuperseded
 
     const driftCount = list.filter((d: any) => d.stats_drift_detected).length
 
@@ -174,6 +172,7 @@ export function HeaderDeviceStatus() {
       failedCommands,
       enrollmentIncomplete,
       enrollmentCleanupPending,
+      autoResolvedCancelled,
       cancelledCommands,
       driftCount,
       hasCriticalIssues,
@@ -308,6 +307,7 @@ export function HeaderDeviceStatus() {
               m.failedCommands > 0 ||
               m.enrollmentIncomplete > 0 ||
               m.enrollmentCleanupPending > 0 ||
+              m.autoResolvedCancelled > 0 ||
               m.cancelledCommands > 0) && (
               <>
                 <div className="border-t" />
@@ -377,18 +377,32 @@ export function HeaderDeviceStatus() {
                         </p>
                       </div>
                     )}
-                    {m.cancelledCommands > 0 && (
+                    {m.autoResolvedCancelled > 0 && (
                       <div>
                         <Badge
                           variant="secondary"
                           className="flex w-full items-center justify-between px-2.5 py-1.5 text-muted-foreground"
                         >
                           <span>Auto-resolved</span>
+                          <span className="font-semibold tabular-nums">{m.autoResolvedCancelled}</span>
+                        </Badge>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 pl-0.5">
+                          Superseded or stale cancels in the last 30 minutes — no action needed.
+                        </p>
+                      </div>
+                    )}
+                    {m.cancelledCommands > 0 && (
+                      <div>
+                        <Badge
+                          variant="secondary"
+                          className="flex w-full items-center justify-between px-2.5 py-1.5 text-amber-700 dark:text-amber-400"
+                        >
+                          <span>Cancelled</span>
                           <span className="font-semibold tabular-nums">{m.cancelledCommands}</span>
                         </Badge>
                         <p className="text-[10px] text-muted-foreground mt-0.5 pl-0.5">
-                          Duplicates or stale commands removed in the last 30 minutes — no action
-                          needed.
+                          Recent admin or device enrollment cancels (e.g. Return=6) — check registrar
+                          cleanup if FP remains on device.
                         </p>
                       </div>
                     )}

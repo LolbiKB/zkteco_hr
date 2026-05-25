@@ -206,7 +206,7 @@ export class UserService {
       if (response.status === 423) {
         const retryAfter = response.headers.get('Retry-After')
         throw new UserOperationLockedError(
-          error.error || 'User operation in progress',
+          error.message || error.error || 'User operation in progress',
           error.existingOperation,
           error.startedAt,
           retryAfter ? parseInt(retryAfter, 10) : 30

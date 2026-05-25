@@ -16,6 +16,7 @@ export interface SyncStatusRow {
   has_fingerprint?: boolean
   has_face?: boolean
   has_photo_in_db?: boolean
+  has_fingerprint_in_db?: boolean
   actual_state?: string
   error_message?: string | null
 }
@@ -46,14 +47,68 @@ function fingerprintExpectedMask(fingerprints: FingerprintBio[]): number {
     .reduce((mask, fp) => mask | (1 << (fp.finger_id || 0)), 0)
 }
 
-function isFingerprintEnrolled(
+function hasFingerprintInCloud(
   status: SyncStatusRow,
   fingerprints: FingerprintBio[]
 ): boolean {
   const fpCount = fingerprints.filter(
     (b) => b.type === 'fingerprint' || b.type === undefined
   ).length
-  return !!(status.has_fingerprint || fpCount > 0)
+  return !!(status.has_fingerprint_in_db || status.has_fingerprint || fpCount > 0)
+}
+
+function hasFingerprintOnDeviceMask(status: SyncStatusRow): boolean {
+  return (status.fingerprint_mask ?? 0) > 0
+}
+
+/** Cloud is source of truth; device mask alone is transient cleanup, not enrollment. */
+function hasFingerprintInCloudOnly(
+  status: SyncStatusRow,
+  fingerprints: FingerprintBio[]
+): boolean {
+  return hasFingerprintInCloud(status, fingerprints)
+}
+
+function isDeviceCleanupInProgress(
+  status: SyncStatusRow,
+  hasActiveCommands: boolean
+): boolean {
+  return (
+    hasActiveCommands ||
+    status.actual_state === 'syncing' ||
+    status.actual_state === 'cleaning'
+  )
+}
+
+function deviceCleanupSyncState(
+  status: SyncStatusRow,
+  hasActiveCommands: boolean
+): SyncComponentState {
+  return isDeviceCleanupInProgress(status, hasActiveCommands) ? 'syncing' : 'pending'
+}
+
+function isFingerprintComponentApplicable(
+  status: SyncStatusRow,
+  fingerprints: FingerprintBio[]
+): boolean {
+  return (
+    hasFingerprintInCloudOnly(status, fingerprints) ||
+    hasFingerprintOnDeviceMask(status)
+  )
+}
+
+function hasFaceInCloud(
+  status: SyncStatusRow,
+  hasFaceInDb?: boolean
+): boolean {
+  return !!(hasFaceInDb ?? status.has_face)
+}
+
+function hasPhotoInCloud(
+  status: SyncStatusRow,
+  hasPhotoInDb?: boolean
+): boolean {
+  return !!(hasPhotoInDb ?? status.has_photo_in_db)
 }
 
 export function isComponentApplicable(
@@ -67,11 +122,11 @@ export function isComponentApplicable(
     case 'user':
       return true
     case 'fingerprint':
-      return isFingerprintEnrolled(status, fingerprints)
+      return isFingerprintComponentApplicable(status, fingerprints)
     case 'face':
-      return hasFaceInDb ?? !!(status.has_face || status.face_synced)
+      return hasFaceInCloud(status, hasFaceInDb) || !!status.face_synced
     case 'photo':
-      return hasPhotoInDb ?? !!(status.has_photo_in_db || status.photo_synced)
+      return hasPhotoInCloud(status, hasPhotoInDb) || !!status.photo_synced
     default:
       return false
   }
@@ -106,17 +161,28 @@ export function getComponentSyncStatus(
       (b) => b.type === 'fingerprint' || b.type === undefined
     )
     const fpCount = fpList.length
+    const inCloud = hasFingerprintInCloudOnly(status, fingerprints)
+    const deviceMask = status.fingerprint_mask ?? 0
 
-    if (fpCount === 0) {
-      const state: SyncComponentState = hasActiveCommands ? 'syncing' : 'pending'
+    // Cloud empty but device still has templates — cleanup in progress, not a steady state
+    if (fpCount === 0 && deviceMask > 0) {
+      const state = deviceCleanupSyncState(status, hasActiveCommands)
       return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
     }
 
-    const expectedMask = fingerprintExpectedMask(fpList)
-    const actualMask = status.fingerprint_mask ?? 0
-    const isSynced = (actualMask & expectedMask) === expectedMask
+    if (fpCount === 0 && deviceMask === 0) {
+      return {
+        state: 'not_enrolled',
+        label: SYNC_COMPONENT_LABELS.not_enrolled,
+        isApplicable: false,
+      }
+    }
 
-    if (isSynced) {
+    const expectedMask = fingerprintExpectedMask(fpList)
+    const hasExpectedOnDevice = (deviceMask & expectedMask) === expectedMask
+    const maskMatchesExactly = deviceMask === expectedMask
+
+    if (maskMatchesExactly && inCloud) {
       return {
         state: 'synced',
         label: SYNC_COMPONENT_LABELS.synced,
@@ -124,8 +190,29 @@ export function getComponentSyncStatus(
       }
     }
 
-    const state: SyncComponentState = hasActiveCommands ? 'syncing' : 'pending'
+    if (hasExpectedOnDevice && !maskMatchesExactly) {
+      const state = deviceCleanupSyncState(status, hasActiveCommands)
+      return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
+    }
+
+    const state = deviceCleanupSyncState(status, hasActiveCommands)
     return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
+  }
+
+  if (component === 'face') {
+    const inCloud = hasFaceInCloud(status, options.hasFaceInDb)
+    if (!inCloud && status.face_synced) {
+      const state = deviceCleanupSyncState(status, hasActiveCommands)
+      return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
+    }
+  }
+
+  if (component === 'photo') {
+    const inCloud = hasPhotoInCloud(status, options.hasPhotoInDb)
+    if (!inCloud && status.photo_synced) {
+      const state = deviceCleanupSyncState(status, hasActiveCommands)
+      return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
+    }
   }
 
   const fieldMap: Record<Exclude<SyncComponent, 'fingerprint'>, keyof SyncStatusRow> = {
@@ -143,14 +230,12 @@ export function getComponentSyncStatus(
     }
   }
 
-  const state: SyncComponentState = hasActiveCommands ? 'syncing' : 'pending'
+  const state = deviceCleanupSyncState(status, hasActiveCommands)
   return { state, label: SYNC_COMPONENT_LABELS[state], isApplicable: true }
 }
 
-/** Counts toward "fully synced" aggregate — N/A does not block. */
-export function isComponentSatisfiedForAggregate(
-  state: SyncComponentState
-): boolean {
+/** Counts toward "fully synced" aggregate — only cloud-synced or N/A. */
+export function isComponentSatisfiedForAggregate(state: SyncComponentState): boolean {
   return state === 'synced' || state === 'not_enrolled'
 }
 

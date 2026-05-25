@@ -132,7 +132,11 @@ export function useDeviceWithUsers(deviceSn: string) {
       
       // Determine which components are actively syncing
       const isUserSyncing = userPendingCommands.some(c => c.command_type === 'sync_user')
-      const isFingerprintSyncing = userPendingCommands.some(c => c.command_type === 'enroll_fingerprint')
+      const isFingerprintSyncing = userPendingCommands.some(
+        (c) =>
+          c.command_type === 'enroll_fingerprint' ||
+          c.command_type === 'enroll_fingerprint_confirm'
+      )
       const isFaceSyncing = userPendingCommands.some(c => c.command_type === 'enroll_face')
       const isPhotoSyncing = userPendingCommands.some(c => c.command_type === 'upload_photo')
       

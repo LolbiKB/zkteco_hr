@@ -3,7 +3,8 @@
 // Sync-related command types (user-specific, for syncing to devices)
 export const SYNC_COMMAND_TYPES = [
   'sync_user',
-  'enroll_fingerprint', 
+  'enroll_fingerprint',
+  'enroll_fingerprint_confirm',
   'enroll_face',
   'upload_photo',
   'delete_user',
@@ -40,6 +41,7 @@ export const COMMAND_LABELS: Record<string, string> = {
   // Sync commands
   sync_user: 'User Info',
   enroll_fingerprint: 'Fingerprint',
+  enroll_fingerprint_confirm: 'Fingerprint (push)',
   enroll_face: 'Face',
   upload_photo: 'Photo',
   delete_user: 'Delete User',

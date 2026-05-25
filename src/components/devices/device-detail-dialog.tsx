@@ -45,6 +45,7 @@ import {
   useForceSync,
   useRealtimeCommands,
   useDeviceUsersPaginated,
+  useCommandQueue,
 } from '@/hooks'
 import {
   getComponentSyncStatus,
@@ -202,11 +203,16 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
     limit: 20,
     search: searchQuery || undefined,
   })
-  
+
+  const { data: deviceCommands = [] } = useCommandQueue({ enabled: open && !!deviceSn })
+
   // Flatten pages into single array
   const allUsers = useMemo(() => {
     if (!paginatedUsers.data?.pages) return []
     const flatUsers = paginatedUsers.data.pages.flatMap(page => page.data || [])
+    const TWO_MINUTES = 2 * 60 * 1000
+    const now = Date.now()
+    const cmdsForDevice = deviceCommands.filter((c: { device_sn: string }) => c.device_sn === deviceSn)
     
     // Create batch map for quick lookup
     const batchMap = new Map((batches || []).map(b => [b.user_id, b]))
@@ -241,10 +247,24 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         }
       }
       
+      const userCmds = cmdsForDevice.filter(
+        (c: { related_user_id?: string }) => c.related_user_id === user.userId
+      )
+      const freshActiveCmds = userCmds.filter((c: { status: string; created_at: string }) => {
+        if (c.status !== 'pending' && c.status !== 'sent') return false
+        return now - new Date(c.created_at).getTime() < TWO_MINUTES
+      })
+      const activePhotoCmd = freshActiveCmds.find(
+        (c: { command_type: string }) => c.command_type === 'upload_photo'
+      )
+
       const hasActiveCommands = user.isBatchInProgress || userStatus === 'syncing'
+      const isPhotoInProgress = !!activePhotoCmd && !user.photoSynced
+      const photoHasActiveCommands = isPhotoInProgress
+
       const enriched = { ...user, userStatus, isUserInProgress: hasActiveCommands }
 
-      const pick = (component: SyncComponent) => {
+      const pick = (component: SyncComponent, photoActiveOnly = false) => {
         const { state, label } = getComponentSyncStatus(component, {
           user_synced: user.userSynced,
           fingerprint_synced: user.fingerprintSynced,
@@ -252,12 +272,13 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
           face_synced: user.faceSynced,
           photo_synced: user.photoSynced,
           has_fingerprint: user.hasFingerprint,
+          has_fingerprint_in_db: user.hasFingerprint,
           has_face: user.hasFace,
           has_photo_in_db: user.hasPhoto,
           actual_state: user.actualState,
           error_message: user.errorMessage,
         } as SyncStatusRow, {
-          hasActiveCommands,
+          hasActiveCommands: photoActiveOnly ? photoHasActiveCommands : hasActiveCommands,
           fingerprints: user.fingerprints ?? [],
           hasFaceInDb: user.hasFace,
           hasPhotoInDb: user.hasPhoto,
@@ -268,7 +289,13 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
       const userComp = pick('user')
       const fp = pick('fingerprint')
       const face = pick('face')
-      const photo = pick('photo')
+      const photo = user.photoSynced
+        ? { state: 'synced' as SyncComponentState, label: 'Synced' }
+        : pick('photo', true)
+
+      const lastSyncAttempt = user.photoSynced && user.photoSyncedAt
+        ? user.photoSyncedAt
+        : activePhotoCmd?.sent_at || activePhotoCmd?.created_at || user.lastSyncAttempt
 
       return {
         ...enriched,
@@ -280,9 +307,26 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         faceLabel: face.label,
         photoStatus: photo.state,
         photoLabel: photo.label,
+        lastSyncAttempt,
+        isPhotoInProgress,
+        isFingerprintInProgress: freshActiveCmds.some(
+          (c: { command_type: string }) =>
+            c.command_type === 'enroll_fingerprint' ||
+            c.command_type === 'enroll_fingerprint_confirm'
+        ),
+        isFaceInProgress: freshActiveCmds.some(
+          (c: { command_type: string }) => c.command_type === 'enroll_face'
+        ),
       }
     })
-  }, [paginatedUsers.data, batches])
+  }, [paginatedUsers.data, batches, deviceCommands, deviceSn])
+  
+  useEffect(() => {
+    if (open && deviceSn) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(deviceSn, '') })
+      queryClient.invalidateQueries({ queryKey: ['device-sync-summary', deviceSn] })
+    }
+  }, [open, deviceSn, queryClient])
   
   // Reset when search changes
   useEffect(() => {

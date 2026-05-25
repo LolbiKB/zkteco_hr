@@ -276,6 +276,10 @@ export function useStartEnrollment() {
       queryClient.invalidateQueries({ queryKey: userKeys.enrollmentStatus(variables.userId) })
     },
     onError: (error: Error) => {
+      if (error instanceof UserOperationLockedError) {
+        showLockErrorToast(error)
+        return
+      }
       toast.error(`Enrollment failed: ${error.message}`)
     },
   })
@@ -479,11 +483,22 @@ export function useForceUserSync() {
 
 // Helper function to show lock error toast
 function showLockErrorToast(error: UserOperationLockedError) {
-  const startedTime = error.startedAt ? new Date(error.startedAt).toLocaleTimeString() : 'unknown'
-  const operationName = error.existingOperation || 'Another operation'
+  const startedTime = error.startedAt
+    ? new Date(error.startedAt).toLocaleTimeString()
+    : null
+  const operationName = error.existingOperation
+    ? error.existingOperation.replace(/_/g, ' ').toLowerCase()
+    : null
+  const detail = operationName && startedTime
+    ? `${operationName} (since ${startedTime})`
+    : operationName
+      ? operationName
+      : error.message.includes('Cannot start')
+        ? error.message
+        : 'another operation'
   toast.error(
-    `User operation in progress: ${operationName} is running (started at ${startedTime}). Please wait ${error.retryAfter} seconds and try again.`,
-    { duration: 5000 }
+    `Cannot enroll: ${detail}. Wait ${error.retryAfter}s or cancel sync, then try again.`,
+    { duration: 6000 }
   )
 }
 

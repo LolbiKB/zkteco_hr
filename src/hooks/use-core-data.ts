@@ -396,6 +396,18 @@ export function useRealtimeCommands(deviceSn?: string) {
             return old
           })
           
+          const terminalStatuses = ['success', 'failed', 'cancelled']
+          if (deviceSn) {
+            if (
+              payload.eventType === 'UPDATE' &&
+              terminalStatuses.includes((payload.new as { status?: string }).status ?? '')
+            ) {
+              queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(deviceSn, '') })
+              queryClient.invalidateQueries({ queryKey: ['device-sync-summary', deviceSn] })
+              queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
+            }
+          }
+
           // Also update by-device cache if exists
           if (deviceSn) {
             queryClient.setQueryData(

@@ -194,7 +194,7 @@ export class DeviceService {
     // Apply command type filter
     if (options.commandType && options.commandType !== 'all') {
       if (options.commandType === 'sync') {
-        query = query.in('command_type', ['sync_user', 'enroll_fingerprint', 'enroll_face', 'upload_photo', 'delete_user'])
+        query = query.in('command_type', ['sync_user', 'enroll_fingerprint', 'enroll_fingerprint_confirm', 'enroll_face', 'upload_photo', 'delete_user'])
       } else if (options.commandType === 'device') {
         query = query.in('command_type', ['reboot', 'info', 'check', 'log', 'clear_data'])
       }

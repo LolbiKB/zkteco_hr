@@ -31,7 +31,7 @@ export function useDeviceWithUsers(deviceSn: string) {
     staleTime: 10000,
   })
   
-  // Fetch batches with user_ids from batch_commands
+  // Force-sync batches (user_id on sync_batches; see docs/SYNC_BATCHES.md)
   const { data: batches, isLoading: batchesLoading } = useQuery({
     queryKey: ['batches-detailed', deviceSn],
     queryFn: async () => {
@@ -44,30 +44,8 @@ export function useDeviceWithUsers(deviceSn: string) {
       if (error) throw error
       if (!batchData || batchData.length === 0) return []
       
-      // Get batch_ids
-      const batchIds = batchData.map(b => b.id)
-      
-      // Fetch batch_commands to get user_ids for each batch
-      const { data: batchCommands, error: bcError } = await supabase
-        .from('batch_commands')
-        .select('batch_id, user_id')
-        .in('batch_id', batchIds)
-      
-      if (bcError) throw bcError
-      
-      // Map user_ids to batches
-      const userIdByBatch = new Map<string, string>()
-      ;(batchCommands || []).forEach(bc => {
-        if (bc.user_id) {
-          userIdByBatch.set(bc.batch_id, bc.user_id)
-        }
-      })
-      
-      // Attach user_id to each batch
-      return batchData.map(batch => ({
-        ...batch,
-        user_id: userIdByBatch.get(batch.id) || null
-      }))
+      // user_id lives on sync_batches (one row per user+device); batch_commands has no user_id
+      return batchData
     },
     enabled: hasDeviceSn,
     staleTime: 5000,

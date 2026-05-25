@@ -21,7 +21,8 @@ import {
   Wifi, 
   WifiOff, 
   Users, 
-  CheckCircle2, 
+  CheckCircle2,
+  AlertCircle,
   Loader2,
   RotateCcw,
   Zap,
@@ -33,6 +34,7 @@ import {
   Info,
   MapPin,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -44,6 +46,13 @@ import {
   useRealtimeCommands,
   useDeviceUsersPaginated,
 } from '@/hooks'
+import {
+  getComponentSyncStatus,
+  syncComponentTileClass,
+  type SyncComponent,
+  type SyncComponentState,
+  type SyncStatusRow,
+} from '@/lib/sync-component-status'
 
 interface DeviceDetailDialogProps {
   deviceSn: string | null
@@ -53,33 +62,46 @@ interface DeviceDetailDialogProps {
 
 // Component to show individual sync component status
 // Simple icon-only status indicator
-function StatusIcon({
-  hasData = true,
-  status = 'never'
-}: {
-  hasData?: boolean
-  status?: 'never' | 'syncing' | 'synced'
-}) {
-  if (!hasData) {
-    return <span className="text-gray-300">-</span>
-  }
-
+function StatusIcon({ status }: { status: SyncComponentState }) {
   switch (status) {
+    case 'not_enrolled':
+      return <span className="text-gray-300">-</span>
     case 'syncing':
       return <Loader2 className="h-5 w-5 text-blue-500 animate-spin mx-auto" />
     case 'synced':
       return <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-    case 'never':
+    case 'pending':
+      return <Clock className="h-5 w-5 text-amber-500 mx-auto" />
+    case 'failed':
+      return <AlertCircle className="h-5 w-5 text-red-500 mx-auto" />
     default:
-      return (
-        <div className="h-5 w-5 mx-auto flex items-center justify-center">
-          <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400" />
-        </div>
-      )
+      return <span className="text-gray-300">-</span>
   }
 }
 
 // User row component with animated accordion
+function ComponentStatusCard({
+  label,
+  icon: Icon,
+  state,
+  statusLabel,
+}: {
+  label: string
+  icon: typeof Fingerprint
+  state: SyncComponentState
+  statusLabel: string
+}) {
+  return (
+    <div className={cn('p-2 rounded-lg', syncComponentTileClass(state))}>
+      <div className="flex items-center gap-1 mb-1">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="font-medium">{label}</span>
+      </div>
+      <div className="text-muted-foreground">{statusLabel}</div>
+    </div>
+  )
+}
+
 function UserSyncRow({
   user,
   onForceSync,
@@ -107,10 +129,10 @@ function UserSyncRow({
             <span className="text-xs text-muted-foreground">PIN: {user.userPin}</span>
           </div>
           <div className="flex items-center gap-1 ml-auto">
-            <StatusIcon hasData={true} status={user.userStatus} />
-            <StatusIcon hasData={user.hasFingerprint} status={user.fingerprintStatus} />
-            <StatusIcon hasData={user.hasFace} status={user.faceStatus} />
-            <StatusIcon hasData={user.hasPhoto} status={user.photoStatus} />
+            <StatusIcon status={user.userComponentStatus} />
+            <StatusIcon status={user.fingerprintStatus} />
+            <StatusIcon status={user.faceStatus} />
+            <StatusIcon status={user.photoStatus} />
             <Button
               variant="ghost"
               size="sm"
@@ -125,29 +147,24 @@ function UserSyncRow({
         <AccordionContent className="px-4 pb-3 pt-2">
           {/* Biometric status cards */}
           <div className="grid grid-cols-3 gap-2 text-xs">
-            <div className={`p-2 rounded-lg ${user.fingerprintStatus === 'synced' ? 'bg-green-50 border border-green-200' : user.fingerprintStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
-              <div className="flex items-center gap-1 mb-1">
-                <Fingerprint className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium">Fingerprint</span>
-              </div>
-              <div className="text-muted-foreground">{user.fingerprintStatus}</div>
-            </div>
-            <div className={`p-2 rounded-lg ${user.faceStatus === 'synced' && user.hasFace ? 'bg-green-50 border border-green-200' : user.faceStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
-              <div className="flex items-center gap-1 mb-1">
-                <ScanFace className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium">Face</span>
-              </div>
-              <div className="text-muted-foreground">
-                {user.hasFace ? user.faceStatus : 'not enrolled'}
-              </div>
-            </div>
-            <div className={`p-2 rounded-lg ${user.photoStatus === 'synced' ? 'bg-green-50 border border-green-200' : user.photoStatus === 'syncing' ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
-              <div className="flex items-center gap-1 mb-1">
-                <Image className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium">Photo</span>
-              </div>
-              <div className="text-muted-foreground">{user.photoStatus}</div>
-            </div>
+            <ComponentStatusCard
+              label="Fingerprint"
+              icon={Fingerprint}
+              state={user.fingerprintStatus}
+              statusLabel={user.fingerprintLabel}
+            />
+            <ComponentStatusCard
+              label="Face"
+              icon={ScanFace}
+              state={user.faceStatus}
+              statusLabel={user.faceLabel}
+            />
+            <ComponentStatusCard
+              label="Photo"
+              icon={Image}
+              state={user.photoStatus}
+              statusLabel={user.photoLabel}
+            />
           </div>
           
           {/* Metadata */}
@@ -224,16 +241,45 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         }
       }
       
+      const hasActiveCommands = user.isBatchInProgress || userStatus === 'syncing'
+      const enriched = { ...user, userStatus, isUserInProgress: hasActiveCommands }
+
+      const pick = (component: SyncComponent) => {
+        const { state, label } = getComponentSyncStatus(component, {
+          user_synced: user.userSynced,
+          fingerprint_synced: user.fingerprintSynced,
+          fingerprint_mask: user.fingerprintMask,
+          face_synced: user.faceSynced,
+          photo_synced: user.photoSynced,
+          has_fingerprint: user.hasFingerprint,
+          has_face: user.hasFace,
+          has_photo_in_db: user.hasPhoto,
+          actual_state: user.actualState,
+          error_message: user.errorMessage,
+        } as SyncStatusRow, {
+          hasActiveCommands,
+          fingerprints: user.fingerprints ?? [],
+          hasFaceInDb: user.hasFace,
+          hasPhotoInDb: user.hasPhoto,
+        })
+        return { state, label }
+      }
+
+      const userComp = pick('user')
+      const fp = pick('fingerprint')
+      const face = pick('face')
+      const photo = pick('photo')
+
       return {
-        ...user,
-        // User-level status from batch (primary - single source of truth)
-        userStatus: userStatus,
-        // Batch in-progress from API - used to block sync button
-        isUserInProgress: user.isBatchInProgress || userStatus === 'syncing',
-        // Component status still from persistent flags for now
-        fingerprintStatus: user.hasFingerprint ? (user.fingerprintSynced ? 'synced' : 'never') : 'never',
-        faceStatus: user.hasFace ? (user.faceSynced ? 'synced' : 'never') : 'never',
-        photoStatus: user.hasPhoto ? (user.photoSynced ? 'synced' : 'never') : 'never',
+        ...enriched,
+        userComponentStatus: userComp.state,
+        userComponentLabel: userComp.label,
+        fingerprintStatus: fp.state,
+        fingerprintLabel: fp.label,
+        faceStatus: face.state,
+        faceLabel: face.label,
+        photoStatus: photo.state,
+        photoLabel: photo.label,
       }
     })
   }, [paginatedUsers.data, batches])

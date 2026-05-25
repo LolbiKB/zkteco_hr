@@ -29,6 +29,11 @@ import { useSyncStatus, useSyncUser, useCommandQueue, useSyncCancel, useGlobalSy
 import type { UserEntry } from '@/services/user-service'
 import React, { useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import {
+  getComponentSyncStatus,
+  isDeviceAllComponentsSynced,
+  type SyncComponent,
+} from '@/lib/sync-component-status'
 
 interface SyncStatusDialogProps {
   user: UserEntry | null
@@ -44,42 +49,10 @@ const DATA_TYPES = [
   { key: 'photo', icon: Image, label: 'Photo', commandType: 'upload_photo' },
 ] as const
 
-type ItemStatus = 'pending' | 'syncing' | 'synced' | 'failed'
-
-function getItemStatus(status: any, key: string, hasActiveCommands: boolean, fingerprints: any[] = []): ItemStatus {
-  // BULLETPROOF: For fingerprint, check mask instead of boolean
-  if (key === 'fingerprint') {
-    const fpCount = fingerprints.length
-    const hasFingerprintEnrolled = status.has_fingerprint || fpCount > 0
-    
-    // If no FP enrolled, nothing to sync
-    if (!hasFingerprintEnrolled) return 'synced'
-    
-    // If FP enrolled but data still loading (fpCount=0), show as pending
-    if (fpCount === 0) return hasActiveCommands ? 'syncing' : 'pending'
-    
-    const expectedMask = fingerprints.reduce((mask, fp) => mask | (1 << (fp.finger_id || 0)), 0)
-    const actualMask = status.fingerprint_mask || 0
-    const isSynced = (actualMask & expectedMask) === expectedMask
-    if (isSynced) return 'synced'
-    if (hasActiveCommands) return 'syncing'
-    return 'pending'
-  }
-  
-  const fieldMap: Record<string, string> = {
-    user: 'user_synced',
-    face: 'face_synced',
-    photo: 'photo_synced',
-  }
-  
-  const field = fieldMap[key]
-  if (!field) return 'pending'
-  if (status[field]) return 'synced'
-  if (hasActiveCommands) return 'syncing'
-  return 'pending'
-}
+type ItemStatus = 'not_enrolled' | 'pending' | 'syncing' | 'synced' | 'failed'
 
 const statusConfig: Record<ItemStatus, { icon: typeof CheckCircle2; bg: string; text: string; color: string }> = {
+  not_enrolled: { icon: Clock, bg: 'bg-muted/50 dark:bg-muted/30', text: 'text-muted-foreground', color: 'text-muted-foreground' },
   synced: { icon: CheckCircle2, bg: 'bg-green-50 dark:bg-green-950/40', text: 'text-green-700 dark:text-green-400', color: 'text-green-600' },
   syncing: { icon: Loader2, bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-400', color: 'text-blue-600' },
   pending: { icon: Clock, bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-400', color: 'text-amber-600' },
@@ -140,16 +113,23 @@ export function SyncStatusDialog({ user, userId, open, onOpenChange }: SyncStatu
       return true
     })
 
+    const syncOptions = {
+      hasActiveCommands,
+      fingerprints,
+      hasFaceInDb: !!(status.has_face_in_db ?? status.has_face),
+      hasPhotoInDb: !!status.has_photo_in_db,
+    }
+
     const items = availableItems.map(({ key, label }) => {
-      let itemStatus = getItemStatus(status, key, hasActiveCommands, fingerprints)
-      if (!isOnline && hasActiveCommands) itemStatus = 'pending'
-      return { key, label, status: itemStatus }
+      let itemStatus = getComponentSyncStatus(key as SyncComponent, status, syncOptions).state
+      if (!isOnline && hasActiveCommands && itemStatus === 'syncing') itemStatus = 'pending'
+      return { key, label, status: itemStatus as ItemStatus }
     })
 
     const syncedCount = items.filter(i => i.status === 'synced').length
     const hasFailed = items.some(i => i.status === 'failed' && isOnline)
     const isActive = items.some(i => i.status === 'syncing') || globalSyncState.active
-    const allSynced = items.length > 0 && items.every(i => i.status === 'synced')
+    const allSynced = isDeviceAllComponentsSynced(status, syncOptions)
 
     return { items, syncedCount, total: items.length, hasFailed, isActive, allSynced, isOffline: !isOnline, lastSyncedAt: status?.last_synced_at }
   }

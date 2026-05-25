@@ -42,6 +42,13 @@ import {
   Copy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  getComponentSyncStatus,
+  isDeviceAllComponentsSynced,
+  isComponentSatisfiedForAggregate,
+  syncComponentTileClass,
+  type SyncComponent,
+} from '@/lib/sync-component-status'
 import { toast } from 'sonner'
 import {
   useSyncStatus,
@@ -99,24 +106,45 @@ interface DeviceCardProps {
   fingerprints?: any[]  // BULLETPROOF: FP data for mask calculation
 }
 
+function SyncComponentTile({
+  component,
+  status,
+  icon: Icon,
+  label,
+  options,
+}: {
+  component: SyncComponent
+  status: SyncStatusEntry
+  icon: typeof Users
+  label: string
+  options: Parameters<typeof getComponentSyncStatus>[2]
+}) {
+  const { state, label: statusLabel } = getComponentSyncStatus(component, status, options)
+  return (
+    <div className={cn('p-2 rounded-lg', syncComponentTileClass(state))}>
+      <div className="flex items-center gap-1 mb-1">
+        <Icon className="h-3 w-3" />
+        <span className="font-medium">{label}</span>
+      </div>
+      <div className="text-muted-foreground">{statusLabel}</div>
+    </div>
+  )
+}
+
 function DeviceCard({ status, device, commands, onSync, isSyncing, hasFace, fingerprints = [] }: DeviceCardProps) {
   const isOnline = status.is_online
   const deviceCommands = commands.filter((c: any) => c.device_sn === status.device_sn)
   const hasActiveCommands = deviceCommands.some(isFreshActiveCommand)
   const staleCommands = deviceCommands.filter(isStaleCommand)
-  
-  // BULLETPROOF: Calculate FP sync from fingerprint_mask (bitmask), not boolean
-  // Use status.has_fingerprint to know if user should have FP (avoids "loading = synced" bug)
-  const expectedMask = fingerprints.reduce((mask, fp) => mask | (1 << (fp.finger_id || 0)), 0)
-  const actualMask = status.fingerprint_mask || 0
-  const fpCount = fingerprints.length
-  const hasFingerprintEnrolled = status.has_fingerprint || fpCount > 0
-  
-  // Only consider FP synced if: no FP enrolled OR (we have loaded FP data AND mask matches)
-  const isFingerprintSynced = !hasFingerprintEnrolled || 
-    (fpCount > 0 && (actualMask & expectedMask) === expectedMask)
-  
-  const allSynced = status.user_synced && isFingerprintSynced && status.face_synced && status.photo_synced
+
+  const syncOptions = {
+    hasActiveCommands,
+    fingerprints,
+    hasFaceInDb: hasFace,
+    hasPhotoInDb: status.has_photo_in_db,
+  }
+
+  const allSynced = isDeviceAllComponentsSynced(status, syncOptions)
 
   return (
     <Accordion type="single" collapsible className="border rounded-lg overflow-hidden">
@@ -139,26 +167,10 @@ function DeviceCard({ status, device, commands, onSync, isSyncing, hasFace, fing
             </p>
           )}
           <div className="grid grid-cols-4 gap-2 text-xs">
-            <div className={cn("p-2 rounded-lg", status.user_synced ? "bg-green-50 border border-green-200" : "bg-gray-50")}>
-              <div className="flex items-center gap-1 mb-1"><Users className="h-3 w-3" /><span className="font-medium">User</span></div>
-              <div className="text-muted-foreground">{status.user_synced ? 'synced' : 'pending'}</div>
-            </div>
-            <div className={cn("p-2 rounded-lg", isFingerprintSynced ? "bg-green-50 border border-green-200" : "bg-gray-50")}>
-              <div className="flex items-center gap-1 mb-1"><Fingerprint className="h-3 w-3" /><span className="font-medium">FP</span></div>
-              <div className="text-muted-foreground">
-                {fpCount === 0 ? 'not enrolled' : isFingerprintSynced ? 'synced' : 'pending'}
-              </div>
-            </div>
-            <div className={cn("p-2 rounded-lg", status.face_synced && hasFace ? "bg-green-50 border border-green-200" : "bg-gray-50")}>
-              <div className="flex items-center gap-1 mb-1"><ScanFace className="h-3 w-3" /><span className="font-medium">Face</span></div>
-              <div className="text-muted-foreground">
-                {!hasFace ? 'not enrolled' : status.face_synced ? 'synced' : 'pending'}
-              </div>
-            </div>
-            <div className={cn("p-2 rounded-lg", status.photo_synced ? "bg-green-50 border border-green-200" : "bg-gray-50")}>
-              <div className="flex items-center gap-1 mb-1"><Image className="h-3 w-3" /><span className="font-medium">Photo</span></div>
-              <div className="text-muted-foreground">{status.photo_synced ? 'synced' : 'pending'}</div>
-            </div>
+            <SyncComponentTile component="user" status={status} icon={Users} label="User" options={syncOptions} />
+            <SyncComponentTile component="fingerprint" status={status} icon={Fingerprint} label="FP" options={syncOptions} />
+            <SyncComponentTile component="face" status={status} icon={ScanFace} label="Face" options={syncOptions} />
+            <SyncComponentTile component="photo" status={status} icon={Image} label="Photo" options={syncOptions} />
           </div>
           <div className="flex justify-end mt-3">
             <Button variant="outline" size="sm" onClick={() => onSync(status.device_sn)} disabled={isSyncing || hasActiveCommands} className="h-7 gap-1.5">
@@ -569,43 +581,35 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
   const faces = useMemo(() => biometrics.filter(b => b.type === 'face'), [biometrics])
 
   const stats = useMemo(() => {
-    const fpCount = fingerprints.length
     const hasFace = faces.length > 0
-    
-    // BULLETPROOF: Calculate expected fingerprint mask (bit N set for each FID)
-    const expectedMask = fingerprints.reduce((mask, fp) => mask | (1 << (fp.finger_id || 0)), 0)
-    
-    // BULLETPROOF: Check if fingerprint_mask matches expected (all FIDs synced)
-    // Only consider synced if: no FP enrolled OR (we have loaded FP data AND mask matches)
-    const isFingerprintSynced = (s: SyncStatusEntry) => {
-      const hasFingerprintEnrolled = s.has_fingerprint || fpCount > 0
-      if (!hasFingerprintEnrolled) return true
-      if (fpCount === 0) return false  // FP enrolled but data not loaded yet
-      const mask = s.fingerprint_mask || 0
-      return (mask & expectedMask) === expectedMask
-    }
-    
+
     const syncingDevices = new Set(commands.filter(isFreshActiveCommand).map((c: any) => c.device_sn))
     const syncing = syncingDevices.size
     const staleCount = commands.filter(isStaleCommand).length
 
-    // BULLETPROOF: A device with active commands is "syncing", not "synced"
-    // Exclude syncing devices from both synced and notSynced counts
+    const componentSatisfied = (s: SyncStatusEntry, component: SyncComponent) => {
+      const { state } = getComponentSyncStatus(component, s, {
+        fingerprints,
+        hasFaceInDb: hasFace,
+        hasPhotoInDb: s.has_photo_in_db,
+        hasActiveCommands: syncingDevices.has(s.device_sn),
+      })
+      return isComponentSatisfiedForAggregate(state)
+    }
+
+    const deviceFullySynced = (s: SyncStatusEntry) =>
+      (['user', 'fingerprint', 'face', 'photo'] as SyncComponent[]).every((c) =>
+        componentSatisfied(s, c)
+      )
+
     const synced = syncStatus.filter(s => {
       if (syncingDevices.has(s.device_sn)) return false
-      const userSynced = s.user_synced
-      const fpSynced = isFingerprintSynced(s)
-      const faceSynced = hasFace ? s.face_synced : true
-      const photoSynced = s.photo_synced
-      return userSynced && fpSynced && faceSynced && photoSynced
+      return deviceFullySynced(s)
     }).length
-    
+
     const notSynced = syncStatus.filter(s => {
       if (syncingDevices.has(s.device_sn)) return false
-      const userMissing = !s.user_synced
-      const fpMissing = fpCount > 0 && !isFingerprintSynced(s)
-      const faceMissing = hasFace && !s.face_synced
-      return userMissing || fpMissing || faceMissing
+      return !deviceFullySynced(s)
     }).length
     
     const cleaning = syncStatus.filter(s => s.actual_state === 'cleaning').length

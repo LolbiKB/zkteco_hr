@@ -64,6 +64,7 @@ export {
 
 export { useSyncCancel } from './use-users'
 export { useProcessPhoto } from './use-photo'
+export { useUserSyncAggregate, userSyncAggregateKeys } from './use-user-sync-aggregate'
 export { getGlobalCancel, setGlobalCancel } from '@/services/user-service'
 
 // Query Keys (Central registry)

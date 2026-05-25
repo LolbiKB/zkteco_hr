@@ -186,6 +186,7 @@ export function useSyncUser() {
       setSyncState({ active: false, lastSyncTriggered: null })
       queryClient.invalidateQueries({ queryKey: userKeys.syncStatus(variables.userId) })
       queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(variables.userId) })
+      queryClient.invalidateQueries({ queryKey: ['user-sync-aggregate', variables.userId] })
       notifySuccess('Sync completed')
     },
     onError: (error: Error) => {
@@ -322,6 +323,7 @@ export function useCancelEnrollment() {
       queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(userId) })
       queryClient.invalidateQueries({ queryKey: userKeys.enrollmentStatus(userId) })
       queryClient.invalidateQueries({ queryKey: ['user-sync-summary', userId] })
+      queryClient.invalidateQueries({ queryKey: ['user-sync-aggregate', userId] })
       if (result.detail) {
         notifySuccess(result.message, result.detail)
       } else {

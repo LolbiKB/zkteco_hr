@@ -213,6 +213,7 @@ export function useForceSync() {
       queryClient.invalidateQueries({
         queryKey: [...queryKeys.users.detail(variables.userId), 'command-queue'],
       })
+      queryClient.invalidateQueries({ queryKey: ['user-sync-aggregate', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
       queryClient.invalidateQueries({ queryKey: queryKeys.commands.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.system.syncHealth })
@@ -298,6 +299,7 @@ export function useRetrySync() {
       queryClient.invalidateQueries({
         queryKey: [...queryKeys.users.detail(variables.userId), 'command-queue'],
       })
+      queryClient.invalidateQueries({ queryKey: ['user-sync-aggregate', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['sync-status', 'all'] })
       queryClient.invalidateQueries({ queryKey: queryKeys.commands.all })
     },

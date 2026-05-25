@@ -14,6 +14,7 @@ export type SyncComponentState =
   | 'failed'
 
 export interface SyncStatusRow {
+  device_sn?: string
   user_synced?: boolean
   fingerprint_synced?: boolean
   fingerprint_mask?: number

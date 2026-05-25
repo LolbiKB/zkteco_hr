@@ -137,6 +137,9 @@ export interface SyncStatusSummary {
   synced: number
   not_synced: number
   is_fully_synced: boolean
+  syncing_devices?: number
+  has_active_commands?: boolean
+  is_syncing?: boolean
 }
 
 export interface UsersResponse {
@@ -559,47 +562,23 @@ export class UserService {
   }
 
   static async getUserSyncSummary(userId: string): Promise<SyncStatusSummary> {
-    const { data: syncStatuses, error } = await supabase
-      .from('user_device_sync_status')
-      .select('device_sn, actual_state, fingerprint_synced, face_synced')
-      .eq('user_id', userId)
+    const result = await this.fetchApi<{
+      success: boolean
+      data: SyncStatusSummary & {
+        syncing?: number
+        has_active_commands?: boolean
+      }
+    }>(`/admin/users/${userId}/sync-aggregate`)
 
-    if (error) throw error
-
-    const { data: activeEnrollment } = await supabase
-      .from('enrollment_sessions')
-      .select('id')
-      .eq('user_id', userId)
-      .in('phase', ['queued', 'awaiting_upload'])
-      .limit(1)
-
-    const { count: fpInDb } = await supabase
-      .from('user_biometrics')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('type', 'fingerprint')
-
-    const total = syncStatuses?.length || 0
-    const hasFpInDb = (fpInDb ?? 0) > 0
-    const hasActiveEnrollment = (activeEnrollment?.length ?? 0) > 0
-
-    const deviceSynced = (s: { actual_state: string; fingerprint_synced: boolean }) => {
-      if (s.actual_state !== 'synced') return false
-      if (hasFpInDb && !s.fingerprint_synced) return false
-      return true
-    }
-
-    const synced = syncStatuses?.filter(deviceSynced).length || 0
-    let not_synced = syncStatuses?.filter(s => !deviceSynced(s)).length || 0
-    if (hasActiveEnrollment && not_synced === 0 && total > 0) {
-      not_synced = 1
-    }
-
+    const d = result.data
     return {
-      total_devices: total,
-      synced,
-      not_synced,
-      is_fully_synced: synced === total && total > 0 && !hasActiveEnrollment,
+      total_devices: d.total_devices,
+      synced: d.synced,
+      not_synced: d.not_synced,
+      is_fully_synced: d.is_fully_synced,
+      syncing_devices: d.syncing_devices ?? d.syncing,
+      has_active_commands: d.has_active_commands,
+      is_syncing: d.is_syncing,
     }
   }
 

@@ -250,6 +250,7 @@ This dashboard uses **[Sonner](https://sonner.emilkowal.ski/)** via shadcn’s `
 | Rule | Detail |
 |------|--------|
 | Mount once | `<Toaster />` from [`src/components/ui/sonner.tsx`](src/components/ui/sonner.tsx) in [`App.tsx`](src/App.tsx) |
+| Sync aggregate | [`useUserSyncAggregate`](dashboard/src/hooks/use-user-sync-aggregate.ts) + [`computeUserSyncAggregate`](dashboard/src/lib/user-sync-aggregate.ts) — list badge and modal share rules; API `GET /admin/users/:id/sync-aggregate` |
 | Mutations toast | Success/error feedback lives in **`use-mutations.ts`** `onSuccess` / `onError` (one toast per operation) |
 | Helpers | [`src/lib/toast.ts`](src/lib/toast.ts) — `notifySuccess(title, description?)`, `notifyError`, `notifyOperationFailed`, lock errors |
 | Components | Toast only for non-mutation UX (e.g. “PIN copied”, background job completion) — avoid duplicating hook toasts |

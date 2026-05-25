@@ -44,7 +44,6 @@ import {
   buildComponentSyncOptions,
   getComponentSyncStatus,
   isDeviceAllComponentsSynced,
-  isComponentSatisfiedForAggregate,
   syncComponentTileClass,
   type SyncComponent,
 } from '@/lib/sync-component-status'
@@ -71,6 +70,7 @@ import {
 import { UserService, type UserEntry, type SyncStatusEntry } from '@/services/user-service'
 import { deriveEnrollPhase, type EnrollPhase } from '@/lib/enrollment-phase'
 import { SyncToolbarActions } from '@/components/users/sync-toolbar-actions'
+import { useUserSyncAggregate } from '@/hooks/use-user-sync-aggregate'
 import {
   ZK_PROTOCOL_FINGER_ORDER,
   ZK_PROTOCOL_FINGER_GRID_LETTERS,
@@ -1013,63 +1013,36 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
   const fingerprints = useMemo(() => biometrics.filter(b => b.type === 'fingerprint'), [biometrics])
   const faces = useMemo(() => biometrics.filter(b => b.type === 'face'), [biometrics])
 
+  const { aggregate: syncAggregate, isSyncing: aggregateIsSyncing } = useUserSyncAggregate(userId, {
+    enabled: open && !!userId,
+    refetchInterval: 3000,
+    includeEnrollmentHints: true,
+  })
+
   const stats = useMemo(() => {
-    const hasFace = faces.length > 0
-
-    const syncingDevices = new Set(commands.filter(isFreshActiveCommand).map((c: any) => c.device_sn))
-    const syncing = syncingDevices.size
-    const enrollmentSession = backgroundEnrollment?.data?.session
-    const staleCount = commands.filter((c: any) => {
-      const deviceCommands = commands.filter((d: any) => d.device_sn === c.device_sn)
-      const sessionForDevice =
-        enrollmentSession?.device_sn === c.device_sn ? enrollmentSession : null
-      return isStaleCommandForDisplay(c, deviceCommands, sessionForDevice)
-    }).length
-
-    const componentSatisfied = (s: SyncStatusEntry, component: SyncComponent) => {
-      const deviceCommands = commands.filter((c: any) => c.device_sn === s.device_sn)
-      const syncOptions = buildComponentSyncOptions(deviceCommands, {
-        fingerprints,
-        hasFaceInDb: hasFace,
-        hasPhotoInDb: s.has_photo_in_db,
-      })
-      const { state } = getComponentSyncStatus(component, s, syncOptions)
-      return isComponentSatisfiedForAggregate(state)
+    if (!syncAggregate) {
+      return {
+        total: syncStatus.length,
+        synced: 0,
+        syncing: 0,
+        notSynced: syncStatus.length,
+        cleaning: 0,
+        staleCount: 0,
+        hasFailedCommands: false,
+        hasFailedDevices: false,
+      }
     }
-
-    const deviceFullySynced = (s: SyncStatusEntry) =>
-      (['user', 'fingerprint', 'face', 'photo'] as SyncComponent[]).every((c) =>
-        componentSatisfied(s, c)
-      )
-
-    const synced = syncStatus.filter(s => {
-      if (syncingDevices.has(s.device_sn)) return false
-      return deviceFullySynced(s)
-    }).length
-
-    const notSynced = syncStatus.filter(s => {
-      if (syncingDevices.has(s.device_sn)) return false
-      return !deviceFullySynced(s)
-    }).length
-    
-    const cleaning = syncStatus.filter(s => s.actual_state === 'cleaning').length
-    
-    const hasFailedCommands = commands.some((c: { status: string }) => c.status === 'failed')
-    const hasFailedDevices = syncStatus.some(
-      (s) => s.actual_state === 'failed' || s.error_message != null
-    )
-
     return {
-      total: syncStatus.length,
-      synced,
-      syncing,
-      notSynced,
-      cleaning,
-      staleCount,
-      hasFailedCommands,
-      hasFailedDevices,
+      total: syncAggregate.total,
+      synced: syncAggregate.synced,
+      syncing: syncAggregate.syncing,
+      notSynced: syncAggregate.not_synced,
+      cleaning: syncAggregate.cleaning,
+      staleCount: syncAggregate.stale_count,
+      hasFailedCommands: syncAggregate.has_failed_commands,
+      hasFailedDevices: syncAggregate.has_failed_devices,
     }
-  }, [syncStatus, commands, fingerprints, faces])
+  }, [syncAggregate, syncStatus.length])
 
   const deviceSns = useMemo(() => syncStatus.map((s) => s.device_sn), [syncStatus])
   const onlineDeviceSns = useMemo(
@@ -1155,10 +1128,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
     setDeleteConfirm({ open: false })
   }
 
-  // BULLETPROOF: isSyncing based on ACTUAL command status, not global mutation state
-  // This ensures UI shows "syncing" while commands are pending/sent, not just during API call
-  const hasActiveCommands = commands.some(isFreshActiveCommand)
-  const isSyncing = hasActiveCommands || syncUser.isPending
+  const isSyncing = aggregateIsSyncing || syncUser.isPending
 
   const { photoUrl: displayPhotoUrl } = useUserPhoto({
     photoUrl: user?.photo_url,

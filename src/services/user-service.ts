@@ -391,6 +391,50 @@ export class UserService {
     return { cancelled: result.cancelled, message: result.message }
   }
 
+  static async triggerEnrollmentRecovery(userId: string): Promise<{ success: boolean; message: string }> {
+    return this.fetchApi<{ success: boolean; message: string }>(
+      `/admin/users/${userId}/enrollment/recovery`,
+      { method: 'POST', body: JSON.stringify({}) }
+    )
+  }
+
+  static async getEnrollmentStatus(userId: string): Promise<{
+    success: boolean
+    data: {
+      session: {
+        id: string
+        phase: string
+        bio_type: string
+        finger_id: number
+        device_sn: string
+        command_id: number | null
+        deadline_at: string | null
+        error_message: string | null
+      } | null
+      command: CommandQueueEntry | null
+      hasTemplateInDb: boolean
+    }
+  }> {
+    return this.fetchApi(`/admin/users/${userId}/enrollment/status`)
+  }
+
+  static async reconcileUserSync(userId: string): Promise<{
+    success: boolean
+    cancelled: number
+    devices: Array<{
+      device_sn: string
+      actual_state: string
+      user_synced: boolean
+      photo_synced: boolean
+      fingerprint_synced: boolean
+    }>
+  }> {
+    return this.fetchApi(`/admin/users/${userId}/reconcile-sync`, {
+      method: 'POST',
+      body: JSON.stringify({ force: true }),
+    })
+  }
+
   static async getFrappeEmployees(filters: UserFilters = {}): Promise<UsersResponse> {
     const params = new URLSearchParams()
     if (filters.page) params.append('page', String(filters.page))
@@ -454,26 +498,47 @@ export class UserService {
   }
 
   static async getUserSyncSummary(userId: string): Promise<SyncStatusSummary> {
-    // Only query user_device_sync_status - the source of truth
-    // actual_state is maintained by:
-    // 1. Triggers (user/biometric changes → 'not_synced')
-    // 2. Sync flow (sync completed → 'synced')
     const { data: syncStatuses, error } = await supabase
       .from('user_device_sync_status')
-      .select('device_sn, actual_state')
+      .select('device_sn, actual_state, fingerprint_synced, face_synced')
       .eq('user_id', userId)
 
     if (error) throw error
 
+    const { data: activeEnrollment } = await supabase
+      .from('enrollment_sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .in('phase', ['queued', 'awaiting_upload'])
+      .limit(1)
+
+    const { count: fpInDb } = await supabase
+      .from('user_biometrics')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('type', 'fingerprint')
+
     const total = syncStatuses?.length || 0
-    const synced = syncStatuses?.filter(s => s.actual_state === 'synced').length || 0
-    const not_synced = total - synced
+    const hasFpInDb = (fpInDb ?? 0) > 0
+    const hasActiveEnrollment = (activeEnrollment?.length ?? 0) > 0
+
+    const deviceSynced = (s: { actual_state: string; fingerprint_synced: boolean }) => {
+      if (s.actual_state !== 'synced') return false
+      if (hasFpInDb && !s.fingerprint_synced) return false
+      return true
+    }
+
+    const synced = syncStatuses?.filter(deviceSynced).length || 0
+    let not_synced = syncStatuses?.filter(s => !deviceSynced(s)).length || 0
+    if (hasActiveEnrollment && not_synced === 0 && total > 0) {
+      not_synced = 1
+    }
 
     return {
       total_devices: total,
       synced,
       not_synced,
-      is_fully_synced: synced === total && total > 0,
+      is_fully_synced: synced === total && total > 0 && !hasActiveEnrollment,
     }
   }
 

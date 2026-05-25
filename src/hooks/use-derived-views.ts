@@ -346,7 +346,12 @@ export function useDashboardStats() {
     const failedPairs = syncData?.filter(s => s.actual_state === 'not_synced').length || 0
     
     const pendingCommands = commands?.filter(c => c.status === 'pending').length || 0
-    const failedCommands = commands?.filter(c => c.status === 'failed').length || 0
+    const failedCommands =
+      commands?.filter(
+        (c: any) =>
+          c.status === 'failed' &&
+          !(typeof c.error_message === 'string' && c.error_message.includes('Cancelled by reconcile'))
+      ).length || 0
     
     return {
       devices: {

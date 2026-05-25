@@ -28,6 +28,7 @@ export const userKeys = {
   commandQueue: (id: string) => [...userKeys.detail(id), 'command-queue'] as const,
   biometrics: (id: string) => [...userKeys.detail(id), 'biometrics'] as const,
   driftStatus: (id: string) => [...userKeys.detail(id), 'drift-status'] as const,
+  enrollmentStatus: (id: string) => [...userKeys.detail(id), 'enrollment-status'] as const,
 }
 
 // Hook: Fetch users with filters
@@ -231,6 +232,16 @@ export function useUserBiometrics(userId: string) {
   })
 }
 
+// Hook: Poll active enrollment session (continues after modal close)
+export function useEnrollmentStatus(userId: string, options?: { enabled?: boolean; refetchInterval?: number }) {
+  return useQuery({
+    queryKey: userKeys.enrollmentStatus(userId),
+    queryFn: () => UserService.getEnrollmentStatus(userId),
+    enabled: !!userId && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval ?? 3000,
+  })
+}
+
 // Hook: Get drift status for a user
 export function useDriftStatus(userId: string) {
   return useQuery({
@@ -262,6 +273,7 @@ export function useStartEnrollment() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: userKeys.syncStatus(variables.userId) })
       queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(variables.userId) })
+      queryClient.invalidateQueries({ queryKey: userKeys.enrollmentStatus(variables.userId) })
     },
     onError: (error: Error) => {
       toast.error(`Enrollment failed: ${error.message}`)
@@ -419,6 +431,26 @@ export function useUserLockStatus(userId: string) {
     refetchInterval: 5000, // Refetch every 5 seconds
   })
 }
+export function useReconcileUserSync() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (userId: string) => UserService.reconcileUserSync(userId),
+    onSuccess: (result, userId) => {
+      queryClient.invalidateQueries({ queryKey: userKeys.syncStatus(userId) })
+      queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(userId) })
+      toast.success(
+        result.cancelled > 0
+          ? `Cleared ${result.cancelled} stale command(s) (admin cleanup)`
+          : 'Sync state reconciled'
+      )
+    },
+    onError: (error: Error) => {
+      toast.error(`Reconcile failed: ${error.message}`)
+    },
+  })
+}
+
 export function useForceUserSync() {
   const queryClient = useQueryClient()
 

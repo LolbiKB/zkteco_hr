@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -49,10 +49,12 @@ import {
   useCommandQueue,
   useRetryUserSync,
   useForceUserSync,
+  useReconcileUserSync,
   useUserBiometrics,
   useDeleteBiometric,
   useStartEnrollment,
   useEnrollmentCommandStatus,
+  useEnrollmentStatus,
   useCancelEnrollment,
 } from '@/hooks/use-users'
 import { UserService, type UserEntry, type SyncStatusEntry } from '@/services/user-service'
@@ -67,6 +69,18 @@ interface UserDetailModalProps {
 const FINGER_LABELS: Record<number, string> = {
   0: 'R-Thumb', 1: 'R-Index', 2: 'R-Middle', 3: 'R-Ring', 4: 'R-Little',
   5: 'L-Thumb', 6: 'L-Index', 7: 'L-Middle', 8: 'L-Ring', 9: 'L-Little',
+}
+
+const COMMAND_FRESHNESS_MS = 2 * 60 * 1000
+
+function isFreshActiveCommand(c: { status: string; created_at: string }) {
+  const age = Date.now() - new Date(c.created_at).getTime()
+  return age < COMMAND_FRESHNESS_MS && (c.status === 'pending' || c.status === 'sent')
+}
+
+function isStaleCommand(c: { status: string; created_at: string }) {
+  const age = Date.now() - new Date(c.created_at).getTime()
+  return age >= COMMAND_FRESHNESS_MS && (c.status === 'pending' || c.status === 'sent')
 }
 
 function getInitials(name: string): string {
@@ -87,7 +101,9 @@ interface DeviceCardProps {
 
 function DeviceCard({ status, device, commands, onSync, isSyncing, hasFace, fingerprints = [] }: DeviceCardProps) {
   const isOnline = status.is_online
-  const hasActiveCommands = commands.some((c: any) => c.device_sn === status.device_sn && (c.status === 'pending' || c.status === 'sent'))
+  const deviceCommands = commands.filter((c: any) => c.device_sn === status.device_sn)
+  const hasActiveCommands = deviceCommands.some(isFreshActiveCommand)
+  const staleCommands = deviceCommands.filter(isStaleCommand)
   
   // BULLETPROOF: Calculate FP sync from fingerprint_mask (bitmask), not boolean
   // Use status.has_fingerprint to know if user should have FP (avoids "loading = synced" bug)
@@ -110,9 +126,18 @@ function DeviceCard({ status, device, commands, onSync, isSyncing, hasFace, fing
             <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isOnline ? "bg-green-500" : "bg-gray-400")} />
             {allSynced && <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
             <span className="text-sm font-medium truncate">{device?.name || status.device_sn}</span>
+            {hasActiveCommands && <Loader2 className="h-3 w-3 animate-spin text-blue-500 shrink-0" />}
+            {!hasActiveCommands && staleCommands.length > 0 && (
+              <Badge variant="outline" className="text-[10px] text-amber-700 shrink-0">Retrying</Badge>
+            )}
           </div>
         </AccordionTrigger>
         <AccordionContent className="px-4 pb-3 pt-2">
+          {staleCommands.length > 0 && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">
+              {staleCommands[0].command_type} #{staleCommands[0].id}: {staleCommands[0].error_message || 'waiting for device ACK'}
+            </p>
+          )}
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div className={cn("p-2 rounded-lg", status.user_synced ? "bg-green-50 border border-green-200" : "bg-gray-50")}>
               <div className="flex items-center gap-1 mb-1"><Users className="h-3 w-3" /><span className="font-medium">User</span></div>
@@ -151,10 +176,10 @@ type EnrollPhase = 'idle' | 'queued' | 'enrolling' | 'accepted' | 'success' | 'f
 
 function getPhase(commandStatus: string | undefined | null, hasTemplate: boolean | null): EnrollPhase {
   if (!commandStatus) return 'idle'
-  if (commandStatus === 'pending') return 'queued'
-  if (commandStatus === 'sent') return 'enrolling'
+  if (commandStatus === 'pending') return 'enrolling'
+  if (commandStatus === 'sent') return 'accepted'
   if (commandStatus === 'success') return hasTemplate ? 'success' : 'accepted'
-  if (commandStatus === 'failed') return 'failed'
+  if (commandStatus === 'failed' || commandStatus === 'cancelled') return 'failed'
   return 'idle'
 }
 
@@ -197,6 +222,13 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
   const [deviceSn, setDeviceSn] = useState<string>('')
   const [activeCommandId, setActiveCommandId] = useState<number | null>(null)
   const [showTimeout, setShowTimeout] = useState(false)
+  const [recoveryPending, setRecoveryPending] = useState(false)
+
+  const enrollmentPolling = !!user?.id && activeCommandId !== null
+  const { data: enrollmentStatusData } = useEnrollmentStatus(user.id || '', {
+    enabled: enrollmentPolling,
+    refetchInterval: 3000,
+  })
 
   const { data: commandData } = useEnrollmentCommandStatus(activeCommandId, user?.id || '')
 
@@ -214,8 +246,28 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
   const enrolledFingers = useMemo(() => new Set(biometricsList.filter(b => b.type === 'fingerprint' && b.finger_id !== null).map(b => b.finger_id!)), [biometricsList])
   const hasTemplateForType = useMemo(() => biometricType === 'fingerprint' ? biometricsList.some(b => b.type === 'fingerprint' && b.finger_id === fingerId) : biometricsList.some(b => b.type === 'face'), [biometricsList, biometricType, fingerId])
 
-  const phase = getPhase(commandData?.status, hasTemplateForType)
-  const errorInfo = phase === 'failed' ? parseEnrollError(commandData?.error_message) : null
+  const sessionPhase = enrollmentStatusData?.data?.session?.phase
+  const commandStatus =
+    enrollmentStatusData?.data?.command?.status ?? commandData?.status
+  const hasTemplate =
+    enrollmentStatusData?.data?.hasTemplateInDb ?? hasTemplateForType
+
+  const phase = useMemo(() => {
+    if (sessionPhase === 'failed' || sessionPhase === 'timed_out' || sessionPhase === 'cancelled') {
+      return 'failed' as EnrollPhase
+    }
+    if (sessionPhase === 'completed' || hasTemplate) {
+      return 'success' as EnrollPhase
+    }
+    return getPhase(commandStatus, hasTemplate)
+  }, [sessionPhase, commandStatus, hasTemplate])
+
+  const errorInfo = phase === 'failed'
+    ? parseEnrollError(
+        enrollmentStatusData?.data?.session?.error_message ??
+          commandData?.error_message
+      )
+    : null
 
   useEffect(() => {
     if (phase !== 'idle' && phase !== 'success' && phase !== 'failed') {
@@ -226,7 +278,7 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
   }, [phase])
 
   useEffect(() => {
-    if (phase === 'accepted') {
+    if (phase === 'accepted' || phase === 'enrolling') {
       const interval = setInterval(() => refetchBiometrics(), 2000)
       return () => clearInterval(interval)
     }
@@ -260,6 +312,19 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
   const handleCancel = () => {
     if (user?.id) cancelEnrollment.mutate(user.id)
     handleReset()
+  }
+
+  const handleRecovery = async () => {
+    if (!user?.id) return
+    setRecoveryPending(true)
+    try {
+      const result = await UserService.triggerEnrollmentRecovery(user.id)
+      toast.success(result.message)
+    } catch (e: any) {
+      toast.error(e.message || 'Recovery failed')
+    } finally {
+      setRecoveryPending(false)
+    }
   }
 
   const showForm = phase === 'idle'
@@ -392,16 +457,38 @@ function EnrollContent({ user, onSuccess }: EnrollContentProps) {
           {/* Phase content */}
           <div className="rounded-lg border p-4 text-center">
             {phase === 'queued' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><RefreshCw className="h-5 w-5 text-blue-600" /></div><div className="font-medium text-sm">Command Sent</div><div className="text-xs text-muted-foreground">Waiting for device...</div></div>}
-            {phase === 'enrolling' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div><div className="font-medium text-sm">{biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'}</div><div className="text-xs text-muted-foreground">{biometricType === 'fingerprint' ? 'Follow device prompts' : 'Center your face'}</div></div>}
+            {phase === 'enrolling' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div><div className="font-medium text-sm">{biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'}</div><div className="text-xs text-muted-foreground">Follow prompts on the device</div></div>}
             {phase === 'accepted' && <div><div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2"><Progress className="h-5 w-5 animate-pulse" /></div><div className="font-medium text-sm">Template Captured</div><div className="text-xs text-muted-foreground">Uploading...</div><Progress value={75} className="h-1 mt-2" /></div>}
             {phase === 'success' && <div><div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2"><CheckCircle2 className="h-5 w-5 text-green-600" /></div><div className="font-medium text-sm text-green-700">Success</div><div className="text-xs text-muted-foreground">{biometricType === 'fingerprint' ? `${FINGER_LABELS[fingerId]} enrolled` : 'Face enrolled'}</div></div>}
             {phase === 'failed' && errorInfo && <div><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2"><AlertCircle className="h-5 w-5 text-red-600" /></div><div className="font-medium text-sm text-red-700">{errorInfo.label}</div><div className="text-xs text-muted-foreground">{errorInfo.description}</div></div>}
           </div>
 
-          {showTimeout && phase === 'enrolling' && (
-            <div className="flex items-center gap-2 p-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
-              <AlertCircle className="h-3.5 w-3.5" />
-              <span>Taking longer than expected...</span>
+          {showTimeout && (phase === 'enrolling' || phase === 'accepted') && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {phase === 'accepted'
+                    ? 'Upload is taking longer than expected. You can close this dialog — enrollment continues in the background.'
+                    : 'Taking longer than expected...'}
+                </span>
+              </div>
+              {phase === 'accepted' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRecovery}
+                  disabled={recoveryPending}
+                >
+                  {recoveryPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  Request template from device
+                </Button>
+              )}
             </div>
           )}
 
@@ -421,17 +508,50 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
   const [enrollOpen, setEnrollOpen] = useState(false)
   const [copiedPin, setCopiedPin] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; bioId?: string; type?: 'fingerprint' | 'face'; fingerId?: number }>({ open: false })
+  const lastEnrollmentPhaseRef = useRef<string | null>(null)
 
   const userId = user?.id || ''
   const refetchInterval = open ? 3000 : undefined
+
+  const { data: backgroundEnrollment } = useEnrollmentStatus(userId, {
+    enabled: open && !!userId,
+    refetchInterval: 3000,
+  })
 
   const { data: syncData, isLoading: syncLoading } = useSyncStatus(userId, { refetchInterval })
   const { data: commandData } = useCommandQueue(userId, 50, { refetchInterval })
   const { data: biometricsData, refetch: refetchBiometrics } = useUserBiometrics(userId)
 
+  useEffect(() => {
+    const phase = backgroundEnrollment?.data?.session?.phase
+    if (!phase || phase === lastEnrollmentPhaseRef.current) return
+
+    if (lastEnrollmentPhaseRef.current && phase === 'completed') {
+      toast.success('Biometric enrollment completed')
+      refetchBiometrics()
+      onRefreshList?.()
+    } else if (
+      lastEnrollmentPhaseRef.current &&
+      (phase === 'failed' || phase === 'timed_out')
+    ) {
+      toast.error(
+        backgroundEnrollment?.data?.session?.error_message ||
+          'Enrollment did not complete — template was not received from the device'
+      )
+    }
+    lastEnrollmentPhaseRef.current = phase
+  }, [backgroundEnrollment?.data?.session?.phase, backgroundEnrollment?.data?.session?.error_message, refetchBiometrics, onRefreshList])
+
+  useEffect(() => {
+    if (!open) {
+      lastEnrollmentPhaseRef.current = null
+    }
+  }, [open, userId])
+
   const syncUser = useSyncUser()
   const retryUserSync = useRetryUserSync()
   const forceUserSync = useForceUserSync()
+  const reconcileUserSync = useReconcileUserSync()
   const deleteBiometric = useDeleteBiometric()
 
   useEffect(() => {
@@ -465,8 +585,9 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       return (mask & expectedMask) === expectedMask
     }
     
-    const syncingDevices = new Set(commands.filter(c => c.status === 'pending' || c.status === 'sent').map(c => c.device_sn))
+    const syncingDevices = new Set(commands.filter(isFreshActiveCommand).map((c: any) => c.device_sn))
     const syncing = syncingDevices.size
+    const staleCount = commands.filter(isStaleCommand).length
 
     // BULLETPROOF: A device with active commands is "syncing", not "synced"
     // Exclude syncing devices from both synced and notSynced counts
@@ -489,7 +610,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
     
     const cleaning = syncStatus.filter(s => s.actual_state === 'cleaning').length
     
-    return { total: syncStatus.length, synced, syncing, notSynced, cleaning }
+    return { total: syncStatus.length, synced, syncing, notSynced, cleaning, staleCount }
   }, [syncStatus, commands, fingerprints, faces])
 
   const handleCopyPin = async () => {
@@ -524,7 +645,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
 
   // BULLETPROOF: isSyncing based on ACTUAL command status, not global mutation state
   // This ensures UI shows "syncing" while commands are pending/sent, not just during API call
-  const hasActiveCommands = commands.some((c: any) => c.status === 'pending' || c.status === 'sent')
+  const hasActiveCommands = commands.some(isFreshActiveCommand)
   const isSyncing = hasActiveCommands || syncUser.isPending
 
   const { photoUrl: displayPhotoUrl } = useUserPhoto({
@@ -612,6 +733,12 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                           <span>{stats.syncing} syncing</span>
                         </div>
                       )}
+                      {stats.staleCount > 0 && stats.syncing === 0 && (
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>{stats.staleCount} retrying</span>
+                        </div>
+                      )}
                       {stats.cleaning > 0 && (
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-purple-500" />
@@ -635,6 +762,18 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                       <Button size="sm" variant="outline" onClick={() => forceUserSync.mutate({ userId: user.id!, deviceSns: syncStatus.map(s => s.device_sn) })} className="h-8 text-xs text-orange-600">
                         <Zap className="h-3 w-3" />
                       </Button>
+                      {(stats.staleCount > 0 || stats.syncing > 0) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => reconcileUserSync.mutate(user.id!)}
+                          disabled={reconcileUserSync.isPending}
+                          className="h-8 text-xs text-amber-700"
+                          title="Clear stale commands and rebuild sync flags"
+                        >
+                          {reconcileUserSync.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertCircle className="h-3 w-3" />}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -721,9 +860,18 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
       </Dialog>
 
       {/* Enroll Dialog */}
-      <Dialog open={enrollOpen} onOpenChange={(open) => {
+      <Dialog open={enrollOpen} onOpenChange={async (open) => {
         if (!open && user?.id) {
-          UserService.cancelEnrollment(user.id).catch(() => {})
+          try {
+            const status = await UserService.getEnrollmentStatus(user.id)
+            const sessionPhase = status.data?.session?.phase
+            const cmdStatus = status.data?.command?.status
+            if (sessionPhase === 'queued' || cmdStatus === 'pending') {
+              await UserService.cancelEnrollment(user.id)
+            }
+          } catch {
+            // ignore — enrollment may already be complete
+          }
         }
         setEnrollOpen(open)
       }}>

@@ -15,6 +15,20 @@ import {
 
 const COMMAND_FRESHNESS_MS = 2 * 60 * 1000
 const FAILED_COMMAND_WINDOW_MS = 60 * 60 * 1000
+const CANCELLED_COMMAND_WINDOW_MS = 60 * 60 * 1000
+
+function isReconcileLegacyFailed(c: { status: string; error_message?: string | null }) {
+  return (
+    c.status === 'failed' &&
+    typeof c.error_message === 'string' &&
+    c.error_message.includes('Cancelled by reconcile')
+  )
+}
+
+function isActionableFailed(c: { status: string; error_message?: string | null; created_at: string }, now: number) {
+  if (c.status !== 'failed' || isReconcileLegacyFailed(c)) return false
+  return now - new Date(c.created_at).getTime() < FAILED_COMMAND_WINDOW_MS
+}
 
 type Status = 'healthy' | 'syncing' | 'warning' | 'critical'
 
@@ -52,9 +66,11 @@ export function HeaderDeviceStatus() {
       return age < COMMAND_FRESHNESS_MS && (c.status === 'pending' || c.status === 'sent')
     }).length
 
-    const failedCommands = (commands ?? []).filter((c: any) => {
-      if (c.status !== 'failed') return false
-      return now - new Date(c.created_at).getTime() < FAILED_COMMAND_WINDOW_MS
+    const failedCommands = (commands ?? []).filter((c: any) => isActionableFailed(c, now)).length
+
+    const cancelledCommands = (commands ?? []).filter((c: any) => {
+      if (c.status !== 'cancelled') return false
+      return now - new Date(c.created_at).getTime() < CANCELLED_COMMAND_WINDOW_MS
     }).length
 
     const driftCount = list.filter((d: any) => d.stats_drift_detected).length
@@ -69,7 +85,7 @@ export function HeaderDeviceStatus() {
 
     return {
       total, online, offline,
-      failedUsers, pendingCommands, failedCommands, driftCount,
+      failedUsers, pendingCommands, failedCommands, cancelledCommands, driftCount,
       hasIssues, issueCount, status,
       loading: devicesLoading || syncLoading || commandsLoading,
     }
@@ -179,7 +195,7 @@ export function HeaderDeviceStatus() {
             </div>
 
             {/* Commands */}
-            {(m.pendingCommands > 0 || m.failedCommands > 0) && (
+            {(m.pendingCommands > 0 || m.failedCommands > 0 || m.cancelledCommands > 0) && (
               <>
                 <div className="border-t" />
                 <div>
@@ -187,17 +203,23 @@ export function HeaderDeviceStatus() {
                     <RefreshCw className="h-3.5 w-3.5" />
                     <span className="font-medium">Commands</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {m.pendingCommands > 0 && (
-                      <Badge variant="secondary" className="flex-1 flex items-center justify-between px-2.5 py-1.5 text-blue-700 dark:text-blue-400">
+                      <Badge variant="secondary" className="flex-1 min-w-[100px] flex items-center justify-between px-2.5 py-1.5 text-blue-700 dark:text-blue-400">
                         <span>Active</span>
                         <span className="font-semibold tabular-nums">{m.pendingCommands}</span>
                       </Badge>
                     )}
                     {m.failedCommands > 0 && (
-                      <Badge variant="secondary" className="flex-1 flex items-center justify-between px-2.5 py-1.5 text-red-700 dark:text-red-400">
+                      <Badge variant="secondary" className="flex-1 min-w-[100px] flex items-center justify-between px-2.5 py-1.5 text-red-700 dark:text-red-400">
                         <span>Failed</span>
                         <span className="font-semibold tabular-nums">{m.failedCommands}</span>
+                      </Badge>
+                    )}
+                    {m.cancelledCommands > 0 && (
+                      <Badge variant="secondary" className="flex-1 min-w-[100px] flex items-center justify-between px-2.5 py-1.5 text-muted-foreground">
+                        <span>Cleaned up</span>
+                        <span className="font-semibold tabular-nums">{m.cancelledCommands}</span>
                       </Badge>
                     )}
                   </div>

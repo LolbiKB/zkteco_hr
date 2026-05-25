@@ -276,25 +276,41 @@ function DeviceCard({
 
 type EnrollPhase = 'idle' | 'queued' | 'enrolling' | 'accepted' | 'success' | 'failed'
 
+/** Minimum time on Process so Capture → Done does not skip a visible step */
+const ENROLL_PROCESS_MIN_MS = 2500
+
 /**
- * Map enrollment session + command to UI phase.
- * Per ZKTeco protocol, ENROLL_FP Return=0 → command status `sent` means the device
- * opened the enroll screen — not that the template was captured (OPERLOG + `success` later).
+ * Backend-aligned enrollment phase (protocol §12.6.1 + §11.9).
+ * Done only when template exists in cloud (`user_biometrics`).
  */
 function deriveEnrollPhase(
   sessionPhase: string | undefined,
   commandStatus: string | undefined | null,
-  hasTemplate: boolean
+  hasTemplate: boolean,
+  isPullingTemplate: boolean
 ): EnrollPhase {
   if (sessionPhase === 'failed' || sessionPhase === 'timed_out' || sessionPhase === 'cancelled') {
     return 'failed'
   }
   if (commandStatus === 'failed' || commandStatus === 'cancelled') return 'failed'
-  if (sessionPhase === 'completed' || hasTemplate) return 'success'
-  if (commandStatus === 'success') return hasTemplate ? 'success' : 'accepted'
+  if (hasTemplate) return 'success'
+  if (commandStatus === 'success' || isPullingTemplate) return 'accepted'
+  if (sessionPhase === 'completed') return 'accepted'
   if (commandStatus === 'sent' || sessionPhase === 'awaiting_upload') return 'enrolling'
   if (commandStatus === 'pending' || sessionPhase === 'queued') return 'queued'
   return 'idle'
+}
+
+/** Hold Process step briefly before Done when cloud template arrives quickly */
+function applyProcessMinDisplay(
+  rawPhase: EnrollPhase,
+  hasTemplate: boolean,
+  processMinUntil: number | null
+): EnrollPhase {
+  if (rawPhase === 'success' && hasTemplate && processMinUntil !== null && Date.now() < processMinUntil) {
+    return 'accepted'
+  }
+  return rawPhase
 }
 
 const parseEnrollError = parseZkEnrollFpError
@@ -320,6 +336,8 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
   const [showTimeout, setShowTimeout] = useState(false)
   const [recoveryPending, setRecoveryPending] = useState(false)
   const autoRecoveryTriggeredRef = useRef(false)
+  const processMinUntilRef = useRef<number | null>(null)
+  const [processMinTick, setProcessMinTick] = useState(0)
 
   const enrollmentPolling = !!user?.id && activeCommandId !== null
   const { data: enrollmentStatusData } = useEnrollmentStatus(user.id || '', {
@@ -359,15 +377,39 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
     enrollmentStatusData?.data?.hasTemplateInDb ?? hasTemplateForType
   const isPullingTemplate = !!recoveryQueuedAt || recoveryPending
 
-  const phase = useMemo(() => {
-    if (sessionPhase === 'failed' || sessionPhase === 'timed_out' || sessionPhase === 'cancelled') {
-      return 'failed' as EnrollPhase
+  const rawPhase = useMemo(
+    () => deriveEnrollPhase(sessionPhase, commandStatus, !!hasTemplate, isPullingTemplate),
+    [sessionPhase, commandStatus, hasTemplate, isPullingTemplate]
+  )
+
+  useEffect(() => {
+    if (rawPhase === 'accepted') {
+      if (processMinUntilRef.current === null) {
+        processMinUntilRef.current = Date.now() + ENROLL_PROCESS_MIN_MS
+      }
+    } else if (rawPhase === 'success' && hasTemplate) {
+      if (processMinUntilRef.current === null) {
+        processMinUntilRef.current = Date.now() + ENROLL_PROCESS_MIN_MS
+      }
+    } else if (rawPhase === 'enrolling' || rawPhase === 'queued' || rawPhase === 'idle') {
+      processMinUntilRef.current = null
+    } else if (rawPhase === 'failed') {
+      processMinUntilRef.current = null
     }
-    if (sessionPhase === 'completed' || hasTemplate) {
-      return 'success' as EnrollPhase
-    }
-    return deriveEnrollPhase(sessionPhase, commandStatus, !!hasTemplate)
-  }, [sessionPhase, commandStatus, hasTemplate])
+  }, [rawPhase, hasTemplate])
+
+  useEffect(() => {
+    const until = processMinUntilRef.current
+    if (until === null || Date.now() >= until) return
+    const delay = until - Date.now()
+    const t = setTimeout(() => setProcessMinTick((n) => n + 1), delay)
+    return () => clearTimeout(t)
+  }, [rawPhase, hasTemplate, processMinTick])
+
+  const phase = useMemo(
+    () => applyProcessMinDisplay(rawPhase, !!hasTemplate, processMinUntilRef.current),
+    [rawPhase, hasTemplate, processMinTick]
+  )
 
   const errorInfo = phase === 'failed'
     ? parseEnrollError(
@@ -385,10 +427,9 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
   }, [phase])
 
   useEffect(() => {
-    // Only pull template after device reports capture complete (command success), not on `sent`
+    // QUERY recovery when device finished but cloud row not received yet (command success, no template)
     if (
-      phase !== 'accepted' ||
-      commandStatus !== 'success' ||
+      rawPhase !== 'accepted' ||
       hasTemplate ||
       !user?.id ||
       recoveryQueuedAt ||
@@ -411,11 +452,17 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
       }
     }, 45000)
     return () => clearTimeout(timer)
-  }, [phase, commandStatus, hasTemplate, user?.id, recoveryQueuedAt])
+  }, [rawPhase, hasTemplate, user?.id, recoveryQueuedAt])
 
   useEffect(() => {
     if (phase === 'idle' || phase === 'success' || phase === 'failed') {
       autoRecoveryTriggeredRef.current = false
+    }
+    if (phase === 'idle' || phase === 'failed') {
+      processMinUntilRef.current = null
+    }
+    if (phase === 'success') {
+      processMinUntilRef.current = null
     }
   }, [phase])
 
@@ -470,7 +517,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
       case 'enrolling':
         return biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'
       case 'accepted':
-        return isPullingTemplate ? 'Pulling template from device' : 'Uploading template'
+        return isPullingTemplate ? 'Pulling template from device' : 'Saving template to cloud'
       case 'success':
         return biometricType === 'fingerprint' ? `${protocolFingerLabel(fingerId)} enrolled` : 'Face enrolled'
       case 'failed':
@@ -499,6 +546,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
   const handleReset = () => {
     setActiveCommandId(null)
     setShowTimeout(false)
+    processMinUntilRef.current = null
     startEnrollment.reset()
   }
 
@@ -720,7 +768,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
             </div>
             {phase === 'queued' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><RefreshCw className="h-5 w-5 text-blue-600" /></div><div className="font-medium text-sm">Command Sent</div><div className="text-xs text-muted-foreground">Waiting for device...</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
             {phase === 'enrolling' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div><div className="font-medium text-sm">{biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'}</div><div className="text-xs text-muted-foreground">{commandStatus === 'sent' ? 'Device is ready — follow prompts on the device screen' : 'Waiting for device to start enrollment…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
-            {phase === 'accepted' && <div><div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-amber-600 animate-spin" /></div><div className="font-medium text-sm">Template Captured</div><div className="text-xs text-muted-foreground">{isPullingTemplate ? 'Pulling template from device…' : 'Uploading to cloud…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div><div className="h-1 mt-2 w-full rounded-full bg-muted overflow-hidden"><div className="h-full w-1/3 bg-amber-500 animate-pulse rounded-full" /></div></div>}
+            {phase === 'accepted' && <div><div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-amber-600 animate-spin" /></div><div className="font-medium text-sm">Saving to cloud</div><div className="text-xs text-muted-foreground">{isPullingTemplate ? 'Requesting template from device…' : 'Waiting for template upload…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div><div className="h-1 mt-2 w-full rounded-full bg-muted overflow-hidden"><div className="h-full w-1/3 bg-amber-500 animate-pulse rounded-full" /></div></div>}
             {phase === 'success' && <div><div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2"><CheckCircle2 className="h-5 w-5 text-green-600" /></div><div className="font-medium text-sm text-green-700">Success</div><div className="text-xs text-muted-foreground">{biometricType === 'fingerprint' ? `${protocolFingerLabel(fingerId)} enrolled` : 'Face enrolled'}</div></div>}
             {phase === 'failed' && errorInfo && <div><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2"><AlertCircle className="h-5 w-5 text-red-600" /></div><div className="font-medium text-sm text-red-700">{errorInfo.label}</div><div className="text-xs text-muted-foreground">{errorInfo.description}</div>{errorInfo.action && <div className="text-xs text-amber-700 mt-1 font-medium">{errorInfo.action}</div>}</div>}
           </div>
@@ -760,7 +808,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
           )}
 
           <div className="flex gap-2">
-            {(phase === 'enrolling' || phase === 'queued') && <Button variant="outline" onClick={handleCancel} className="flex-1">Cancel</Button>}
+            {(phase === 'enrolling' || phase === 'queued' || phase === 'accepted') && <Button variant="outline" onClick={handleCancel} className="flex-1">Cancel</Button>}
             {phase === 'success' && (
               <>
                 <Button variant="outline" onClick={handleReset} className="flex-1 gap-1.5">

@@ -1,9 +1,68 @@
+import type { LucideIcon } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MinusCircle,
+} from 'lucide-react'
+
 export type AttlogClosureStatus =
   | 'pending_verify'
   | 'backfill_running'
   | 'closed'
   | 'deferred_offline'
   | 'closure_failed'
+
+export type AttlogClosureBadgeConfig = {
+  label: string
+  className: string
+  icon: LucideIcon
+}
+
+/** Text-on-secondary badge style (matches HR sync / verify columns). */
+export function attlogClosureBadgeConfig(
+  status: AttlogClosureStatus | string | null | undefined
+): AttlogClosureBadgeConfig {
+  switch (status) {
+    case 'closed':
+      return {
+        label: 'Closed',
+        className: 'text-green-700 dark:text-green-400',
+        icon: CheckCircle2,
+      }
+    case 'deferred_offline':
+      return {
+        label: 'Deferred (offline)',
+        className: 'text-amber-700 dark:text-amber-400',
+        icon: Clock,
+      }
+    case 'backfill_running':
+      return {
+        label: 'Backfill',
+        className: 'text-blue-700 dark:text-blue-400',
+        icon: Loader2,
+      }
+    case 'pending_verify':
+      return {
+        label: 'Verifying',
+        className: 'text-blue-700 dark:text-blue-400',
+        icon: Loader2,
+      }
+    case 'closure_failed':
+      return {
+        label: 'Failed',
+        className: 'text-destructive',
+        icon: AlertCircle,
+      }
+    default:
+      return {
+        label: 'Not started',
+        className: 'text-muted-foreground',
+        icon: MinusCircle,
+      }
+  }
+}
 
 export function attlogClosureLabel(status: AttlogClosureStatus | string | null | undefined): string {
   switch (status) {
@@ -22,18 +81,7 @@ export function attlogClosureLabel(status: AttlogClosureStatus | string | null |
   }
 }
 
+/** @deprecated Use attlogClosureBadgeConfig + variant secondary badges */
 export function attlogClosureBadgeClass(status: AttlogClosureStatus | string | null | undefined): string {
-  switch (status) {
-    case 'closed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-    case 'deferred_offline':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-    case 'backfill_running':
-    case 'pending_verify':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-    case 'closure_failed':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-    default:
-      return 'bg-muted text-muted-foreground'
-  }
+  return attlogClosureBadgeConfig(status).className
 }

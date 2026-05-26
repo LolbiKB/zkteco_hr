@@ -11,6 +11,7 @@ import {
   useSendDeviceCommand, 
   useUpdateDevice,
   useYesterdayAttlogClosure,
+  useAttlogCatchUpDepthMap,
 } from '@/hooks'
 import { EditDeviceDialog } from '@/components/devices/edit-device-dialog'
 import { DeviceDetailDialog } from '@/components/devices/device-detail-dialog'
@@ -27,6 +28,7 @@ export function Devices() {
   // Fetch devices for table
   const { data, isLoading, isError, error, refetch, isFetching } = useDevices(filters)
   const { data: yesterdayClosure } = useYesterdayAttlogClosure()
+  const { data: catchUpDepth } = useAttlogCatchUpDepthMap()
 
   // Device command mutation
   const deviceCommandMutation = useSendDeviceCommand()
@@ -92,8 +94,9 @@ export function Devices() {
         onEdit: handleEditDevice,
         onShowDetail: handleShowDetail,
         yesterdayClosureBySn: yesterdayClosure,
+        catchUpDepthBySn: catchUpDepth,
       }),
-    [filters, yesterdayClosure]
+    [filters, yesterdayClosure, catchUpDepth]
   )
 
   // Error state

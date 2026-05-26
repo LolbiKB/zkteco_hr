@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table-components'
 import type { DeviceEntry } from '@/services/device-service'
 import type { DeviceAttlogClosureRow } from '@/hooks/use-attlog-closure'
-import { attlogClosureBadgeClass, attlogClosureLabel } from '@/lib/attlog-closure-display'
+import { AttlogCatchUpBadge, AttlogClosureBadge } from '@/components/shared/status-badges'
 
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
@@ -33,6 +33,7 @@ interface CreateDeviceColumnsProps {
   onEdit?: (device: DeviceEntry) => void
   onShowDetail?: (serialNumber: string) => void
   yesterdayClosureBySn?: Map<string, DeviceAttlogClosureRow>
+  catchUpDepthBySn?: Map<string, number>
 }
 
 // Status options for filter
@@ -48,6 +49,7 @@ export function createDeviceColumns({
   onEdit,
   onShowDetail,
   yesterdayClosureBySn,
+  catchUpDepthBySn,
 }: CreateDeviceColumnsProps): ColumnDef<DeviceEntry>[] {
   return [
     {
@@ -138,6 +140,17 @@ export function createDeviceColumns({
       },
     },
     {
+      id: 'attlog_catchup',
+      header: 'Catch-up',
+      cell: ({ row }) => {
+        const depth = catchUpDepthBySn?.get(row.original.serial_number) ?? 0
+        if (depth === 0) {
+          return <span className="text-muted-foreground text-sm">—</span>
+        }
+        return <AttlogCatchUpBadge depth={depth} />
+      },
+    },
+    {
       id: 'attlog_closure',
       header: 'Yesterday ledger',
       cell: ({ row }) => {
@@ -145,18 +158,15 @@ export function createDeviceColumns({
         const closure = yesterdayClosureBySn?.get(sn)
         const status = closure?.status
         return (
-          <Badge
-            variant="secondary"
-            className={attlogClosureBadgeClass(status)}
+          <AttlogClosureBadge
+            status={status}
             title={
               closure?.last_error ||
               (closure?.device_sum != null
                 ? `device=${closure.device_sum} bridge=${closure.server_sum ?? '—'}`
                 : 'Daily ATTLOG closeout — see runbook')
             }
-          >
-            {attlogClosureLabel(status)}
-          </Badge>
+          />
         )
       },
     },

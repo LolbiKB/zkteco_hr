@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { startOfDay, endOfDay, formatISO, parseISO, isSameDay } from 'date-fns'
 import { AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,7 +11,7 @@ import {
   useAttendanceLogSummary,
   useYesterdayAttlogClosure,
 } from '@/hooks'
-import { Badge } from '@/components/ui/badge'
+import { AttlogClosureBadge } from '@/components/shared/status-badges'
 import type {
   AttendanceLogFilters,
   AttendanceLogStatFilter,
@@ -22,12 +23,36 @@ import {
 } from '@/lib/attendance-log-display'
 
 export function AttendanceLogs() {
-  const [filters, setFilters] = useState<AttendanceLogFilters>({
-    page: 1,
-    limit: 20,
-    sort: 'check_time',
-    order: 'desc',
+  const [searchParams] = useSearchParams()
+
+  const [filters, setFilters] = useState<AttendanceLogFilters>(() => {
+    const deviceSn = searchParams.get('device_sn') || undefined
+    const dateFrom = searchParams.get('dateFrom') || undefined
+    const dateTo = searchParams.get('dateTo') || undefined
+    return {
+      page: 1,
+      limit: 20,
+      sort: 'check_time',
+      order: 'desc',
+      ...(deviceSn && { device_sn: deviceSn }),
+      ...(dateFrom && { dateFrom }),
+      ...(dateTo && { dateTo }),
+    }
   })
+
+  useEffect(() => {
+    const deviceSn = searchParams.get('device_sn')
+    const dateFrom = searchParams.get('dateFrom')
+    const dateTo = searchParams.get('dateTo')
+    if (!deviceSn && !dateFrom && !dateTo) return
+    setFilters((prev) => ({
+      ...prev,
+      ...(deviceSn && { device_sn: deviceSn }),
+      ...(dateFrom && { dateFrom }),
+      ...(dateTo && { dateTo }),
+      page: 1,
+    }))
+  }, [searchParams])
 
   const { data, meta, isLoading, isError, error, refetchAttendanceLogs, isFetching } =
     useAttendanceLogs(filters)
@@ -67,11 +92,7 @@ export function AttendanceLogs() {
     return [...data]
       .sort((a, b) => parseISO(a.check_time).getTime() - parseISO(b.check_time).getTime())
       .map((log, i) => {
-        const { time } = formatCheckTimeForLog(
-          log.check_time,
-          log.devices?.timezone,
-          log.created_at
-        )
+        const { time } = formatCheckTimeForLog(log.check_time, log.devices?.timezone)
         const loc = log.devices?.name || log.device_sn
         return { seq: i + 1, time, loc }
       })
@@ -143,14 +164,13 @@ export function AttendanceLogs() {
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Yesterday ledger closeout:</span>
           {closureAlerts.failed > 0 && (
-            <Badge variant="secondary" className="bg-red-100 text-red-800">
-              {closureAlerts.failed} failed
-            </Badge>
+            <AttlogClosureBadge status="closure_failed" label={`${closureAlerts.failed} failed`} />
           )}
           {closureAlerts.deferred > 0 && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-800">
-              {closureAlerts.deferred} deferred (offline)
-            </Badge>
+            <AttlogClosureBadge
+              status="deferred_offline"
+              label={`${closureAlerts.deferred} deferred (offline)`}
+            />
           )}
         </div>
       )}

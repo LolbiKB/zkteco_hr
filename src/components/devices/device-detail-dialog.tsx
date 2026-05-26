@@ -33,6 +33,7 @@ import {
   Search,
   Info,
   MapPin,
+  ScrollText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sparkles } from 'lucide-react'
@@ -46,6 +47,7 @@ import {
   useDeviceUsersPaginated,
   useCommandQueue,
 } from '@/hooks'
+import { DeviceAttlogTab } from '@/components/devices/device-attlog-tab'
 import {
   buildComponentSyncOptions,
   getComponentSyncStatus,
@@ -205,7 +207,6 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
   })
 
   const { data: deviceCommands = [] } = useCommandQueue({ enabled: open && !!deviceSn })
-
   // Flatten pages into single array
   const allUsers = useMemo(() => {
     if (!paginatedUsers.data?.pages) return []
@@ -402,7 +403,7 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Users ({stats.total})
@@ -410,6 +411,10 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
             <TabsTrigger value="info" className="flex items-center gap-2">
               <Info className="h-4 w-4" />
               Device Info
+            </TabsTrigger>
+            <TabsTrigger value="attlogs" className="flex items-center gap-2">
+              <ScrollText className="h-4 w-4" />
+              ATT Logs
             </TabsTrigger>
           </TabsList>
 
@@ -549,6 +554,16 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="attlogs" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+            {deviceSn && (
+              <DeviceAttlogTab
+                deviceSn={deviceSn}
+                isOnline={!!device?.isOnline}
+                enabled={open && activeTab === 'attlogs'}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>

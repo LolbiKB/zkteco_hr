@@ -7,9 +7,6 @@ import {
   Monitor,
   MapPin,
   AlertTriangle,
-  CloudUpload,
-  CloudOff,
-  Clock,
 } from 'lucide-react'
 import {
   SelectFilterHeader,
@@ -21,6 +18,7 @@ import {
   formatIngestedTime,
   erpPairingPreviewLabel,
 } from '@/lib/attendance-log-display'
+import { HrSyncBadge } from '@/components/shared/status-badges'
 
 interface CreateAttendanceLogColumnsProps {
   onFilterByVerifyType?: (type: string) => void
@@ -77,8 +75,7 @@ export function createAttendanceLogColumns({
       cell: ({ row }) => {
         const { date, time, timeZoneLabel } = formatCheckTimeForLog(
           row.getValue('check_time') as string,
-          row.original.devices?.timezone,
-          row.original.created_at
+          row.original.devices?.timezone
         )
         return (
           <div className="flex flex-col" title={`Device clock (${timeZoneLabel})`}>
@@ -191,31 +188,9 @@ export function createAttendanceLogColumns({
       cell: ({ row }) => {
         const log = row.original
         const status = (log.sync_status || 'PENDING').toUpperCase()
-        const config: Record<string, { label: string; className: string; icon: typeof Clock }> =
-          {
-            SUCCESS: {
-              label: 'Delivered',
-              className: 'text-green-700',
-              icon: CloudUpload,
-            },
-            FAILED: {
-              label: 'Failed',
-              className: 'text-destructive',
-              icon: CloudOff,
-            },
-            PENDING: {
-              label: 'Pending',
-              className: 'text-amber-700',
-              icon: Clock,
-            },
-          }
-        const { label, className, icon: Icon } = config[status] || config.PENDING
         return (
           <div className="flex flex-col gap-0.5 max-w-[200px]">
-            <Badge variant="secondary" className={`${className} w-fit pointer-events-none`}>
-              <Icon className="h-3 w-3 mr-1" />
-              {label}
-            </Badge>
+            <HrSyncBadge syncStatus={log.sync_status} />
             {log.frappe_checkin_id && (
               <span className="text-[10px] text-muted-foreground font-mono truncate">
                 {log.frappe_checkin_id}

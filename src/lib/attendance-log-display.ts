@@ -3,6 +3,16 @@ import type { AttendanceLogEntry } from '@/services/attendance-log-service'
 
 const DEFAULT_DEVICE_TZ = 'Asia/Phnom_Penh'
 
+/** Local calendar date (YYYY-MM-DD) for a UTC instant in device timezone. */
+export function getLocalDateStringFromUtc(iso: string, timeZone: string = DEFAULT_DEVICE_TZ): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso))
+}
+
 /** Format a UTC instant in a specific IANA timezone (device site time). */
 export function formatInstantInTimeZone(
   iso: string,
@@ -24,49 +34,12 @@ export function formatInstantInTimeZone(
   return { date: dateFmt.format(d), time: timeFmt.format(d) }
 }
 
-/**
- * Legacy ingest bug: device wall clock was saved as a UTC instant (no offset subtracted).
- * Heuristic: check_time is ~7h ahead of created_at for Asia/Phnom_Penh sites.
- */
-function isLegacyLocalWallClockStoredAsUtc(
-  checkIso: string,
-  createdIso?: string | null
-): boolean {
-  if (!createdIso) return false
-  const deltaMs = new Date(checkIso).getTime() - new Date(createdIso).getTime()
-  const hours = deltaMs / (3600 * 1000)
-  return hours > 5 && hours < 9
-}
-
-/** Show UTC calendar components (matches device LCD when mis-stored). */
-function formatLegacyWallClockAsUtc(iso: string): { date: string; time: string } {
-  const d = new Date(iso)
-  const dateFmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-  const timeFmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-  return { date: dateFmt.format(d), time: timeFmt.format(d) }
-}
-
 /** Device punch time — uses device timezone when available. */
 export function formatCheckTimeForLog(
   iso: string,
-  deviceTimeZone?: string | null,
-  createdAtIso?: string | null
+  deviceTimeZone?: string | null
 ): { date: string; time: string; timeZoneLabel: string } {
   const tz = deviceTimeZone || DEFAULT_DEVICE_TZ
-  if (isLegacyLocalWallClockStoredAsUtc(iso, createdAtIso)) {
-    const { date, time } = formatLegacyWallClockAsUtc(iso)
-    return { date, time, timeZoneLabel: `${tz} (device clock)` }
-  }
   const { date, time } = formatInstantInTimeZone(iso, tz)
   return { date, time, timeZoneLabel: tz }
 }

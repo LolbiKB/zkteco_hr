@@ -2,6 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, Fingerprint, ScanFace, UserPlus, AlertTriangle } from 'lucide-react'
+import type { PhotoCacheStatus } from '@/lib/photo-cache-status'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +32,7 @@ export const columns: ColumnDef<UserEntry>[] = [
           hasCachedPhoto={!!user.photo_storage_path}
           userId={user.id || undefined}
           frappeEmployeeId={user.frappe_employee_id}
+          photoCacheStatus={user.photo_cache_status as PhotoCacheStatus | undefined}
           name={user.name || 'Unknown'}
           secondaryText={user.frappe_employee_id}
           avatarSize="sm"

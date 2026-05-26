@@ -80,6 +80,7 @@ interface GenericDataTableProps<TData, TFilters extends BaseFilters> {
 
   // Toolbar customization
   hideToolbar?: boolean
+  toolbarLeading?: React.ReactNode
   toolbarActions?: React.ReactNode
 
   // Core toolbar feature toggles
@@ -98,6 +99,7 @@ export function GenericDataTable<TData, TFilters extends BaseFilters>({
   config,
   actions,
   hideToolbar = false,
+  toolbarLeading,
   toolbarActions,
   hideSearch = false,
   hideRefresh = false,
@@ -178,6 +180,7 @@ export function GenericDataTable<TData, TFilters extends BaseFilters>({
           {!hideToolbar && (
             <div className="flex shrink-0 items-center justify-between border-b bg-background pb-4">
               <div className="flex items-center space-x-2 min-w-0">
+                {toolbarLeading}
                 {/* Search */}
                 {!hideSearch && (
                   <div className="relative">

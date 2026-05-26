@@ -2,22 +2,18 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   fetchAttendanceLogs,
+  fetchAttendanceLogSummary,
   exportAttendanceLogs,
   type AttendanceLogFilters,
 } from '@/services/attendance-log-service'
 
-/**
- * Query keys for attendance logs
- */
 export const attendanceLogQueryKeys = {
   all: ['attendance-logs'] as const,
   lists: () => [...attendanceLogQueryKeys.all, 'list'] as const,
   list: (filters: AttendanceLogFilters) => [...attendanceLogQueryKeys.lists(), filters] as const,
+  summary: () => [...attendanceLogQueryKeys.all, 'summary'] as const,
 }
 
-/**
- * Hook for managing attendance logs with TanStack Query
- */
 export function useAttendanceLogManagement(filters: AttendanceLogFilters) {
   const {
     data: response,
@@ -29,8 +25,8 @@ export function useAttendanceLogManagement(filters: AttendanceLogFilters) {
   } = useQuery({
     queryKey: attendanceLogQueryKeys.list(filters),
     queryFn: () => fetchAttendanceLogs(filters),
-    staleTime: 30000, // 30 seconds
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 30000,
+    gcTime: 1000 * 60 * 5,
     retry: 2,
   })
 
@@ -52,23 +48,29 @@ export function useAttendanceLogManagement(filters: AttendanceLogFilters) {
   }
 }
 
-/**
- * Hook for exporting attendance logs
- */
+/** Primary hook for Attendance Logs page (replaces use-core-data thin wrapper). */
+export function useAttendanceLogs(filters: AttendanceLogFilters) {
+  return useAttendanceLogManagement(filters)
+}
+
+export function useAttendanceLogSummary() {
+  return useQuery({
+    queryKey: attendanceLogQueryKeys.summary(),
+    queryFn: fetchAttendanceLogSummary,
+    staleTime: 60000,
+  })
+}
+
 export function useExportAttendanceLogs() {
   return useMutation({
     mutationFn: async (filters: AttendanceLogFilters) => {
       const blob = await exportAttendanceLogs(filters)
-      
-      // Create download link
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `attendance-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`
+      link.download = `attendance-punches-${format(new Date(), 'yyyy-MM-dd')}.csv`
       document.body.appendChild(link)
       link.click()
-      
-      // Cleanup
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
     },

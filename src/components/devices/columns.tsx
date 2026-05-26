@@ -23,6 +23,8 @@ import {
   DeviceCell,
 } from '@/components/ui/table-components'
 import type { DeviceEntry } from '@/services/device-service'
+import type { DeviceAttlogClosureRow } from '@/hooks/use-attlog-closure'
+import { attlogClosureBadgeClass, attlogClosureLabel } from '@/lib/attlog-closure-display'
 
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
@@ -30,6 +32,7 @@ interface CreateDeviceColumnsProps {
   onDeviceCommand?: (serialNumber: string, commandType: string, commandBody: string) => void
   onEdit?: (device: DeviceEntry) => void
   onShowDetail?: (serialNumber: string) => void
+  yesterdayClosureBySn?: Map<string, DeviceAttlogClosureRow>
 }
 
 // Status options for filter
@@ -44,6 +47,7 @@ export function createDeviceColumns({
   onDeviceCommand,
   onEdit,
   onShowDetail,
+  yesterdayClosureBySn,
 }: CreateDeviceColumnsProps): ColumnDef<DeviceEntry>[] {
   return [
     {
@@ -130,6 +134,29 @@ export function createDeviceColumns({
               </Badge>
             )}
           </div>
+        )
+      },
+    },
+    {
+      id: 'attlog_closure',
+      header: 'Yesterday ledger',
+      cell: ({ row }) => {
+        const sn = row.original.serial_number
+        const closure = yesterdayClosureBySn?.get(sn)
+        const status = closure?.status
+        return (
+          <Badge
+            variant="secondary"
+            className={attlogClosureBadgeClass(status)}
+            title={
+              closure?.last_error ||
+              (closure?.device_sum != null
+                ? `device=${closure.device_sum} bridge=${closure.server_sum ?? '—'}`
+                : 'Daily ATTLOG closeout — see runbook')
+            }
+          >
+            {attlogClosureLabel(status)}
+          </Badge>
         )
       },
     },

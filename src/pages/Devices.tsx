@@ -9,7 +9,8 @@ import { DeviceDataTable } from '@/components/devices/data-table'
 import { 
   useDevices, 
   useSendDeviceCommand, 
-  useUpdateDevice 
+  useUpdateDevice,
+  useYesterdayAttlogClosure,
 } from '@/hooks'
 import { EditDeviceDialog } from '@/components/devices/edit-device-dialog'
 import { DeviceDetailDialog } from '@/components/devices/device-detail-dialog'
@@ -25,6 +26,7 @@ export function Devices() {
 
   // Fetch devices for table
   const { data, isLoading, isError, error, refetch, isFetching } = useDevices(filters)
+  const { data: yesterdayClosure } = useYesterdayAttlogClosure()
 
   // Device command mutation
   const deviceCommandMutation = useSendDeviceCommand()
@@ -89,8 +91,9 @@ export function Devices() {
         onDeviceCommand: handleDeviceCommand,
         onEdit: handleEditDevice,
         onShowDetail: handleShowDetail,
+        yesterdayClosureBySn: yesterdayClosure,
       }),
-    [filters]
+    [filters, yesterdayClosure]
   )
 
   // Error state
@@ -118,8 +121,22 @@ export function Devices() {
       <div className="flex-1 min-h-0">
         <DeviceDataTable
           columns={columns}
-          data={(data?.devices || []).map(d => ({ ...d, status: d.isOnline ? 'online' : 'offline' }))}
-          meta={data ? { total: data.total, page: data.page, limit: data.limit, totalPages: data.totalPages, hasNext: data.hasNext, hasPrev: data.hasPrev } : undefined}
+          data={(data?.devices || []).map((d) => ({
+            ...d,
+            status: d.isOnline ? 'online' : 'offline',
+          }))}
+          meta={
+            data
+              ? {
+                  total: data.total,
+                  page: data.page,
+                  limit: data.limit,
+                  totalPages: data.totalPages,
+                  hasNext: data.hasNext,
+                  hasPrev: data.hasPrev,
+                }
+              : undefined
+          }
           loading={isLoading}
           isFetching={isFetching}
           filters={filters}

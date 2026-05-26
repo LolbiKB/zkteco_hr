@@ -24,7 +24,7 @@ export class PhotoService {
    */
   static async processAndStorePhoto(
     userId: string,
-    imageUrl: string
+    frappeEmployeeId?: string | null
   ): Promise<ProcessPhotoResult> {
     try {
       console.log(`[PhotoService] Processing photo for user ${userId}`)
@@ -39,7 +39,7 @@ export class PhotoService {
         },
         body: JSON.stringify({
           user_id: userId,
-          photo_url: imageUrl,
+          ...(frappeEmployeeId ? { frappe_employee_id: frappeEmployeeId } : {}),
         }),
       })
 
@@ -193,5 +193,54 @@ export class PhotoService {
       console.error('[PhotoService] Failed to get photo base64:', error)
       return null
     }
+  }
+
+  private static photoQuery(frappeEmployeeId?: string | null): string {
+    if (!frappeEmployeeId) return ''
+    return `?frappe_employee_id=${encodeURIComponent(frappeEmployeeId)}`
+  }
+
+  static async checkPhoto(
+    userId: string,
+    frappeEmployeeId?: string | null
+  ): Promise<{
+    exists: boolean
+    needsRefresh?: boolean
+    photo_cache_status?: string
+  }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    const response = await fetch(
+      `${API_URL}/admin/photo/${userId}/check${PhotoService.photoQuery(frappeEmployeeId)}`,
+      {
+      headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+    }
+    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.error || `Check failed: ${response.status}`)
+    }
+    return response.json()
+  }
+
+  static async headCheckPhoto(
+    userId: string,
+    frappeEmployeeId?: string | null
+  ): Promise<{
+    exists: boolean
+    needsRefresh?: boolean
+    photo_cache_status?: string
+  }> {
+    const { data: { session } } = await supabase.auth.getSession()
+    const response = await fetch(
+      `${API_URL}/admin/photo/${userId}/head-check${PhotoService.photoQuery(frappeEmployeeId)}`,
+      {
+      headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+    }
+    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.error || `Head check failed: ${response.status}`)
+    }
+    return response.json()
   }
 }

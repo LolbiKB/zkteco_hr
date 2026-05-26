@@ -1,7 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UserService, getGlobalCancel, setGlobalCancel, getSyncState, setSyncState, type UserFilters, UserOperationLockedError } from '@/services/user-service'
-import { PhotoService } from '@/services/photo-service'
 import {
   notifyInfo,
   notifyOperationFailed,
@@ -90,11 +89,11 @@ export function useSyncUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ userId, deviceSns, photoUrl }: { userId: string; deviceSns: string[]; photoUrl?: string }) => {
+    mutationFn: async ({ userId, deviceSns }: { userId: string; deviceSns: string[] }) => {
       setGlobalCancel(false) // Reset cancel flag
       setSyncState({ active: true, userId, deviceSns, lastSyncTriggered: Date.now() })
       
-      // Step 1: Queue sync_user commands for ALL devices
+      // Step 1: Queue sync_user commands for ALL devices (devices ↔ cloud; no Frappe photo fetch)
       const { parentCommands } = await UserService.syncUserToDevices(userId, deviceSns)
       console.log('[useSyncUser] sync_user queued, parentCommands:', parentCommands)
       
@@ -102,26 +101,9 @@ export function useSyncUser() {
       queryClient.invalidateQueries({ queryKey: userKeys.syncStatus(userId) })
       queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(userId) })
       
-      // Check for cancellation before photo processing
       if (getGlobalCancel().value) {
         await UserService.clearPendingCommandsForUser(userId)
         throw new Error('Sync cancelled')
-      }
-      
-      // Process photo BEFORE biometrics (if needed)
-      if (photoUrl) {
-        try {
-          const result = await PhotoService.processAndStorePhoto(userId, photoUrl)
-          if (!result.success) {
-            console.warn('[useSyncUser] Photo processing failed:', result.message)
-            notifyInfo(
-              'Photo skipped',
-              result.message || 'Photo processing failed; continuing sync without photo.'
-            )
-          }
-        } catch (error) {
-          console.error('[useSyncUser] Photo processing error:', error)
-        }
       }
       
       // Step 2: Run sync for each device in PARALLEL

@@ -308,8 +308,8 @@ export function useUserSyncProgress(userId: string) {
 // =====================================================
 
 /**
- * Dashboard statistics derived from core data
- * Used by: Dashboard page, Header stats
+ * Dashboard statistics derived from core data.
+ * Used by: Header device status chip and global derived views.
  */
 export function useDashboardStats() {
   const { data: devicesResponse } = useDevices()

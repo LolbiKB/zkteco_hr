@@ -1,14 +1,25 @@
-import { useState, useMemo } from 'react'
-import { startOfDay, endOfDay, formatISO } from 'date-fns'
+import { useState, useMemo, useCallback } from 'react'
+import { startOfDay, endOfDay, formatISO, parseISO, isSameDay } from 'date-fns'
 import { AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { DayTimelineStrip } from '@/components/attendance-logs/day-timeline-strip'
 import { createAttendanceLogColumns } from '@/components/attendance-logs/columns'
 import { AttendanceLogDataTable } from '@/components/attendance-logs/data-table'
 import {
   useAttendanceLogs,
+  useAttendanceLogSummary,
+  useYesterdayAttlogClosure,
 } from '@/hooks'
-import { useExportAttendanceLogs } from '@/hooks/use-attendance-logs'
-import type { AttendanceLogFilters } from '@/services/attendance-log-service'
+import { Badge } from '@/components/ui/badge'
+import type {
+  AttendanceLogFilters,
+  AttendanceLogStatFilter,
+} from '@/services/attendance-log-service'
+import {
+  computeSequenceMap,
+  daySequenceWarnings,
+  formatCheckTimeForLog,
+} from '@/lib/attendance-log-display'
 
 export function AttendanceLogs() {
   const [filters, setFilters] = useState<AttendanceLogFilters>({
@@ -18,55 +29,61 @@ export function AttendanceLogs() {
     order: 'desc',
   })
 
-  // Fetch attendance logs
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-    isFetching,
-  } = useAttendanceLogs({
-    page: filters.page,
-    limit: filters.limit,
-    startDate: filters.dateFrom,
-    endDate: filters.dateTo,
-    deviceSn: filters.device_sn,
-    userPin: filters.user_pin,
-  })
+  const { data, meta, isLoading, isError, error, refetchAttendanceLogs, isFetching } =
+    useAttendanceLogs(filters)
 
-  // Export mutation
-  const { mutate: exportLogs, isPending: isExporting } = useExportAttendanceLogs()
+  const { data: summary } = useAttendanceLogSummary()
+  const { data: yesterdayClosure } = useYesterdayAttlogClosure()
 
-  // Extract unique devices for filter
-  const availableDevices = useMemo(() => {
-    const uniqueDevices = new Set((data?.logs || []).map((log) => log.device_sn))
-    return Array.from(uniqueDevices).map((sn) => ({
-      value: sn,
-      label: sn,
-    }))
-  }, [data])
+  const closureAlerts = useMemo(() => {
+    if (!yesterdayClosure?.size) return null
+    let failed = 0
+    let deferred = 0
+    for (const row of yesterdayClosure.values()) {
+      if (row.status === 'closure_failed') failed++
+      if (row.status === 'deferred_offline') deferred++
+    }
+    if (failed === 0 && deferred === 0) return null
+    return { failed, deferred }
+  }, [yesterdayClosure])
 
-  // Column definitions with filter callbacks
+  const isDayUserScope = useMemo(() => {
+    if (!filters.user_pin || !filters.dateFrom || !filters.dateTo) return false
+    return isSameDay(parseISO(filters.dateFrom), parseISO(filters.dateTo))
+  }, [filters.user_pin, filters.dateFrom, filters.dateTo])
+
+  const sequenceMap = useMemo(
+    () => (isDayUserScope ? computeSequenceMap(data) : new Map<number, number>()),
+    [data, isDayUserScope]
+  )
+
+  const dayWarnings = useMemo(
+    () => (isDayUserScope ? daySequenceWarnings(data) : []),
+    [data, isDayUserScope]
+  )
+
+  const timelinePunches = useMemo(() => {
+    if (!isDayUserScope) return []
+    return [...data]
+      .sort((a, b) => parseISO(a.check_time).getTime() - parseISO(b.check_time).getTime())
+      .map((log, i) => {
+        const { time } = formatCheckTimeForLog(
+          log.check_time,
+          log.devices?.timezone,
+          log.created_at
+        )
+        const loc = log.devices?.name || log.device_sn
+        return { seq: i + 1, time, loc }
+      })
+  }, [data, isDayUserScope])
+
   const columns = useMemo(
     () =>
       createAttendanceLogColumns({
-        onFilterByDevice: (device) =>
-          setFilters((prev) => ({
-            ...prev,
-            device_sn: device || undefined,
-            page: 1,
-          })),
-        onFilterByStatus: (status) =>
-          setFilters((prev) => ({
-            ...prev,
-            status: status ? parseInt(status) : undefined,
-            page: 1,
-          })),
         onFilterByVerifyType: (type) =>
           setFilters((prev) => ({
             ...prev,
-            verify_type: type ? parseInt(type) : undefined,
+            verify_type: type ? parseInt(type, 10) : undefined,
             page: 1,
           })),
         onFilterByDate: (date) => {
@@ -84,24 +101,27 @@ export function AttendanceLogs() {
             })
           }
         },
-        currentDeviceFilter: filters.device_sn,
-        currentStatusFilter: filters.status?.toString(),
         currentVerifyTypeFilter: filters.verify_type?.toString(),
         currentDateFilter: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        availableDevices,
+        showSequence: isDayUserScope,
+        sequenceMap,
       }),
-    [filters, availableDevices]
+    [filters, isDayUserScope, sequenceMap]
   )
 
-  // Handle export
-  const handleExport = () => {
-    exportLogs(filters)
-  }
+  const toggleStatFilter = useCallback((stat: AttendanceLogStatFilter) => {
+    setFilters((prev) => {
+      const { preset, sync_status, dateFrom, dateTo, ...rest } = prev
+      if (preset === stat) {
+        return { ...rest, page: 1, sort: 'check_time', order: 'desc' }
+      }
+      return { ...rest, preset: stat, page: 1, sort: 'check_time', order: 'desc' }
+    })
+  }, [])
 
-  // Error state
   if (isError) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background p-6">
+      <div className="flex items-center justify-center flex-1 min-h-0">
         <Card className="border-destructive max-w-2xl w-full">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-destructive">
@@ -118,19 +138,44 @@ export function AttendanceLogs() {
   }
 
   return (
-    <div className="h-full">
-      <AttendanceLogDataTable
-        columns={columns}
-        data={data?.logs || []}
-        meta={data ? { total: data.total, page: data.page, limit: data.limit, totalPages: data.totalPages, hasNext: data.hasNext, hasPrev: data.hasPrev } : undefined}
-        loading={isLoading}
-        isFetching={isFetching}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onRefresh={refetch}
-        onExportLogs={handleExport}
-        isExporting={isExporting}
-      />
+    <div className="flex h-full min-h-0 flex-col">
+      {closureAlerts && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>Yesterday ledger closeout:</span>
+          {closureAlerts.failed > 0 && (
+            <Badge variant="secondary" className="bg-red-100 text-red-800">
+              {closureAlerts.failed} failed
+            </Badge>
+          )}
+          {closureAlerts.deferred > 0 && (
+            <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+              {closureAlerts.deferred} deferred (offline)
+            </Badge>
+          )}
+        </div>
+      )}
+      {isDayUserScope && filters.user_pin && (
+        <DayTimelineStrip
+          userPin={filters.user_pin}
+          punches={timelinePunches}
+          warnings={dayWarnings}
+        />
+      )}
+
+      <div className="flex-1 min-h-0">
+        <AttendanceLogDataTable
+          columns={columns}
+          data={data}
+          meta={meta}
+          summary={summary}
+          loading={isLoading}
+          isFetching={isFetching}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onStatToggle={toggleStatFilter}
+          onRefresh={() => void refetchAttendanceLogs()}
+        />
+      </div>
     </div>
   )
 }

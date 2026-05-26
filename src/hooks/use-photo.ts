@@ -18,8 +18,8 @@ export function useProcessPhoto() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ userId, imageUrl }: { userId: string; imageUrl: string }): Promise<ProcessPhotoResult> => {
-      const result = await PhotoService.processAndStorePhoto(userId, imageUrl)
+    mutationFn: async ({ userId }: { userId: string }): Promise<ProcessPhotoResult> => {
+      const result = await PhotoService.processAndStorePhoto(userId)
       return result
     },
     onSuccess: (result, variables) => {

@@ -16,7 +16,7 @@ export {
   useSyncStatus,
   useCommandQueue,
   useUsersList,
-  useAttendanceLogs,
+  useAttendanceLogs as useAttendanceLogsCore,
   useUser,
   useDevice,
   useDeviceCommands,
@@ -74,7 +74,7 @@ export { queryKeys, legacyKeyMap } from '@/lib/query-keys'
 export * from './use-users'
 export * from './use-devices'
 export * from './use-attendance-logs'
-export * from './use-dashboard'
+export * from './use-attlog-closure'
 export * from './use-device-status'
 export * from './use-connection-status'
 export * from './use-photo'

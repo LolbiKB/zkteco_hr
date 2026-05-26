@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ConfirmationDialog } from '@/components/ui/base-modal'
 import { useUserPhoto } from '@/hooks/use-user-photo'
+import { PhotoCacheAvatarIndicator } from '@/components/ui/table-components'
+import {
+  getPhotoCacheAvatarIndicator,
+  type PhotoCacheStatus,
+} from '@/lib/photo-cache-status'
 import {
   RefreshCw,
   Loader2,
@@ -35,7 +41,6 @@ import {
   X,
   Users,
   UserPlus,
-  CloudOff,
   Sparkles,
   Copy,
 } from 'lucide-react'
@@ -66,10 +71,12 @@ import {
   useEnrollmentCommandStatus,
   useEnrollmentStatus,
   useCancelEnrollment,
+  userKeys,
 } from '@/hooks/use-users'
 import { UserService, type UserEntry, type SyncStatusEntry } from '@/services/user-service'
 import { deriveEnrollPhase, type EnrollPhase } from '@/lib/enrollment-phase'
 import { SyncToolbarActions } from '@/components/users/sync-toolbar-actions'
+import { UserPhotoTab } from '@/components/users/user-photo-tab'
 import { useUserSyncAggregate } from '@/hooks/use-user-sync-aggregate'
 import {
   ZK_PROTOCOL_FINGER_ORDER,
@@ -924,6 +931,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
 }
 
 export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: UserDetailModalProps) {
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('sync')
   const [enrollOpen, setEnrollOpen] = useState(false)
   const [enrollCancelConfirmOpen, setEnrollCancelConfirmOpen] = useState(false)
@@ -1063,7 +1071,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
 
   const handleSyncToDevice = (deviceSn: string) => {
     if (!user?.id) return
-    syncUser.mutate({ userId: user.id, deviceSns: [deviceSn], photoUrl: user.photo_url })
+    syncUser.mutate({ userId: user.id, deviceSns: [deviceSn] })
   }
 
   const handleSyncAllDevices = () => {
@@ -1075,7 +1083,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
         'Sync queued for configured devices anyway.'
       )
     }
-    syncUser.mutate({ userId: user.id, deviceSns: targets, photoUrl: user.photo_url })
+    syncUser.mutate({ userId: user.id, deviceSns: targets })
   }
 
   const confirmCloseEnrollDialog = async () => {
@@ -1141,6 +1149,11 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
   if (!user) return null
 
   const isRegistered = user.is_registered
+  const photoIndicator =
+    getPhotoCacheAvatarIndicator(user.photo_cache_status as PhotoCacheStatus | undefined) ??
+    (user.photo_url && !user.photo_storage_path
+      ? getPhotoCacheAvatarIndicator('missing_cache')
+      : null)
 
   return (
     <>
@@ -1153,10 +1166,11 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                   <AvatarImage key={displayPhotoUrl || 'no-photo'} src={displayPhotoUrl || undefined} alt={user.name} className="object-cover" />
                   <AvatarFallback className="bg-primary/10 text-primary font-medium">{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
-                {user.photo_url && !user.photo_storage_path && (
-                  <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-                    <CloudOff className="w-3 h-3 text-blue-500" />
-                  </div>
+                {photoIndicator && (
+                  <PhotoCacheAvatarIndicator
+                    kind={photoIndicator.kind}
+                    title={photoIndicator.title}
+                  />
                 )}
               </div>
               <div>
@@ -1179,7 +1193,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="sync" className="flex items-center gap-2 text-xs">
                 <Users className="h-4 w-4" />
                 Sync ({stats.total})
@@ -1187,6 +1201,10 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
               <TabsTrigger value="biometrics" className="flex items-center gap-2 text-xs">
                 <Fingerprint className="h-4 w-4" />
                 Bio ({fingerprints.length + faces.length})
+              </TabsTrigger>
+              <TabsTrigger value="photo" className="flex items-center gap-2 text-xs">
+                <Image className="h-4 w-4" />
+                Photo
               </TabsTrigger>
             </TabsList>
 
@@ -1295,6 +1313,24 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                   </div>
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="photo" className="flex-1 flex flex-col min-h-0 mt-4 overflow-y-auto">
+              {!isRegistered ? (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                  Register first to manage HR photo cache
+                </div>
+              ) : user ? (
+                <UserPhotoTab
+                  user={user}
+                  syncStatus={syncStatus}
+                  onProcessed={() => {
+                    onRefreshList?.()
+                    queryClient.invalidateQueries({ queryKey: userKeys.syncStatus(userId) })
+                    queryClient.invalidateQueries({ queryKey: userKeys.commandQueue(userId) })
+                  }}
+                />
+              ) : null}
             </TabsContent>
 
             <TabsContent value="biometrics" className="flex-1 flex flex-col min-h-0 mt-4">

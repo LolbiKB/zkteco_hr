@@ -1,11 +1,10 @@
 import { ThemeProvider } from 'next-themes'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation, Link, Navigate } from 'react-router-dom'
 import { AttendanceLogs } from './pages/AttendanceLogs'
 import { Devices } from './pages/Devices'
 import { Users } from './pages/Users'
-import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/Login'
 import { AuthProvider, useAuth } from '@/contexts/auth-context'
 import { Toaster } from '@/components/ui/sonner'
@@ -48,15 +47,15 @@ const queryClient = new QueryClient({
 })
 
 const routeTitles: Record<string, string> = {
-  '/': 'Overview',
+  '/users': 'User Management',
   '/attendance-logs': 'Attendance Logs',
   '/devices': 'Device Management',
-  '/users': 'User Management',
 }
 
 function AppContent() {
   const location = useLocation()
-  const pageTitle = routeTitles[location.pathname] || 'Dashboard'
+  const pageTitle = routeTitles[location.pathname] || 'User Management'
+  const isUsersHome = location.pathname === '/users'
   const { user, isAdmin, loading, isAdminLoading, signOut } = useAuth()
   
   // Global realtime for devices - available to all pages
@@ -117,19 +116,19 @@ function AppContent() {
                 />
                 <Breadcrumb>
                   <BreadcrumbList>
-                    <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink asChild>
-                        <Link to="/">Dashboard</Link>
-                      </BreadcrumbLink>
-                    </BreadcrumbItem>
-                    {location.pathname !== '/' && (
+                    {!isUsersHome && (
                       <>
-                        <BreadcrumbSeparator className="hidden md:block" />
-                        <BreadcrumbItem>
-                          <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                        <BreadcrumbItem className="hidden md:block">
+                          <BreadcrumbLink asChild>
+                            <Link to="/users">Users</Link>
+                          </BreadcrumbLink>
                         </BreadcrumbItem>
+                        <BreadcrumbSeparator className="hidden md:block" />
                       </>
                     )}
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                    </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
               </div>
@@ -142,11 +141,11 @@ function AppContent() {
           </header>
           <div className="flex flex-1 flex-col gap-4 p-4 pt-0 min-w-0 overflow-hidden">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/" element={<Navigate to="/users" replace />} />
+              <Route path="/dashboard" element={<Navigate to="/users" replace />} />
+              <Route path="/users" element={<Users />} />
               <Route path="/attendance-logs" element={<AttendanceLogs />} />
               <Route path="/devices" element={<Devices />} />
-              <Route path="/users" element={<Users />} />
             </Routes>
           </div>
         </SidebarInset>

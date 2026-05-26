@@ -15,7 +15,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CloudOff, X, ChevronsUpDown, Server } from "lucide-react"
+import { CloudDownload, History, TriangleAlert, X, ChevronsUpDown, Server } from "lucide-react"
+import {
+  getPhotoCacheAvatarIndicator,
+  type PhotoCacheAvatarIndicatorKind,
+  type PhotoCacheStatus,
+} from '@/lib/photo-cache-status'
 import { useUserPhoto } from "@/hooks/use-user-photo"
 
 // ========================================
@@ -170,11 +175,33 @@ export function BadgeCell({
   return <Badge variant={variant}>{text}</Badge>
 }
 
+const PHOTO_CACHE_ICON: Record<
+  PhotoCacheAvatarIndicatorKind,
+  { Icon: typeof History; className: string }
+> = {
+  missing_cache: { Icon: CloudDownload, className: 'w-3 h-3 text-sky-600' },
+  hr_updated: { Icon: History, className: 'w-3 h-3 text-amber-600' },
+  stale_cache: { Icon: TriangleAlert, className: 'w-3 h-3 text-destructive' },
+}
+
+export function PhotoCacheAvatarIndicator({ kind, title }: { kind: PhotoCacheAvatarIndicatorKind; title: string }) {
+  const { Icon, className } = PHOTO_CACHE_ICON[kind]
+  return (
+    <div
+      className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border shadow-sm"
+      title={title}
+    >
+      <Icon className={className} aria-hidden />
+    </div>
+  )
+}
+
 interface AvatarCellProps {
   photoUrl?: string | null
   hasCachedPhoto?: boolean
   userId?: string
   frappeEmployeeId?: string
+  photoCacheStatus?: PhotoCacheStatus
   fallbackText: string
   size?: 'sm' | 'md' | 'lg'
 }
@@ -184,6 +211,7 @@ export function AvatarCell({
   hasCachedPhoto,
   userId,
   frappeEmployeeId,
+  photoCacheStatus,
   fallbackText,
   size = 'md'
 }: AvatarCellProps) {
@@ -215,6 +243,11 @@ export function AvatarCell({
   }
 
   const initials = getInitials(fallbackText)
+  const photoIndicator =
+    getPhotoCacheAvatarIndicator(photoCacheStatus) ??
+    (photoUrl && !hasCachedPhoto
+      ? getPhotoCacheAvatarIndicator('missing_cache')
+      : null)
 
   return (
     <div className="relative">
@@ -229,14 +262,8 @@ export function AvatarCell({
           {initials}
         </AvatarFallback>
       </Avatar>
-      {/* Cloud icon indicator - photo exists in Frappe but not yet processed for devices */}
-      {photoUrl && !hasCachedPhoto && (
-        <div 
-          className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5"
-          title="Photo not processed for devices - click refresh in menu to process"
-        >
-          <CloudOff className="w-3 h-3 text-blue-500" />
-        </div>
+      {photoIndicator && (
+        <PhotoCacheAvatarIndicator kind={photoIndicator.kind} title={photoIndicator.title} />
       )}
     </div>
   )
@@ -247,6 +274,7 @@ interface UserCellProps {
   hasCachedPhoto?: boolean
   userId?: string
   frappeEmployeeId?: string
+  photoCacheStatus?: PhotoCacheStatus
   name: string
   secondaryText?: string
   avatarSize?: 'sm' | 'md' | 'lg'
@@ -257,6 +285,7 @@ export function UserCell({
   hasCachedPhoto,
   userId,
   frappeEmployeeId,
+  photoCacheStatus,
   name,
   secondaryText,
   avatarSize = 'sm'
@@ -268,6 +297,7 @@ export function UserCell({
         hasCachedPhoto={hasCachedPhoto}
         userId={userId}
         frappeEmployeeId={frappeEmployeeId}
+        photoCacheStatus={photoCacheStatus}
         fallbackText={name}
         size={avatarSize}
       />

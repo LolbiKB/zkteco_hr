@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, CalendarCheck, Users, Fingerprint, ChevronRight } from "lucide-react"
+import { CalendarCheck, Users, Fingerprint, ChevronRight } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 
 import {
@@ -25,10 +25,11 @@ import {
 
 const menuItems = [
   {
-    title: "Dashboard",
-    icon: Home,
+    title: "Management",
+    icon: Users,
     items: [
-      { title: "Overview", url: "/" },
+      { title: "User Management", url: "/users" },
+      { title: "Device Management", url: "/devices" },
     ],
   },
   {
@@ -36,14 +37,6 @@ const menuItems = [
     icon: CalendarCheck,
     items: [
       { title: "Attendance Logs", url: "/attendance-logs" },
-    ],
-  },
-  {
-    title: "Management",
-    icon: Users,
-    items: [
-      { title: "User Management", url: "/users" },
-      { title: "Device Management", url: "/devices" },
     ],
   },
 ]
@@ -54,7 +47,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="p-2">
-        <a href="/" className="flex items-center justify-center h-10 relative">
+        <Link to="/users" className="flex items-center justify-center h-10 relative">
           <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground absolute transition-all duration-200 ease-out group-data-[state=expanded]:opacity-0 group-data-[state=expanded]:scale-75">
             <Fingerprint className="size-4" />
           </div>
@@ -67,7 +60,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <span className="text-xs text-muted-foreground whitespace-nowrap">Bridge System</span>
             </div>
           </div>
-        </a>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent>

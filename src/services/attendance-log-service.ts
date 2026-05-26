@@ -1,41 +1,58 @@
 import type { BaseFilters } from '@/components/ui/generic-data-table'
+import { startOfDay, endOfDay, formatISO } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 
-// Attendance Log Filters
+export type AttendanceLogPreset =
+  | 'today'
+  | 'pending_sync'
+  | 'failed_sync'
+  | 'suspicious'
+  | 'unknown_pin'
+
+export type AttendanceLogStatFilter = 'today' | 'pending_sync' | 'failed_sync' | 'suspicious'
+
 export interface AttendanceLogFilters extends BaseFilters {
   device_sn?: string
   user_pin?: string
   status?: number
   verify_type?: number
-  dateFrom?: string // ISO format
-  dateTo?: string // ISO format
+  dateFrom?: string
+  dateTo?: string
+  sync_status?: string
+  preset?: AttendanceLogPreset
 }
 
-// Attendance Log Entry (matches database schema)
 export interface AttendanceLogEntry {
   id: number
   device_sn: string
   user_pin: string
-  check_time: string // ISO timestamp
-  status: number
+  check_time: string
+  status: number | string
   verify_type: number
-  raw_data: string
+  raw_data?: string | null
   created_at: string
-  // Joined data (if available)
+  sync_status?: string | null
+  synced_to_frappe?: boolean | null
+  frappe_checkin_id?: string | null
+  synced_at?: string | null
+  last_error_message?: string | null
+  retry_count?: number | null
+  is_suspicious?: boolean | null
+  suspicious_reason?: string | null
   devices?: {
     serial_number: string
-    name?: string
-    location?: string
-  }
+    name?: string | null
+    location?: string | null
+    timezone?: string | null
+  } | null
   users?: {
     id: string
     name: string
-    frappe_employee_id?: string
+    frappe_employee_id?: string | null
     pin: string
-  }
+  } | null
 }
 
-// API Response
 export interface AttendanceLogsResponse {
   success: boolean
   data: AttendanceLogEntry[]
@@ -49,51 +66,115 @@ export interface AttendanceLogsResponse {
   }
 }
 
-/**
- * Fetch attendance logs from database with RLS
- */
+export interface AttendanceLogSummary {
+  totalToday: number
+  pendingSync: number
+  failedSync: number
+  suspiciousToday: number
+}
+
+const TODAY_SCOPED_PRESETS: AttendanceLogPreset[] = [
+  'today',
+  'pending_sync',
+  'failed_sync',
+  'suspicious',
+]
+
+function applyPresetToFilters(filters: AttendanceLogFilters): AttendanceLogFilters {
+  const { sync_status: _sync, ...rest } = filters
+  const next: AttendanceLogFilters = { ...rest }
+  if (filters.preset && TODAY_SCOPED_PRESETS.includes(filters.preset)) {
+    const now = new Date()
+    next.dateFrom = formatISO(startOfDay(now))
+    next.dateTo = formatISO(endOfDay(now))
+  }
+  if (filters.preset === 'pending_sync') {
+    next.sync_status = 'PENDING'
+  }
+  if (filters.preset === 'failed_sync') {
+    next.sync_status = 'FAILED'
+  }
+  return next
+}
+
+function applyFiltersToQuery(
+  query: ReturnType<ReturnType<typeof supabase.from>['select']>,
+  filters: AttendanceLogFilters
+) {
+  let q = query
+  if (filters.search) {
+    const term = filters.search.trim()
+    q = q.or(`device_sn.ilike.%${term}%,user_pin.ilike.%${term}%`)
+  }
+  if (filters.device_sn) {
+    q = q.eq('device_sn', filters.device_sn)
+  }
+  if (filters.user_pin) {
+    q = q.ilike('user_pin', `%${filters.user_pin}%`)
+  }
+  if (filters.status !== undefined) {
+    q = q.eq('status', filters.status)
+  }
+  if (filters.verify_type !== undefined) {
+    q = q.eq('verify_type', filters.verify_type)
+  }
+  if (filters.dateFrom) {
+    q = q.gte('check_time', filters.dateFrom)
+  }
+  if (filters.dateTo) {
+    q = q.lte('check_time', filters.dateTo)
+  }
+  if (filters.sync_status) {
+    q = q.eq('sync_status', filters.sync_status)
+  }
+  if (filters.preset === 'suspicious') {
+    q = q.eq('is_suspicious', true)
+  }
+  return q
+}
+
+async function attachUsers(logs: AttendanceLogEntry[]): Promise<AttendanceLogEntry[]> {
+  const pins = [...new Set(logs.map((log) => log.user_pin).filter(Boolean))]
+  const usersData: Record<
+    string,
+    { id: string; name: string; frappe_employee_id?: string | null; pin: string }
+  > = {}
+
+  if (pins.length > 0) {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, name, frappe_employee_id, pin')
+      .in('pin', pins)
+
+    users?.forEach((user) => {
+      usersData[user.pin] = user
+    })
+  }
+
+  return logs.map((log) => ({
+    ...log,
+    users: usersData[log.user_pin] || null,
+  }))
+}
+
 export async function fetchAttendanceLogs(
   filters: AttendanceLogFilters
 ): Promise<AttendanceLogsResponse> {
-  const page = filters.page || 1
-  const limit = filters.limit || 20
-  const sortBy = filters.sort || 'check_time'
-  const sortOrder = filters.order || 'desc'
+  const effective = applyPresetToFilters(filters)
+  const page = effective.page || 1
+  const limit = effective.limit || 20
+  const sortBy = effective.sort || 'check_time'
+  const sortOrder = effective.order || 'desc'
   const from = (page - 1) * limit
   const to = from + limit - 1
 
-  // Build query
   let query = supabase
     .from('attendance_logs')
-    .select('*, devices(serial_number, name, location)', { count: 'exact' })
+    .select('*, devices(serial_number, name, location, timezone)', { count: 'exact' })
 
-  // Apply filters
-  if (filters.search) {
-    query = query.or(`device_sn.ilike.%${filters.search}%,user_pin.ilike.%${filters.search}%`)
-  }
-  if (filters.device_sn) {
-    query = query.eq('device_sn', filters.device_sn)
-  }
-  if (filters.user_pin) {
-    query = query.ilike('user_pin', `%${filters.user_pin}%`)
-  }
-  if (filters.status !== undefined) {
-    query = query.eq('status', filters.status)
-  }
-  if (filters.verify_type !== undefined) {
-    query = query.eq('verify_type', filters.verify_type)
-  }
-  if (filters.dateFrom) {
-    query = query.gte('check_time', filters.dateFrom)
-  }
-  if (filters.dateTo) {
-    query = query.lte('check_time', filters.dateTo)
-  }
+  query = applyFiltersToQuery(query, effective)
 
-  // Apply sorting and pagination
-  query = query
-    .order(sortBy, { ascending: sortOrder === 'asc' })
-    .range(from, to)
+  query = query.order(sortBy, { ascending: sortOrder === 'asc' }).range(from, to)
 
   const { data, error, count } = await query
 
@@ -101,35 +182,19 @@ export async function fetchAttendanceLogs(
     throw new Error(`Failed to fetch attendance logs: ${error.message}`)
   }
 
-  // Fetch users to join with attendance logs
-  const pins = [...new Set((data || []).map(log => log.user_pin).filter(Boolean))]
-  let usersData: Record<string, { id: string; name: string; frappe_employee_id?: string; pin: string }> = {}
-  
-  if (pins.length > 0) {
-    const { data: users } = await supabase
-      .from('users')
-      .select('id, name, frappe_employee_id, pin')
-      .in('pin', pins)
-    
-    if (users) {
-      users.forEach(user => {
-        usersData[user.pin] = user
-      })
-    }
+  let dataWithUsers = await attachUsers((data || []) as AttendanceLogEntry[])
+
+  if (effective.preset === 'unknown_pin') {
+    dataWithUsers = dataWithUsers.filter((log) => !log.users)
   }
 
-  // Join user data with attendance logs
-  const dataWithUsers = (data || []).map(log => ({
-    ...log,
-    users: usersData[log.user_pin] || null
-  }))
-
-  const total = count || 0
+  const total =
+    effective.preset === 'unknown_pin' ? dataWithUsers.length : count || 0
   const totalPages = Math.ceil(total / limit)
 
   return {
     success: true,
-    data: dataWithUsers || [],
+    data: dataWithUsers,
     meta: {
       total,
       page,
@@ -141,67 +206,96 @@ export async function fetchAttendanceLogs(
   }
 }
 
-/**
- * Export attendance logs as CSV
- */
-export async function exportAttendanceLogs(
-  filters: AttendanceLogFilters
-): Promise<Blob> {
-  // Fetch all matching records (no pagination for export)
-  let query = supabase
-    .from('attendance_logs')
-    .select('*, devices(serial_number, name, location)')
+export async function fetchAttendanceLogSummary(): Promise<AttendanceLogSummary> {
+  const todayStart = formatISO(startOfDay(new Date()))
+  const todayEnd = formatISO(endOfDay(new Date()))
 
-  // Apply same filters
-  if (filters.search) {
-    query = query.or(`device_sn.ilike.%${filters.search}%,user_pin.ilike.%${filters.search}%`)
-  }
-  if (filters.device_sn) {
-    query = query.eq('device_sn', filters.device_sn)
-  }
-  if (filters.user_pin) {
-    query = query.ilike('user_pin', `%${filters.user_pin}%`)
-  }
-  if (filters.status !== undefined) {
-    query = query.eq('status', filters.status)
-  }
-  if (filters.verify_type !== undefined) {
-    query = query.eq('verify_type', filters.verify_type)
-  }
-  if (filters.dateFrom) {
-    query = query.gte('check_time', filters.dateFrom)
-  }
-  if (filters.dateTo) {
-    query = query.lte('check_time', filters.dateTo)
-  }
+  const [totalRes, pendingRes, failedRes, suspiciousRes] = await Promise.all([
+    supabase
+      .from('attendance_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('check_time', todayStart)
+      .lte('check_time', todayEnd),
+    supabase
+      .from('attendance_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('check_time', todayStart)
+      .lte('check_time', todayEnd)
+      .eq('sync_status', 'PENDING'),
+    supabase
+      .from('attendance_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('check_time', todayStart)
+      .lte('check_time', todayEnd)
+      .eq('sync_status', 'FAILED'),
+    supabase
+      .from('attendance_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('check_time', todayStart)
+      .lte('check_time', todayEnd)
+      .eq('is_suspicious', true),
+  ])
 
-  const { data, error } = await query
+  return {
+    totalToday: totalRes.count ?? 0,
+    pendingSync: pendingRes.count ?? 0,
+    failedSync: failedRes.count ?? 0,
+    suspiciousToday: suspiciousRes.count ?? 0,
+  }
+}
+
+export async function exportAttendanceLogs(filters: AttendanceLogFilters): Promise<Blob> {
+  let query = supabase.from('attendance_logs').select('*, devices(serial_number, name, location)')
+  query = applyFiltersToQuery(query, applyPresetToFilters(filters))
+
+  const { data, error } = await query.order('check_time', { ascending: false })
 
   if (error) {
     throw new Error(`Failed to export attendance logs: ${error.message}`)
   }
 
-  // Convert to CSV
-  const csv = convertToCSV(data || [])
+  let logs = await attachUsers((data || []) as AttendanceLogEntry[])
+  if (filters.preset === 'unknown_pin') {
+    logs = logs.filter((log) => !log.users)
+  }
+
+  const csv = convertToCSV(logs)
   return new Blob([csv], { type: 'text/csv' })
 }
 
-/**
- * Convert attendance logs to CSV format
- */
 function convertToCSV(logs: AttendanceLogEntry[]): string {
-  const headers = ['ID', 'Device SN', 'Device Name', 'User PIN', 'Check Time', 'Status', 'Verify Type']
-  const rows = logs.map(log => [
+  const headers = [
+    'ID',
+    'Device SN',
+    'Location',
+    'User PIN',
+    'Employee Name',
+    'Check Time (UTC)',
+    'Device Button Status',
+    'Verify Type',
+    'HR Sync Status',
+    'Frappe Checkin ID',
+    'Suspicious',
+    'Suspicious Reason',
+    'Ingested At',
+  ]
+  const rows = logs.map((log) => [
     log.id,
     log.device_sn,
-    log.devices?.name || '',
+    log.devices?.name || log.devices?.location || '',
     log.user_pin,
+    log.users?.name || '',
     log.check_time,
     log.status,
     log.verify_type,
+    log.sync_status || '',
+    log.frappe_checkin_id || '',
+    log.is_suspicious ? 'yes' : 'no',
+    log.suspicious_reason || '',
+    log.created_at,
   ])
 
   return [headers, ...rows]
-    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n')
 }

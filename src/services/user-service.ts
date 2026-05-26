@@ -60,6 +60,9 @@ export interface UserEntry {
   card_number?: string | null
   photo_url?: string
   photo_storage_path?: string | null
+  photo_cache_status?: string
+  frappe_image_path?: string | null
+  photo_synced_at?: string | null
   privilege: number | null
   status?: 'active' | 'inactive' | 'compromised' | 'archived'
   created_at: string | null
@@ -304,6 +307,21 @@ export class UserService {
       biometrics: [], // Fastify doesn't return which biometrics were queued
       photo: result.photoIncluded || false,
     }
+  }
+
+  static async pushPhotoToDevices(
+    userId: string,
+    deviceSns: string[]
+  ): Promise<{ message: string; commandsQueued: number }> {
+    const result = await this.fetchApi<{
+      success: boolean
+      message: string
+      commandsQueued: number
+    }>(`/admin/users/${userId}/push-photo`, {
+      method: 'POST',
+      body: JSON.stringify({ device_sns: deviceSns }),
+    })
+    return { message: result.message, commandsQueued: result.commandsQueued }
   }
 
   static async enrichUserDevicesForDevice(

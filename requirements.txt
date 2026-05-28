@@ -1,0 +1,1 @@
+# Keep this minimal; Frappe provides core dependencies in the bench environment.

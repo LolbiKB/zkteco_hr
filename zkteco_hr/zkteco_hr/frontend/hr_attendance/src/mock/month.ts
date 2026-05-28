@@ -46,10 +46,38 @@ export type CalendarPayload = {
   days: Day[]
 }
 
-export const EMPLOYEES: Array<{ id: string; label: string }> = [
-  { id: "EMP-0001", label: "EMP-0001 · Demo Employee" },
-  { id: "EMP-0002", label: "EMP-0002 · A. Al-Sayed" },
-  { id: "EMP-0003", label: "EMP-0003 · M. Reyes" },
+export const EMPLOYEES: Array<{
+  id: string
+  label: string
+  image?: string | null
+  title?: string | null
+  department?: string | null
+  company?: string | null
+}> = [
+  {
+    id: "EMP-0001",
+    label: "EMP-0001 · Demo Employee",
+    image: "/assets/frappe/images/default-avatar.png",
+    title: "Sales Associate",
+    department: "Retail",
+    company: "ZKTeco Demo",
+  },
+  {
+    id: "EMP-0002",
+    label: "EMP-0002 · A. Al-Sayed",
+    image: "/assets/frappe/images/default-avatar.png",
+    title: "HR Specialist",
+    department: "HR",
+    company: "ZKTeco Demo",
+  },
+  {
+    id: "EMP-0003",
+    label: "EMP-0003 · M. Reyes",
+    image: "/assets/frappe/images/default-avatar.png",
+    title: "Ops Supervisor",
+    department: "Operations",
+    company: "ZKTeco Demo",
+  },
 ]
 
 function mulberry32(seed: number) {

@@ -2,8 +2,8 @@
   "name": "zkteco_hr",
   "private": true,
   "scripts": {
-    "build": "cd zkteco_hr/frontend/hr_attendance && npm install && npm run build",
-    "dev:hr": "cd zkteco_hr/frontend/hr_attendance && npm install && npm run dev"
+    "build": "cd frontend/hr_attendance && npm install && npm run build",
+    "dev:hr": "cd frontend/hr_attendance && npm install && npm run dev"
   }
 }
 

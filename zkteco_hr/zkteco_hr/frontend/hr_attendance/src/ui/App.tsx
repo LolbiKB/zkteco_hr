@@ -1,11 +1,9 @@
 import { EMPLOYEES, getMockMonth, type CalendarPayload } from "../mock/month";
 import {
   addDays,
-  addMonths,
   format,
   isSameDay,
   isSameMonth,
-  startOfMonth,
   startOfWeek,
 } from "date-fns";
 import {
@@ -47,7 +45,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
@@ -98,11 +96,13 @@ type Day = CalendarPayload["days"][number];
 const SEVERITY_ORDER: Severity[] = ["CRITICAL", "WARNING", "INFO"];
 
 export function App() {
-  const [view, setView] = useState<"week" | "month">("week");
+  // Week-only for now (month view disabled).
+  const view: "week" = "week";
   const [employee, setEmployee] = useState(() => EMPLOYEES[0]!.id);
 
   const payload = useMemo(() => getMockMonth(employee, 2026, 5), [employee]);
   const [anchor, setAnchor] = useState<Date>(() => new Date(payload.start_date));
+  const selectedEmployee = useMemo(() => EMPLOYEES.find((e) => e.id === employee) ?? EMPLOYEES[0]!, [employee]);
 
   const [statusFilter, setStatusFilter] = useState<Set<FlagStatus>>(
     () => new Set<FlagStatus>(["OPEN", "EXPLAINED"])
@@ -134,20 +134,26 @@ export function App() {
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
-  const monthStart = startOfMonth(anchor);
-  const monthGridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const monthGrid = useMemo(() => Array.from({ length: 42 }, (_, i) => addDays(monthGridStart, i)), [monthGridStart]);
+  const scheduleStart = useMemo(() => new Date(payload.start_date), [payload.start_date]);
+  const minWeekStart = startOfWeek(scheduleStart, { weekStartsOn: 1 });
+  const maxWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 }); // don't navigate beyond present week
+  const title = `Week of ${format(weekStart, "MMM d, yyyy")}`;
 
-  const title = view === "month" ? format(anchor, "MMMM yyyy") : `Week of ${format(weekStart, "MMM d, yyyy")}`;
+  const canGoPrev = weekStart > minWeekStart;
+  const canGoNext = weekStart < maxWeekStart;
 
   function goPrev() {
-    setAnchor((d) => (view === "month" ? addMonths(d, -1) : addDays(d, -7)));
+    if (!canGoPrev) return;
+    setAnchor((d) => addDays(d, -7));
   }
   function goNext() {
-    setAnchor((d) => (view === "month" ? addMonths(d, 1) : addDays(d, 7)));
+    if (!canGoNext) return;
+    setAnchor((d) => addDays(d, 7));
   }
   function goToday() {
-    setAnchor(new Date());
+    const today = new Date();
+    const clamped = today < scheduleStart ? scheduleStart : today;
+    setAnchor(clamped);
   }
 
   function toggleSetItem<T extends string>(set: Set<T>, v: T) {
@@ -168,145 +174,125 @@ export function App() {
       <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
         <div className="mx-auto flex h-full max-w-7xl flex-col px-4 py-4 sm:px-6">
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-none flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="font-heading text-lg font-semibold tracking-tight">
-                    HR Attendance
-                  </div>
-                  <Badge variant="outline" className="h-6 rounded-full px-2 text-[11px]">
-                    mock
-                  </Badge>
-                </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Week-first triage · click any day to inspect details
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <EmployeePicker value={employee} onChange={setEmployee} />
-                <DateJump anchor={anchor} onSelectDate={setAnchor} />
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <FilterIcon className="mr-1 size-4" />
-                      Filters
-                      {(statusFilter.size !== 2 || severityFilter.size !== 3) && (
-                        <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                          active
-                        </span>
+            <Card className="border-border/60">
+              <CardContent className="py-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="relative size-11 shrink-0 overflow-hidden rounded-full border border-border/60 bg-muted/20">
+                      {selectedEmployee.image ? (
+                        <img
+                          src={selectedEmployee.image}
+                          alt={selectedEmployee.label}
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
+                          {(selectedEmployee.label.split("·")[1] ?? selectedEmployee.id)
+                            .trim()
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((p) => p[0])
+                            .join("")
+                            .toUpperCase()}
+                        </div>
                       )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel>Status</DropdownMenuLabel>
-                    {(["OPEN", "EXPLAINED", "APPROVED", "REJECTED", "CLOSED"] as const).map((s) => (
-                      <DropdownMenuCheckboxItem
-                        key={s}
-                        checked={statusFilter.has(s)}
-                        onCheckedChange={() => setStatusFilter((cur) => toggleSetItem(cur, s))}
-                      >
-                        {s}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Severity</DropdownMenuLabel>
-                    {(["CRITICAL", "WARNING", "INFO"] as const).map((s) => (
-                      <DropdownMenuCheckboxItem
-                        key={s}
-                        checked={severityFilter.has(s)}
-                        onCheckedChange={() => setSeverityFilter((cur) => toggleSetItem(cur, s))}
-                      >
-                        {s}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </div>
 
-                <div className="hidden h-6 w-px bg-border md:block" />
-
-                <Tabs value={view} onValueChange={(v) => setView(v as any)}>
-                  <TabsList>
-                    <TabsTrigger value="week">Week</TabsTrigger>
-                    <TabsTrigger value="month">Month</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
-                <Button variant="outline" size="sm" onClick={goToday}>
-                  Today
-                </Button>
-                <Button variant="outline" size="sm" onClick={goPrev}>
-                  <ChevronLeftIcon className="mr-1 size-4" /> Prev
-                </Button>
-                <Button variant="outline" size="sm" onClick={goNext}>
-                  Next <ChevronRightIcon className="ml-1 size-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-none items-end justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-base font-semibold tracking-tight">{title}</div>
-                <div className="mt-0.5 text-sm text-muted-foreground">
-                  Employee: <span className="font-medium text-foreground">{employee}</span>
-                </div>
-                {(statusFilter.size !== 5 || severityFilter.size !== 3) ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {severityFilter.size !== 3 ? (
-                      <Badge variant="secondary" className="rounded-full">
-                        Severity: {[...severityFilter].join(", ")}
-                      </Badge>
-                    ) : null}
-                    {statusFilter.size !== 5 ? (
-                      <Badge variant="secondary" className="rounded-full">
-                        Status: {[...statusFilter].join(", ")}
-                      </Badge>
-                    ) : null}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold tracking-tight">
+                          {(selectedEmployee.label.split("·")[1] ?? selectedEmployee.id).trim()}
+                        </div>
+                        <Badge variant="secondary" className="h-6 rounded-full px-2 text-[11px]">
+                          {selectedEmployee.id}
+                        </Badge>
+                        <Badge variant="outline" className="h-6 rounded-full px-2 text-[11px]">
+                          mock
+                        </Badge>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{title}</span>
+                        {selectedEmployee.title ? <span>{selectedEmployee.title}</span> : null}
+                        {selectedEmployee.department ? <span>· {selectedEmployee.department}</span> : null}
+                        {selectedEmployee.company ? <span>· {selectedEmployee.company}</span> : null}
+                      </div>
+                    </div>
                   </div>
-                ) : null}
-              </div>
-              <div className="hidden items-center gap-2 md:flex">
-                <LegendPill severity="CRITICAL" />
-                <LegendPill severity="WARNING" />
-                <LegendPill severity="INFO" />
-              </div>
-            </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EmployeePicker value={employee} onChange={setEmployee} />
+                    <DateJump anchor={anchor} onSelectDate={setAnchor} />
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <FilterIcon className="mr-1 size-4" />
+                          Filters
+                          {(statusFilter.size !== 2 || severityFilter.size !== 3) && (
+                            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                              active
+                            </span>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuLabel>Status</DropdownMenuLabel>
+                        {(["OPEN", "EXPLAINED", "APPROVED", "REJECTED", "CLOSED"] as const).map((s) => (
+                          <DropdownMenuCheckboxItem
+                            key={s}
+                            checked={statusFilter.has(s)}
+                            onCheckedChange={() => setStatusFilter((cur) => toggleSetItem(cur, s))}
+                          >
+                            {s}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Severity</DropdownMenuLabel>
+                        {(["CRITICAL", "WARNING", "INFO"] as const).map((s) => (
+                          <DropdownMenuCheckboxItem
+                            key={s}
+                            checked={severityFilter.has(s)}
+                            onCheckedChange={() => setSeverityFilter((cur) => toggleSetItem(cur, s))}
+                          >
+                            {s}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Separator orientation="vertical" className="hidden h-7 md:block" />
+
+                    <Button variant="outline" size="sm" onClick={goToday}>
+                      Today
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={goPrev} disabled={!canGoPrev}>
+                      <ChevronLeftIcon className="mr-1 size-4" /> Prev
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={goNext} disabled={!canGoNext}>
+                      Next <ChevronRightIcon className="ml-1 size-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="min-h-0 flex-1">
-              {view === "week" ? (
-                <WeekView
-                  weekDates={weekDates}
-                  anchor={anchor}
-                  daysByDate={daysByDate}
-                  statusFilter={statusFilter}
-                  severityFilter={severityFilter}
-                  onInspectDay={(date) => {
-                    setInspectingDate(date);
-                    setInspectingFlag(null);
-                  }}
-                  onInspectFlag={(date, flag) => {
-                    setInspectingDate(date);
-                    setInspectingFlag(flag);
-                  }}
-                />
-              ) : (
-                <MonthView
-                  monthGrid={monthGrid}
-                  anchor={anchor}
-                  daysByDate={daysByDate}
-                  statusFilter={statusFilter}
-                  severityFilter={severityFilter}
-                  onInspectDay={(date) => {
-                    setInspectingDate(date);
-                    setInspectingFlag(null);
-                  }}
-                  onInspectFlag={(date, flag) => {
-                    setInspectingDate(date);
-                    setInspectingFlag(flag);
-                  }}
-                />
-              )}
+              <WeekView
+                weekDates={weekDates}
+                anchor={anchor}
+                daysByDate={daysByDate}
+                statusFilter={statusFilter}
+                severityFilter={severityFilter}
+                onInspectDay={(date) => {
+                  setInspectingDate(date);
+                  setInspectingFlag(null);
+                }}
+                onInspectFlag={(date, flag) => {
+                  setInspectingDate(date);
+                  setInspectingFlag(flag);
+                }}
+              />
             </div>
           </div>
         </div>
@@ -332,8 +318,10 @@ export function App() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-sm font-medium">At a glance</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        {inspectingDay?.first_in ?? "—"} → {inspectingDay?.last_out ?? "—"}
+                      <div className="mt-1 font-mono text-[12px] leading-relaxed text-muted-foreground">
+                        <span className="text-foreground/85">{inspectingDay?.first_in ?? "—"}</span>{" "}
+                        <span className="text-muted-foreground">→</span>{" "}
+                        <span className="text-foreground/85">{inspectingDay?.last_out ?? "—"}</span>
                       </div>
                     </div>
                     <div className="w-28">
@@ -347,119 +335,156 @@ export function App() {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/60">
-                <CardContent className="pt-4">
-                  <div className="text-sm font-medium">Timeline</div>
-                  <div className="mt-3 grid grid-cols-[1fr_auto] gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">Punches</div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {(inspectingDay?.checkins ?? []).slice(0, 8).map((c, idx) => (
-                          <Badge key={c.custom_supabase_log_id ?? `${c.time}-${idx}`} variant="secondary" className="rounded-full">
-                            {format(new Date(c.time), "h:mm a")}
-                            {c.log_type ? ` ${c.log_type}` : ""}
-                          </Badge>
-                        ))}
-                        {(inspectingDay?.checkins ?? []).length > 8 ? (
-                          <Badge variant="outline" className="rounded-full">
-                            more…
-                          </Badge>
-                        ) : null}
-                      </div>
+              {(() => {
+                const punches = inspectingDay?.checkins ?? [];
+                const flags = (inspectingDay?.flags ?? [])
+                  .filter((f) => statusFilter.has(f.status ?? "OPEN"))
+                  .filter((f) => severityFilter.has((f.severity ?? "WARNING") as Severity))
+                  .sort((a, b) => {
+                    const aIdx = SEVERITY_ORDER.indexOf((a.severity ?? "WARNING") as Severity);
+                    const bIdx = SEVERITY_ORDER.indexOf((b.severity ?? "WARNING") as Severity);
+                    if (aIdx !== bIdx) return aIdx - bIdx;
+                    return (a.flag_code ?? "").localeCompare(b.flag_code ?? "");
+                  });
 
-                      <div className="mt-3 text-xs text-muted-foreground">Segments</div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {segments.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : (
-                          segments.slice(0, 6).map((s, idx) => (
-                            <Tooltip key={idx}>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                  <Badge variant="outline" className="rounded-full bg-muted/20">
-                                    {s.start?.time ? format(new Date(s.start.time), "h:mm a") : "—"}–
-                                    {s.end?.time ? format(new Date(s.end.time), "h:mm a") : "—"}
-                                  </Badge>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  <div className="font-medium">
-                                    {s.minutes != null ? `${s.minutes} min` : "—"}
-                                  </div>
-                                  <div className="text-muted-foreground">
-                                    {s.branch ? `Branch: ${s.branch}` : "Branch: —"}
-                                  </div>
+                return (
+                  <Tabs defaultValue="timeline" className="min-h-0">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="timeline" className="gap-2">
+                        Timeline
+                        <Badge variant="secondary" className="h-5 rounded-full px-2 text-[11px]">
+                          {punches.length}
+                        </Badge>
+                      </TabsTrigger>
+                      <TabsTrigger value="flags" className="gap-2">
+                        Flags
+                        <Badge variant="secondary" className="h-5 rounded-full px-2 text-[11px]">
+                          {flags.length}
+                        </Badge>
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="timeline" className="mt-3 min-h-0">
+                      <Card className="border-border/60">
+                        <CardContent className="pt-4">
+                          <div className="grid grid-cols-[1fr_auto] gap-3">
+                            <div className="min-w-0">
+                              <div className="text-xs text-muted-foreground">Punches</div>
+                              {punches.length === 0 ? (
+                                <div className="mt-2 rounded-xl border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                                  No punches recorded for this day.
                                 </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          ))
-                        )}
-                      </div>
-                    </div>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {punches.slice(0, 10).map((c, idx) => (
+                                    <Badge
+                                      key={(c as any).custom_supabase_log_id ?? `${c.time}-${idx}`}
+                                      variant="secondary"
+                                      className="rounded-full"
+                                    >
+                                      {format(parseDateTimeLocal(c.time), "h:mm a")}
+                                      {c.log_type ? ` ${c.log_type}` : ""}
+                                    </Badge>
+                                  ))}
+                                  {punches.length > 10 ? (
+                                    <Badge variant="outline" className="rounded-full">
+                                      +{punches.length - 10} more
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              )}
 
-                    <div className="w-10">
-                      <DayStackTrack
-                        checkins={inspectingDay?.checkins ?? []}
-                        worst={worstSeverity(inspectingDay?.flags ?? [])}
-                      />
-                    </div>
-                  </div>
+                              <div className="mt-4 text-xs text-muted-foreground">Segments</div>
+                              {segments.length === 0 ? (
+                                <div className="mt-2 rounded-xl border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                                  No segments (missing pairs or no data).
+                                </div>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {segments.slice(0, 8).map((s, idx) => (
+                                    <Tooltip key={idx}>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex">
+                                          <Badge variant="outline" className="rounded-full bg-muted/20">
+                                            {s.start?.time ? format(parseDateTimeLocal(s.start.time), "h:mm a") : "—"}–
+                                            {s.end?.time ? format(parseDateTimeLocal(s.end.time), "h:mm a") : "—"}
+                                          </Badge>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <div className="text-xs">
+                                          <div className="font-medium">{s.minutes != null ? `${s.minutes} min` : "—"}</div>
+                                          <div className="text-muted-foreground">
+                                            {s.branch ? `Branch: ${s.branch}` : "Branch: —"}
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
 
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    Designed to fit without scrolling (native module feel inside Desk).
-                  </div>
-                </CardContent>
-              </Card>
+                            <div className="w-10">
+                              <DayStackTrack checkins={punches} worst={worstSeverity(inspectingDay?.flags ?? [])} />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
-              <Card className="border-border/60">
-                <CardContent className="pt-4">
-                  <div className="text-sm font-medium">Flags</div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {(inspectingDay?.flags ?? [])
-                      .filter((f) => statusFilter.has(f.status ?? "OPEN"))
-                      .filter((f) => severityFilter.has((f.severity ?? "WARNING") as Severity))
-                      .sort((a, b) => {
-                        const aIdx = SEVERITY_ORDER.indexOf((a.severity ?? "WARNING") as Severity);
-                        const bIdx = SEVERITY_ORDER.indexOf((b.severity ?? "WARNING") as Severity);
-                        if (aIdx !== bIdx) return aIdx - bIdx;
-                        return (a.flag_code ?? "").localeCompare(b.flag_code ?? "");
-                      })
-                      .slice(0, 10)
-                      .map((f) => (
-                        <Tooltip key={f.name}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="rounded-full focus:outline-hidden focus:ring-2 focus:ring-ring/40"
-                              onClick={() => setInspectingFlag(f)}
-                            >
-                              <FlagBadge flag={f} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="text-xs">
-                              <div className="font-medium">{f.flag_code}</div>
-                              <div className="text-muted-foreground">
-                                {f.status ?? "OPEN"} · {f.severity ?? "WARNING"}
+                    <TabsContent value="flags" className="mt-3 min-h-0">
+                      <Card className="border-border/60">
+                        <CardContent className="pt-4">
+                          <div className="text-sm font-medium">Flags</div>
+                          {flags.length === 0 ? (
+                            <div className="mt-3 rounded-xl border border-dashed border-border/60 bg-muted/10 px-3 py-6 text-center">
+                              <div className="text-sm font-medium">No flags</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Nothing to review for the current filters.
                               </div>
                             </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
-                  </div>
+                          ) : (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {flags.slice(0, 14).map((f) => (
+                                <Tooltip key={f.name}>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="rounded-full focus:outline-hidden focus:ring-2 focus:ring-ring/40"
+                                      onClick={() => setInspectingFlag(f)}
+                                    >
+                                      <FlagBadge flag={f} />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="text-xs">
+                                      <div className="font-medium">{f.flag_code}</div>
+                                      <div className="text-muted-foreground">
+                                        {f.status ?? "OPEN"} · {f.severity ?? "WARNING"}
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ))}
+                            </div>
+                          )}
 
-                  {inspectingFlag ? (
-                    <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
-                      <div className="text-xs font-medium">Selected</div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <FlagBadge flag={inspectingFlag} />
-                        <div className="text-xs text-muted-foreground">{inspectingFlag.status ?? "OPEN"}</div>
-                      </div>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+                          {inspectingFlag ? (
+                            <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+                              <div className="text-xs font-medium">Selected</div>
+                              <div className="mt-1 flex items-center gap-2">
+                                <FlagBadge flag={inspectingFlag} />
+                                <div className="text-xs text-muted-foreground">{inspectingFlag.status ?? "OPEN"}</div>
+                              </div>
+                            </div>
+                          ) : null}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
+                );
+              })()}
             </div>
           </ScrollArea>
         </SheetContent>
@@ -478,10 +503,11 @@ function WeekView(props: {
   onInspectFlag: (date: string, flag: Flag) => void;
 }) {
   // Calendar-style working-hours viewport.
-  // Scroll is shared for the week. We clamp the scroll range to the week's earliest/latest punches.
+  // The scroll viewport = card section height. We map exactly `visibleHours` of time onto that
+  // height by sizing the inner canvas to (weekSpan / visibleHours) × 100% of the viewport.
+  // This guarantees overflow whenever the week span exceeds `visibleHours` — no JS measurement needed.
   const visibleHours = 10;
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [viewportPx, setViewportPx] = useState<number>(0);
 
   const weekWindow = useMemo(() => {
     const mins: number[] = [];
@@ -515,33 +541,15 @@ function WeekView(props: {
   }, [props.daysByDate, props.weekDates]);
 
   const weekSpanMinutes = Math.max(60, weekWindow.endMin - weekWindow.startMin);
-  // Respect the "10h scale" regardless of clamping window:
-  // pxPerMinute is fixed from the viewport and visibleHours.
-  // If we can't measure yet (e.g. first paint), use a conservative fallback so overflow behavior is stable.
-  const effectiveViewportPx = viewportPx > 0 ? viewportPx : 360;
-  const pxPerMinute = effectiveViewportPx / (visibleHours * 60);
-  const dayCanvasPx = Math.max(1, Math.round(pxPerMinute * weekSpanMinutes));
+  const canvasHeightRatio = weekSpanMinutes / (visibleHours * 60); // 1.0 = exactly 10h
+  const canvasHeightPct = canvasHeightRatio * 100;
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Ensure we're snapped to the top of the week window on week change.
+    // Snap scroll to the top of the week window when the week changes.
     el.scrollTop = 0;
   }, [weekWindow.startMin, weekWindow.endMin]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const ro = new ResizeObserver(() => {
-      const h = el.clientHeight;
-      if (h > 0) setViewportPx(h);
-    });
-    ro.observe(el);
-    // Seed immediately
-    setViewportPx(el.clientHeight || 0);
-    return () => ro.disconnect();
-  }, []);
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] rounded-2xl border border-border/60 bg-card">
       <div className="grid grid-cols-7 border-b border-border/60">
@@ -569,9 +577,7 @@ function WeekView(props: {
                     {format(parseDateTimeLocal(info!.first_in as string), "h:mm a")} –{" "}
                     {format(parseDateTimeLocal(info!.last_out as string), "h:mm a")}
                   </span>
-                ) : (
-                  <span>—</span>
-                )}
+                ) : null}
               </div>
 
               <div className="mt-1 flex items-center gap-1.5">
@@ -607,11 +613,11 @@ function WeekView(props: {
 
       <div
         ref={scrollRef}
-        className="min-h-0 h-full max-h-full overflow-y-auto overscroll-contain"
+        className="relative min-h-0 h-full max-h-full overflow-y-auto overscroll-contain"
       >
         <div
           className="grid grid-cols-7"
-          style={{ height: dayCanvasPx }}
+          style={{ height: `${canvasHeightPct}%` }}
         >
           {props.weekDates.map((d) => {
             const key = format(d, "yyyy-MM-dd");
@@ -804,7 +810,16 @@ function DayDayTrack(props: {
   const lateness = computeLateness(props.shift, props.firstIn);
   const adherence = computeAdherenceOpacity(props.shift, props.grossMinutes);
   const outline = severityOutlineClass(props.worst);
-  const rogue = getRoguePunchKind(props.flags, props.shift);
+  const roguePunches = useMemo(() => {
+    const checkins = props.checkins ?? [];
+    if (checkins.length === 0) return [] as Checkin[];
+    const sorted = [...checkins].sort(
+      (a, b) => parseDateTimeLocal(a.time).getTime() - parseDateTimeLocal(b.time).getTime()
+    );
+    // If checkins are odd, the last one is unpaired (common real-world rogue case).
+    if (sorted.length % 2 === 1) return [sorted[sorted.length - 1]];
+    return [] as Checkin[];
+  }, [props.checkins]);
 
   const window = useMemo(() => {
     if (props.dense) return null;
@@ -826,21 +841,26 @@ function DayDayTrack(props: {
         className={cn("relative rounded-xl bg-muted/25", props.dense ? "" : "min-h-0 flex-1")}
         style={props.dense ? { height: 96 } : undefined}
       >
-        <div className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-border/60" />
+        {/* Center guide line (pixel-snapped to avoid looking thicker on some DPIs) */}
+        <div
+          className="absolute inset-y-2 w-px bg-border/60"
+          style={{ left: "calc(50% - 0.5px)" }}
+        />
 
-        {/* Rogue punches: single strong horizontal indicator line */}
-        {rogue ? (
-          <div
-            className="absolute inset-x-3 top-3 h-1 rounded-full bg-destructive"
-            title={
-              rogue === "OFF_SHIFT"
-                ? "Off-shift punches"
-                : rogue === "UNKNOWN_BRANCH"
-                  ? "Unknown device branch"
-                  : "Non-primary site punches"
-            }
-          />
-        ) : null}
+        {/* Unpaired punch marker(s): single red vertical tick at punch time */}
+        {roguePunches.map((c, idx) => {
+          const m = minutesFromDateTime(c.time);
+          if (m == null) return null;
+          const topPct = pctFromMinute(m);
+          return (
+            <div
+              key={`${c.time}-${idx}`}
+              className="absolute inset-x-2 h-1 rounded-full bg-destructive shadow-sm"
+              style={{ top: `calc(${topPct}% - 2px)` }}
+              title={`Unpaired punch · ${format(parseDateTimeLocal(c.time), "h:mm a")}`}
+            />
+          );
+        })}
 
         {/* Expected shift window (ghost rail) */}
         {expected && !window ? (
@@ -867,7 +887,7 @@ function DayDayTrack(props: {
             {hasMissingLunch || hasLateFromLunch ? (
               <div
                 className={cn(
-                  "absolute left-0 top-0 h-full w-1 rounded-l-md",
+                  "absolute inset-x-0 top-0 h-0.5 rounded-t-md",
                   hasMissingLunch ? "bg-destructive" : "bg-amber-500"
                 )}
                 aria-hidden="true"
@@ -876,21 +896,7 @@ function DayDayTrack(props: {
           </div>
         ) : null}
 
-        {/* Lateness threshold line (start + grace) */}
-        {lateness?.thresholdPct != null && !window ? (
-          <div
-            className={cn(
-              "absolute inset-x-3 h-px",
-              lateness.isLate ? "bg-amber-500/80" : "bg-border/70"
-            )}
-            style={{ top: `calc(${lateness.thresholdPct}% + 8px)` }}
-            title={
-              lateness.isLate && lateness.deltaMinutes != null
-                ? `Late by ${lateness.deltaMinutes} min`
-                : "Start threshold"
-            }
-          />
-        ) : null}
+        {/* (Intentionally no lateness threshold hairline marker) */}
 
         {/* Shift overlays inside the week window (minute-based mapping) */}
         {window && props.shift.shift_assigned ? (
@@ -923,26 +929,12 @@ function DayDayTrack(props: {
                 />
               );
             })()}
-            {(() => {
-              const startMin = parseTimeToMinutes(props.shift.start_time ?? null);
-              if (startMin == null) return null;
-              const grace = Number.isFinite(props.shift.grace_minutes) ? Number(props.shift.grace_minutes) : 0;
-              const thresholdMin = startMin + grace;
-              return (
-                <div
-                  className={cn(
-                    "absolute inset-x-3 h-px",
-                    lateness?.isLate ? "bg-amber-500/80" : "bg-border/70"
-                  )}
-                  style={{ top: `calc(${pctFromMinute(thresholdMin)}% + 8px)` }}
-                />
-              );
-            })()}
+            {/* (Intentionally no lateness threshold hairline marker) */}
           </>
         ) : null}
 
-        {/* Presence rail (quiet, non-pill). Hide when we have explicit segments. */}
-        {span && segments.length === 0 ? (
+        {/* Presence rail (quiet). Month-only; week view relies on segments/gaps. */}
+        {props.dense && span && segments.length === 0 ? (
           <div
             className={cn("absolute left-1/2 w-[12px] -translate-x-1/2 rounded-sm opacity-20", color)}
             style={{
@@ -952,31 +944,31 @@ function DayDayTrack(props: {
           />
         ) : null}
 
-        {/* Away gaps (solid + thicker outline) */}
-        {gaps.slice(0, props.dense ? 3 : 6).map((g, idx) => (
-          <HoverCard key={idx} openDelay={220} closeDelay={120}>
-            <HoverCardTrigger asChild>
-              <div
-                className={cn(
-                  "absolute inset-x-3 rounded-md border-2 border-solid bg-background/20",
-                  outline
-                )}
-                style={{
-                  top: `calc(${g.topPct}% + 8px)`,
-                  height: `calc(${g.heightPct}% - 8px)`,
-                }}
-              />
-            </HoverCardTrigger>
-            <HoverCardContent className="w-auto p-2">
-              <div className="text-xs">Away{g.minutes != null ? ` · ${g.minutes}m` : ""}</div>
-            </HoverCardContent>
-          </HoverCard>
-        ))}
+        {/* Away gaps (solid + thicker outline). Edge-to-edge with adjacent segments. */}
+        {gaps.slice(0, props.dense ? 3 : 6).map((g, idx) => {
+          const topPct = g.startMin != null ? pctFromMinute(g.startMin) : g.topPct;
+          const endPct = g.endMin != null ? pctFromMinute(g.endMin) : g.topPct + g.heightPct;
+          const heightPct = Math.max(0.5, endPct - topPct);
+          return (
+            <HoverCard key={idx} openDelay={220} closeDelay={120}>
+              <HoverCardTrigger asChild>
+                <div
+                  className="absolute inset-x-2 rounded-sm border-2 border-solid border-destructive/70 bg-destructive/5"
+                  style={{
+                    top: `${topPct}%`,
+                    height: `${heightPct}%`,
+                  }}
+                />
+              </HoverCardTrigger>
+              <HoverCardContent className="w-auto p-2">
+                <div className="text-xs">Away{g.minutes != null ? ` · ${g.minutes}m` : ""}</div>
+              </HoverCardContent>
+            </HoverCard>
+          );
+        })}
 
         {/* Rectangular segments (primary) */}
-        {segments.length === 0 ? (
-          <div className="absolute inset-2 rounded-lg border border-dashed border-border/60" />
-        ) : (
+        {segments.length === 0 ? null : (
           segments.slice(0, props.dense ? 3 : 6).map((s, idx) => {
             const topPct = s.startMin != null ? pctFromMinute(s.startMin) : (s.startPct ?? null);
             const endPct = s.endMin != null ? pctFromMinute(s.endMin) : (s.endPct ?? null);
@@ -1000,12 +992,12 @@ function DayDayTrack(props: {
                 <HoverCardTrigger asChild>
                   <div
                     className={cn(
-                      "absolute inset-x-2 rounded-md shadow-sm ring-1 ring-foreground/10",
+                      "absolute inset-x-2 rounded-sm shadow-sm ring-1 ring-foreground/10",
                       color
                     )}
                     style={{
-                      top: `calc(${topPct}% + 8px)`,
-                      height: `calc(${heightPct}% - 8px)`,
+                      top: `${topPct}%`,
+                      height: `${heightPct}%`,
                       opacity: adherence,
                     }}
                   >
@@ -1089,7 +1081,10 @@ function DayStackTrack(props: { checkins: Checkin[]; worst: Severity | null }) {
 
   return (
     <div className={cn("relative h-24 w-full rounded-xl", rail)}>
-      <div className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-border/60" />
+      <div
+        className="absolute inset-y-2 w-px bg-border/60"
+        style={{ left: "calc(50% - 0.5px)" }}
+      />
     </div>
   );
 }
@@ -1191,27 +1186,39 @@ function deriveSegments(checkins: Checkin[]): Segment[] {
 }
 
 function deriveGaps(segments: Segment[]) {
-  const gaps: Array<{ topPct: number; heightPct: number; minutes: number | null }> = [];
+  const gaps: Array<{
+    startMin: number | null;
+    endMin: number | null;
+    topPct: number;
+    heightPct: number;
+    minutes: number | null;
+  }> = [];
   if (!segments || segments.length < 2) return gaps;
 
-  const sorted = [...segments].sort((a, b) => (a.startPct ?? 0) - (b.startPct ?? 0));
+  const sorted = [...segments].sort((a, b) => (a.startMin ?? a.startPct ?? 0) - (b.startMin ?? b.startPct ?? 0));
   for (let i = 0; i < sorted.length - 1; i++) {
     const a = sorted[i];
     const b = sorted[i + 1];
-    const aEnd = a.endPct ?? null;
-    const bStart = b.startPct ?? null;
-    if (aEnd == null || bStart == null) continue;
-    if (bStart <= aEnd) continue;
-    const heightPct = bStart - aEnd;
-    if (heightPct < 1.2) continue;
+    const aEndPct = a.endPct ?? null;
+    const bStartPct = b.startPct ?? null;
+    if (aEndPct == null || bStartPct == null) continue;
+    if (bStartPct <= aEndPct) continue;
+    const heightPct = bStartPct - aEndPct;
+    if (heightPct < 0.5) continue;
 
     let minutes: number | null = null;
     if (a.end?.time && b.start?.time) {
-      const delta = new Date(b.start.time).getTime() - new Date(a.end.time).getTime();
+      const delta = parseDateTimeLocal(b.start.time).getTime() - parseDateTimeLocal(a.end.time).getTime();
       if (Number.isFinite(delta) && delta >= 0) minutes = Math.round(delta / 60000);
     }
 
-    gaps.push({ topPct: aEnd, heightPct, minutes });
+    gaps.push({
+      startMin: a.endMin ?? null,
+      endMin: b.startMin ?? null,
+      topPct: aEndPct,
+      heightPct,
+      minutes,
+    });
   }
   return gaps;
 }

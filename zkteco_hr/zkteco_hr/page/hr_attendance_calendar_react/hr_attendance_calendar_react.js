@@ -6,30 +6,12 @@ frappe.pages["hr-attendance-calendar-react"].on_page_load = function (wrapper) {
   });
 
   const root = document.createElement("div");
-  root.id = "zk-hr-attendance-react-root";
+  root.id = "root";
   page.main.get(0).appendChild(root);
 
-  // Load the Vite build output from /assets/zkteco_hr/hr_attendance/
-  // This file will exist after running `vite build` from the frontend folder.
-  // We keep this dynamic so the page doesn’t break the build if assets aren't present yet.
-  const entry = "/assets/zkteco_hr/hr_attendance/assets/index.js";
-  const css = "/assets/zkteco_hr/hr_attendance/assets/index.css";
-
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = css;
-  link.onerror = () => {
-    // CSS missing is non-fatal; JS will still render.
-  };
-  document.head.appendChild(link);
-
-  const script = document.createElement("script");
-  script.type = "module";
-  script.src = entry;
-  script.onerror = () => {
+  // Use Frappe asset resolution (works after `bench build` on Cloud).
+  frappe.require(["hr_attendance.bundle.css", "hr_attendance.bundle.js"]).catch(() => {
     root.innerHTML =
-      "<div class='text-muted' style='padding:16px'>React bundle not found. Run Vite build to generate assets at <code>/assets/zkteco_hr/hr_attendance/</code>.</div>";
-  };
-  document.head.appendChild(script);
+      "<div class='text-muted' style='padding:16px'>HR Attendance bundle not found. Run <code>npm run build</code> in the app, commit <code>public/hr_attendance.bundle.*</code>, then <code>bench build --app zkteco_hr</code> on the site.</div>";
+  });
 };
-

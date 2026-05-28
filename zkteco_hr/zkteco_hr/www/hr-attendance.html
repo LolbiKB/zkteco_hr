@@ -9,10 +9,10 @@
       window.csrf_token = "{{ frappe.session.csrf_token }}";
     </script>
 
-    {{ include_style('hr_attendance.bundle.css') }}
+    <link rel="stylesheet" href="/assets/zkteco_hr/hr_attendance.bundle.css" />
   </head>
   <body>
     <div id="root"></div>
-    {{ include_script('hr_attendance.bundle.js') }}
+    <script src="/assets/zkteco_hr/hr_attendance.bundle.js"></script>
   </body>
 </html>

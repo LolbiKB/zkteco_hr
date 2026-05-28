@@ -9,9 +9,19 @@ frappe.pages["hr-attendance-calendar-react"].on_page_load = function (wrapper) {
   root.id = "root";
   page.main.get(0).appendChild(root);
 
-  // Use Frappe asset resolution (works after `bench build` on Cloud).
-  frappe.require(["hr_attendance.bundle.css", "hr_attendance.bundle.js"]).catch(() => {
+  const css = "/assets/zkteco_hr/hr_attendance.bundle.css";
+  const js = "/assets/zkteco_hr/hr_attendance.bundle.js";
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = css;
+  document.head.appendChild(link);
+
+  const script = document.createElement("script");
+  script.src = js;
+  script.onerror = () => {
     root.innerHTML =
-      "<div class='text-muted' style='padding:16px'>HR Attendance bundle not found. Run <code>npm run build</code> in the app, commit <code>public/hr_attendance.bundle.*</code>, then <code>bench build --app zkteco_hr</code> on the site.</div>";
-  });
+      "<div class='text-muted' style='padding:16px'>HR Attendance bundle not found at <code>/assets/zkteco_hr/hr_attendance.bundle.js</code>. Run <code>npm run build</code>, commit <code>public/hr_attendance.bundle.*</code>, then migrate the site.</div>";
+  };
+  document.head.appendChild(script);
 };

@@ -1,0 +1,33 @@
+{
+  "app": "zkteco_hr",
+  "doctype": "Workspace Sidebar",
+  "name": "ZKTeco HR",
+  "title": "ZKTeco HR",
+  "module": "ZKTeco HR",
+  "header_icon": "calendar",
+  "standard": 1,
+  "items": [
+    {
+      "label": "HR Attendance Calendar",
+      "link_to": "hr-attendance-calendar",
+      "link_type": "Page",
+      "type": "Link",
+      "child": 0,
+      "collapsible": 1,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0
+    },
+    {
+      "label": "Attendance Flag",
+      "link_to": "Attendance Flag",
+      "link_type": "DocType",
+      "type": "Link",
+      "child": 0,
+      "collapsible": 1,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0
+    }
+  ]
+}

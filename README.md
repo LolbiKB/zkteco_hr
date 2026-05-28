@@ -28,3 +28,12 @@ generate_auto_flags_for_date("2026-05-28")
 
 - “My Week” API (whitelisted):
   - `zkteco_hr.attendance_engine.api.get_my_week(employee, start_date, end_date)`
+
+## HR Attendance Calendar (Desk)
+
+- Open from Awesomebar: **HR Attendance Calendar** or route `/app/hr-attendance-calendar`
+- Module sidebar: **ZKTeco HR** (Frappe v16 `Workspace Sidebar` fixture)
+
+HR calendar API:
+
+- `zkteco_hr.attendance_engine.hr_calendar.get_employee_calendar(employee, start_date, end_date)`

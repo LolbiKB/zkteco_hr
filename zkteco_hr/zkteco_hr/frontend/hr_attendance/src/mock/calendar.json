@@ -1,0 +1,280 @@
+{
+  "employee": "EMP-0001",
+  "start_date": "2026-05-04",
+  "end_date": "2026-05-31",
+  "days": [
+    {
+      "date": "2026-05-04",
+      "shift": {
+        "shift_assigned": true,
+        "shift_type": "FT_0800_1700",
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "grace_minutes": 0,
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00"
+      },
+      "checkins": [
+        {
+          "time": "2026-05-04 08:11:00",
+          "log_type": "IN",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        },
+        {
+          "time": "2026-05-04 12:05:00",
+          "log_type": "OUT",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        },
+        {
+          "time": "2026-05-04 12:58:00",
+          "log_type": "IN",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        },
+        {
+          "time": "2026-05-04 17:22:00",
+          "log_type": "OUT",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        }
+      ],
+      "first_in": "2026-05-04 08:11:00",
+      "last_out": "2026-05-04 17:22:00",
+      "gross_minutes": 551,
+      "flags": [
+        {
+          "name": "AUTO-emp-2026-05-04-LATE_START",
+          "flag_code": "LATE_START",
+          "severity": "WARNING",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 1,
+          "rule_version": "v0",
+          "evidence": {
+            "late_threshold": "2026-05-04T08:00:00"
+          }
+        }
+        ,
+        {
+          "name": "AUTO-emp-2026-05-04-LATE_FROM_LUNCH",
+          "flag_code": "LATE_FROM_LUNCH",
+          "severity": "WARNING",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 1,
+          "rule_version": "v0",
+          "evidence": {
+            "lunch_expected_end": "2026-05-04T13:00:00",
+            "lunch_observed_in": "2026-05-04T12:58:00"
+          }
+        }
+      ]
+    }
+    ,
+    {
+      "date": "2026-05-05",
+      "shift": {
+        "shift_assigned": true,
+        "shift_type": "FT_0800_1700",
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "grace_minutes": 5,
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00"
+      },
+      "checkins": [
+        {
+          "time": "2026-05-05 07:58:00",
+          "log_type": "IN",
+          "device_id": "DEV-02",
+          "custom_device_branch": "BRANCH-B"
+        },
+        {
+          "time": "2026-05-05 12:02:00",
+          "log_type": "OUT",
+          "device_id": "DEV-02",
+          "custom_device_branch": "BRANCH-B"
+        },
+        {
+          "time": "2026-05-05 12:49:00",
+          "log_type": "IN",
+          "device_id": "DEV-02",
+          "custom_device_branch": "BRANCH-B"
+        },
+        {
+          "time": "2026-05-05 17:10:00",
+          "log_type": "OUT",
+          "device_id": "DEV-02",
+          "custom_device_branch": "BRANCH-B"
+        }
+      ],
+      "first_in": "2026-05-05 07:58:00",
+      "last_out": "2026-05-05 17:10:00",
+      "gross_minutes": 552,
+      "flags": []
+    },
+    {
+      "date": "2026-05-06",
+      "shift": {
+        "shift_assigned": true,
+        "shift_type": "FT_0800_1700",
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "grace_minutes": 0,
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00"
+      },
+      "checkins": [
+        {
+          "time": "2026-05-06 09:34:00",
+          "log_type": "IN",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        }
+      ],
+      "first_in": "2026-05-06 09:34:00",
+      "last_out": null,
+      "gross_minutes": null,
+      "flags": [
+        {
+          "name": "AUTO-emp-2026-05-06-MISSING_IN_OR_OUT",
+          "flag_code": "MISSING_IN_OR_OUT",
+          "severity": "CRITICAL",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 0,
+          "rule_version": "v0",
+          "evidence": {
+            "reason": "Only one punch present"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-05-07",
+      "shift": {
+        "shift_assigned": true,
+        "shift_type": "FT_0800_1700",
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "grace_minutes": 0,
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00"
+      },
+      "checkins": [],
+      "first_in": null,
+      "last_out": null,
+      "gross_minutes": null,
+      "flags": [
+        {
+          "name": "AUTO-emp-2026-05-07-UNNOTIFIED_ABSENCE",
+          "flag_code": "UNNOTIFIED_ABSENCE",
+          "severity": "CRITICAL",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 1,
+          "rule_version": "v0",
+          "evidence": {
+            "expected_shift": "FT_0800_1700"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-05-08",
+      "shift": {
+        "shift_assigned": true,
+        "shift_type": "FT_0800_1700",
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "grace_minutes": 0,
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00"
+      },
+      "checkins": [
+        {
+          "time": "2026-05-08 08:03:00",
+          "log_type": "IN",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        },
+        {
+          "time": "2026-05-08 11:30:00",
+          "log_type": "OUT",
+          "device_id": "DEV-01",
+          "custom_device_branch": "BRANCH-A"
+        },
+        {
+          "time": "2026-05-08 14:05:00",
+          "log_type": "IN",
+          "device_id": "DEV-03",
+          "custom_device_branch": "BRANCH-C"
+        },
+        {
+          "time": "2026-05-08 17:01:00",
+          "log_type": "OUT",
+          "device_id": "DEV-03",
+          "custom_device_branch": "BRANCH-C"
+        }
+      ],
+      "first_in": "2026-05-08 08:03:00",
+      "last_out": "2026-05-08 17:01:00",
+      "gross_minutes": 538,
+      "flags": [
+        {
+          "name": "AUTO-emp-2026-05-08-NON_PRIMARY_SITE_PUNCH",
+          "flag_code": "NON_PRIMARY_SITE_PUNCH",
+          "severity": "WARNING",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 1,
+          "rule_version": "v0",
+          "evidence": {
+            "expected_branch": "BRANCH-A",
+            "observed_branch": "BRANCH-C"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-05-09",
+      "shift": {
+        "shift_assigned": false
+      },
+      "checkins": [
+        {
+          "time": "2026-05-09 08:01:00",
+          "log_type": "IN",
+          "device_id": "DEV-99",
+          "custom_device_branch": null
+        },
+        {
+          "time": "2026-05-09 16:49:00",
+          "log_type": "OUT",
+          "device_id": "DEV-99",
+          "custom_device_branch": null
+        }
+      ],
+      "first_in": "2026-05-09 08:01:00",
+      "last_out": "2026-05-09 16:49:00",
+      "gross_minutes": 528,
+      "flags": [
+        {
+          "name": "AUTO-emp-2026-05-09-UNKNOWN_DEVICE_BRANCH",
+          "flag_code": "UNKNOWN_DEVICE_BRANCH",
+          "severity": "INFO",
+          "source": "AUTO",
+          "status": "OPEN",
+          "day_closed": 1,
+          "rule_version": "v0",
+          "evidence": {
+            "device_id": "DEV-99"
+          }
+        }
+      ]
+    }
+  ]
+}
+

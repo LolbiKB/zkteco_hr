@@ -37,3 +37,33 @@ generate_auto_flags_for_date("2026-05-28")
 HR calendar API:
 
 - `zkteco_hr.attendance_engine.hr_calendar.get_employee_calendar(employee, start_date, end_date)`
+
+## React + Vite HR Attendance (local dev)
+
+This repo includes a Vite+React frontend scaffold under:
+
+- `zkteco_hr/zkteco_hr/frontend/hr_attendance/`
+
+### Run with mock data (fast UI iteration)
+
+From your bench's app folder (or from the repo), run:
+
+```bash
+cd zkteco_hr/zkteco_hr/frontend/hr_attendance
+npm install
+npm run dev
+```
+
+### Build and load inside Frappe Desk
+
+Build assets into `zkteco_hr/zkteco_hr/public/hr_attendance/`:
+
+```bash
+cd zkteco_hr/zkteco_hr/frontend/hr_attendance
+npm install
+npm run build
+```
+
+Then open the Desk page:
+
+- `/app/hr-attendance-calendar-react`

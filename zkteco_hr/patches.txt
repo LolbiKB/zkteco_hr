@@ -1,1 +1,2 @@
+zkteco_hr.patches.reset_zkteco_hr_navigation
 zkteco_hr.patches.remove_broken_hr_workspace

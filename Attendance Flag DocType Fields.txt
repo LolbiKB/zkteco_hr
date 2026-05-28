@@ -1,0 +1,200 @@
+Fields
+
+No.
+Label
+Type
+Name
+Mandatory
+Options
+Perm Level
+
+1
+Employee
+Section Break
+employee_section
+
+0
+
+2
+Employee
+Link
+employee
+
+Employee
+0
+
+3
+Employee Name
+Data
+employee_name
+
+0
+
+4
+Column Break
+column_break_1
+
+0
+
+5
+Company
+Link
+company
+
+Company
+0
+
+6
+Attendance Date
+Date
+attendance_date
+
+0
+
+7
+Flag
+Section Break
+flag_section
+
+0
+
+8
+Flag Code
+Select
+flag_code
+
+NON_PRIMARY_SITE_PUNCH
+LATE_START
+OFF_SHIFT_PUNCH
+MISSING_IN_OR_OUT
+MISSING_LUNCH
+LATE_FROM_LUNCH
+UNNOTIFIED_ABSENCE
+UNKNOWN_DEVICE_BRANCH
+LATE_CHECKIN_AFTER_CLOSE
+0
+
+9
+Severity
+Select
+severity
+
+INFO
+WARNING
+CRITICAL
+0
+
+10
+Source
+Select
+source
+
+AUTO
+EMPLOYEE
+HR
+0
+
+11
+Status
+Select
+status
+
+OPEN
+EXPLAINED
+APPROVED
+REJECTED
+CLOSED
+0
+
+12
+Day Closed
+Check
+day_closed
+
+0
+
+13
+Details
+Section Break
+details_section
+
+0
+
+14
+Linked Checkin
+Link
+linked_checkin
+
+Employee Checkin
+0
+
+15
+Rule Version
+Data
+rule_version
+
+0
+
+16
+Evidence (JSON)
+Long Text
+evidence
+
+0
+
+17
+Employee Explanation
+Section Break
+employee_section2
+
+0
+
+18
+Employee Note
+Small Text
+employee_note
+
+0
+
+19
+Employee Attachment
+Attach
+employee_attachment
+
+0
+
+20
+Employee Submitted At
+Datetime
+employee_submitted_at
+
+0
+
+21
+HR Decision
+Section Break
+hr_section
+
+0
+
+22
+HR Note
+Text
+hr_note
+
+0
+
+23
+HR User
+Link
+hr_user
+
+User
+0
+
+24
+HR Decided At
+Datetime
+hr_decided_at
+
+0

@@ -1,0 +1,46 @@
+"Bulk Edit Fields"
+"Is System Generated","Label","Type","Name","Non Negative","Mandatory","Unique","Is Virtual","In List View","In Standard Filter","In Global Search","In Preview","Bold","No Copy","Allow in Quick Entry","Translatable","Mask","Link Filters","Default","Precision","Length","Options","Sort Options","Fetch From","Fetch on Save if Empty","Show Dashboard","Depends On","Perm Level","Hidden","Read Only","Collapsible","Allow Bulk Edit","Collapsible Depends On","Ignore User Permissions","Allow on Submit","Report Hide","Remember Last Selected Value","Hide Border","Ignore XSS Filter","Mandatory Depends On","Read Only Depends On","Button Color","In Filter","Hide Seconds","Hide Days","Description","Placeholder","Print Hide","Print Hide If No Value","Print Width","Alignment","Columns","Width","Is Custom Field"
+"is_system_generated","label","fieldtype","fieldname","non_negative","reqd","unique","is_virtual","in_list_view","in_standard_filter","in_global_search","in_preview","bold","no_copy","allow_in_quick_entry","translatable","mask","link_filters","default","precision","length","options","sort_options","fetch_from","fetch_if_empty","show_dashboard","depends_on","permlevel","hidden","read_only","collapsible","allow_bulk_edit","collapsible_depends_on","ignore_user_permissions","allow_on_submit","report_hide","remember_last_selected_value","hide_border","ignore_xss_filter","mandatory_depends_on","read_only_depends_on","button_color","in_filter","hide_seconds","hide_days","description","placeholder","print_hide","print_hide_if_no_value","print_width","alignment","columns","width","is_custom_field"
+" "," "," "," "," "," "," "," "," "," "," "," "," "," "," "," "," "," "," ","Set non-standard precision for a Float or Currency field "," "," "," "," ","If unchecked, the value will always be re-fetched on save. "," ","This field will appear only if the fieldname defined here has value OR the rules are true (examples):
+myfield
+eval:doc.myfield=='My Value'
+eval:doc.age>18 "," "," "," "," "," "," "," "," "," "," "," ","Don't encode HTML tags like <script> or just characters like < or >, as they could be intentionally used in this field "," "," "," "," "," "," "," "," "," "," ","Print Width of the field, if the field is a column in a table "," ","Number of columns for a field in a Grid (Total Columns in a grid should be less than 11) "," "," "
+"The CSV format is case sensitive"
+"Do not edit headers which are preset in the template"
+"------"
+"","Employee","Link","employee","",1,"","","",1,"","","","","","","","","","","","Employee","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Employee Name","Data","employee_name","","","","",1,"","","","","","","","","","","","","","","employee.employee_name","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","Log Type","Select","log_type","","","","",1,"","","","","","","","","","","","","
+IN
+OUT","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Verify Type","Select","custom_verify_type","","","","","","","","","","","",1,"","","","","","Fingerprint
+Face
+Password
+Card
+RFID
+QRCode","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",1
+"","Shift","Link","shift","","","","","","","","","","","","","","","","","","Shift Type","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","Overtime Type","Link","overtime_type","","","","","","","","","","","","","","","","","","Overtime Type","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","","",""
+"","","Column Break","column_break_4","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Time","Datetime","time","",1,"","",1,"","","","","","","","","","Now","","","","","","","","",1,"","","","","","","","","","","","","eval:doc.attendance;","","","","","","","","","","","","",""
+"","Location / Device ID","Data","device_id","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Skip Auto Attendance","Check","skip_auto_attendance","","","","","","","","","","","","","","","0","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Attendance Marked","Link","attendance","","","","","","","","","","","","","","","","","","Attendance","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","Supabase Log ID","Data","custom_supabase_log_id","","",1,"",1,1,"","","","","",1,"","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",1
+"","Device Serial Number","Data","custom_device_serial_number","","","","","","","","","","","",1,"","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",1
+"","Device Branch","Link","custom_device_branch","","","","","","","","","","","","","","","","","","Branch","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",1
+"","Bridge Env","Data","custom_bridge_env","","","","","","","","","","","",1,"","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",1
+"","Location","Section Break","location_section","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Latitude","Float","latitude","","","","","","","","","","","","","","","","7","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","","Column Break","column_break_yqpi","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Longitude","Float","longitude","","","","","","","","","","","","","","","","7","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","","Section Break","section_break_ksbo","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","",""
+"","Fetch Geolocation","Button","fetch_geolocation","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Geolocation","Geolocation","geolocation","","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","Shift Timings","Section Break","shift_timings_section","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Shift Start","Datetime","shift_start","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Shift End","Datetime","shift_end","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Off-shift","Check","offshift","","","","","","","","","","","","","","","0","","","","","","","","","",1,1,"","","","","","","","","","","","","","","","","","","","","","","",""
+"","","Column Break","column_break_vyyt","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Shift Actual Start","Datetime","shift_actual_start","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","","",""
+"","Shift Actual End","Datetime","shift_actual_end","","","","","","","","","","","","","","","","","","","","","","","","",1,"","","","","","","","","","","","","","","","","","","","","","","","",""

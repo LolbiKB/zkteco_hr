@@ -85,7 +85,6 @@ export function EditDeviceDialog({
   
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
-  const [useCustomLocation, setUseCustomLocation] = useState(false)
   const [isRegistrar, setIsRegistrar] = useState(false)
   const [capabilities, setCapabilities] = useState<string[]>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -95,11 +94,6 @@ export function EditDeviceDialog({
       setName(device.name || '')
       const currentLocation = device.location || ''
       setLocation(currentLocation)
-      if (branches.length > 0 && currentLocation && !branches.some(b => b.value === currentLocation)) {
-        setUseCustomLocation(true)
-      } else {
-        setUseCustomLocation(false)
-      }
       setIsRegistrar(device.is_registrar || false)
       setCapabilities(device.registrar_capabilities || [])
       setConfirmOpen(false)
@@ -182,26 +176,8 @@ export function EditDeviceDialog({
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="location">Location (Branch)</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto py-0 px-1 text-xs text-muted-foreground"
-                  onClick={() => {
-                    setUseCustomLocation(prev => !prev)
-                    if (!useCustomLocation) setLocation('')
-                  }}
-                >
-                  {useCustomLocation ? 'Pick from list' : 'Type custom'}
-                </Button>
               </div>
-              {useCustomLocation ? (
-                <Input
-                  id="location"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g., Phnom Penh Office"
-                />
-              ) : isLoadingBranches ? (
+              {isLoadingBranches ? (
                 <div className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border rounded-md">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading branches...

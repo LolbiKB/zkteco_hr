@@ -14,8 +14,10 @@ export function useCalendarEmployees() {
     EMPLOYEES_METHOD
   );
 
+  const employees = useMemo<CalendarEmployee[]>(() => data?.message ?? [], [data?.message]);
+
   return {
-    employees: data?.message ?? [],
+    employees,
     error,
     isLoading,
     refresh: mutate,

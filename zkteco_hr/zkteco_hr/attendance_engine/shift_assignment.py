@@ -100,6 +100,10 @@ def shift_assignment_bounds_by_employee(employee_ids: list[str]) -> dict[str, di
     if not employee_ids or not frappe.db.table_exists("Shift Assignment"):
         return {}
 
+    status_clause = ""
+    if frappe.db.has_column("Shift Assignment", "status"):
+        status_clause = "AND status = 'Active'"
+
     placeholders = ", ".join(["%s"] * len(employee_ids))
     rows = frappe.db.sql(
         f"""
@@ -111,7 +115,7 @@ def shift_assignment_bounds_by_employee(employee_ids: list[str]) -> dict[str, di
         FROM `tabShift Assignment`
         WHERE employee IN ({placeholders})
           AND docstatus = 1
-          AND status = 'Active'
+          {status_clause}
         GROUP BY employee
         """,
         tuple(employee_ids),

@@ -63,18 +63,32 @@ def is_full_time_employment(employment_type: str | None) -> bool:
     return "full" in normalized
 
 
+def _shift_schedule_assignment_start_field() -> str | None:
+    """HRMS uses create_shifts_after; older/custom schemas may use from_date."""
+    if frappe.db.has_column("Shift Schedule Assignment", "create_shifts_after"):
+        return "create_shifts_after"
+    if frappe.db.has_column("Shift Schedule Assignment", "from_date"):
+        return "from_date"
+    return None
+
+
 def _shift_schedule_assignment_metadata_by_employee(employee_ids: list[str]) -> dict[str, dict]:
     """Enabled Shift Schedule Assignment rows (HR Setup), keyed by employee."""
     if not employee_ids or not frappe.db.table_exists("Shift Schedule Assignment"):
         return {}
 
-    fields = ["employee", "name", "end_date"]
-    if frappe.db.has_column("Shift Schedule Assignment", "from_date"):
-        fields.append("from_date")
+    start_field = _shift_schedule_assignment_start_field()
+    fields = ["employee", "name"]
+    if start_field:
+        fields.append(start_field)
+    if frappe.db.has_column("Shift Schedule Assignment", "end_date"):
+        fields.append("end_date")
 
     filters: dict = {"employee": ["in", employee_ids]}
     if frappe.db.has_column("Shift Schedule Assignment", "enabled"):
         filters["enabled"] = 1
+
+    order_by = f"{start_field} desc, creation desc" if start_field else "creation desc"
 
     today = getdate()
     by_employee: dict[str, dict] = {}
@@ -83,7 +97,7 @@ def _shift_schedule_assignment_metadata_by_employee(employee_ids: list[str]) -> 
             "Shift Schedule Assignment",
             filters=filters,
             fields=fields,
-            order_by="from_date desc, creation desc",
+            order_by=order_by,
         )
         or []
     )
@@ -95,12 +109,12 @@ def _shift_schedule_assignment_metadata_by_employee(employee_ids: list[str]) -> 
         end_date = row.get("end_date")
         if end_date and getdate(end_date) < today:
             continue
-        from_date = row.get("from_date")
+        start_date = row.get(start_field) if start_field else None
         by_employee[emp] = {
             "has_shift_assignment": True,
             "has_shift_schedule_assignment": True,
             "shift_schedule_assignment": row.get("name"),
-            "schedule_min_date": str(getdate(from_date)) if from_date else None,
+            "schedule_min_date": str(getdate(start_date)) if start_date else None,
             "schedule_max_date": str(getdate(end_date)) if end_date else None,
         }
     return by_employee
@@ -195,8 +209,16 @@ def list_calendar_employees(include_without_shifts=True):
     )
 
     employee_ids = [row["name"] for row in rows]
-    ssa_by_employee = _shift_schedule_assignment_metadata_by_employee(employee_ids)
-    assignment_bounds = shift_assignment_bounds_by_employee(employee_ids)
+    try:
+        ssa_by_employee = _shift_schedule_assignment_metadata_by_employee(employee_ids)
+    except Exception:
+        frappe.log_error(title="list_calendar_employees SSA metadata failed")
+        ssa_by_employee = {}
+    try:
+        assignment_bounds = shift_assignment_bounds_by_employee(employee_ids)
+    except Exception:
+        frappe.log_error(title="list_calendar_employees shift bounds failed")
+        assignment_bounds = {}
 
     employees = []
     for row in rows:
@@ -275,7 +297,7 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
 
     employee_branch = frappe.db.get_value("Employee", employee, "branch")
     device_alerts = []
-    if employee_branch:
+    if employee_branch and frappe.db.table_exists("Device Closeout Alert"):
         device_alerts = (
             frappe.get_all(
                 "Device Closeout Alert",
@@ -293,25 +315,27 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
             if row.get("local_date"):
                 row["local_date"] = str(row["local_date"])
 
-    flags = (
-        frappe.get_all(
-            "Attendance Flag",
-            filters={"employee": employee, "attendance_date": ["between", [start, end]]},
-            fields=[
-                "name",
-                "attendance_date",
-                "flag_code",
-                "severity",
-                "source",
-                "status",
-                "day_closed",
-                "rule_version",
-                "evidence",
-            ],
-            order_by="attendance_date asc, creation asc",
+    flags = []
+    if frappe.db.table_exists("Attendance Flag"):
+        flags = (
+            frappe.get_all(
+                "Attendance Flag",
+                filters={"employee": employee, "attendance_date": ["between", [start, end]]},
+                fields=[
+                    "name",
+                    "attendance_date",
+                    "flag_code",
+                    "severity",
+                    "source",
+                    "status",
+                    "day_closed",
+                    "rule_version",
+                    "evidence",
+                ],
+                order_by="attendance_date asc, creation asc",
+            )
+            or []
         )
-        or []
-    )
 
     checkins_by_day = defaultdict(list)
     for c in checkins:

@@ -105,3 +105,42 @@ export function formatDeviceAlertStatus(status: string): string {
       return status.replace(/_/g, " ");
   }
 }
+
+/** Extract a readable message from frappe-react-sdk / Axios errors. */
+export function formatAttendanceLoadError(error: unknown): string {
+  if (!error) return "Unknown error";
+
+  const pickMessage = (value: unknown): string | null => {
+    if (typeof value !== "string" || !value.trim()) return null;
+    try {
+      const parsed = JSON.parse(value) as { message?: string };
+      if (typeof parsed.message === "string" && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+    } catch {
+      /* plain text */
+    }
+    return value.trim();
+  };
+
+  if (typeof error === "string") {
+    return pickMessage(error) ?? error;
+  }
+
+  if (error instanceof Error) {
+    return pickMessage(error.message) ?? error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const response = record.response as { data?: { message?: string; exc?: string } } | undefined;
+    const fromResponse =
+      pickMessage(response?.data?.message) ?? pickMessage(response?.data?.exc);
+    if (fromResponse) return fromResponse;
+
+    const direct = pickMessage(record.message) ?? pickMessage(record.exc);
+    if (direct) return direct;
+  }
+
+  return "Unknown error";
+}

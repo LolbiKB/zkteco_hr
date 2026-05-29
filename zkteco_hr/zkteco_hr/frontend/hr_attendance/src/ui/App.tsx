@@ -1,6 +1,7 @@
 import {
   deviceAlertsByDate,
   deviceAlertsForWeek,
+  formatAttendanceLoadError,
   useCalendarEmployees,
   useDefaultEmployee,
   useEmployeeCalendar,
@@ -138,6 +139,7 @@ export function App() {
   const isBootstrapping = employeesLoading && employees.length === 0;
   const isCalendarLoading = calendarLoading && !!employee;
   const loadError = employeesError ?? calendarError;
+  const loadErrorMessage = loadError ? formatAttendanceLoadError(loadError) : null;
 
   async function refetchPage() {
     setIsRefreshing(true);
@@ -214,7 +216,10 @@ export function App() {
           {loadError ? (
             <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in duration-300">
               <CardContent className="py-3 text-sm text-destructive">
-                Could not load attendance data. Confirm you have HR User access and try again.
+                <div>Could not load attendance data. Confirm you have HR User access and try again.</div>
+                {loadErrorMessage ? (
+                  <div className="mt-1 text-xs text-destructive/90">{loadErrorMessage}</div>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}

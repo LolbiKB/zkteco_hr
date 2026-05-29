@@ -7,7 +7,7 @@ import { FrappeProvider } from "frappe-react-sdk";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <FrappeProvider>
+    <FrappeProvider enableSocket={false}>
       <TooltipProvider>
         <App />
       </TooltipProvider>

@@ -71,6 +71,26 @@ HR calendar API:
 
 Calendar filter semantics (Shift Assignment docstatus, leave, flags): see `zkteco_hr/zkteco_hr/docs/CALENDAR_DATA_CONTRACT.md`.
 
+## Weekly Schedule wizard
+
+- Route: **`/hr-schedule`** (same SPA bundle as `/hr-attendance`)
+- Link from the attendance toolbar: **Edit weekly schedule**
+- APIs (`System Manager` / `HR User`):
+  - `zkteco_hr.attendance_engine.schedule_api.get_employee_schedule_context(employee)`
+  - `zkteco_hr.attendance_engine.schedule_api.resolve_weekly_schedule_plan(employee, week_pattern, effective_from)`
+  - `zkteco_hr.attendance_engine.schedule_api.get_holiday_preview(employee, start_date, end_date)`
+  - `zkteco_hr.attendance_engine.schedule_api.apply_weekly_schedule(employee, week_pattern, create_shifts_after, generate_through, confirm_create)`
+
+Effective-from defaults to **tomorrow** (site date). Orphan SSAs not in the new plan are disabled from that date forward; past assignments are preserved.
+
+**Manual acceptance (Frappe Cloud after deploy + migrate):**
+
+1. Open `/hr-schedule`, pick an employee with existing SSAs — grid prefills from PATs.
+2. Change Sat to short shift — resolved plan shows separate group / PAT.
+3. Preview shows reconcile section when an old SSA would be disabled.
+4. Save with `confirm_create` when new FT/PAT needed — success link opens `/hr-attendance`.
+5. `/hr-attendance`: shift band on Tue–Sat inside Mon–Sat assignment block.
+
 ## React + Vite HR Attendance (local dev)
 
 This repo includes a Vite+React frontend scaffold under:
@@ -96,6 +116,8 @@ cd zkteco_hr/zkteco_hr/frontend/hr_attendance
 npm install
 npm run build
 ```
+
+**Frappe Cloud deploy notes** (404 / MIME errors, sync pitfalls, cache bust): see [`docs/HR_ATTENDANCE_DEPLOY.md`](zkteco_hr/zkteco_hr/docs/HR_ATTENDANCE_DEPLOY.md).
 
 Then open the Desk page:
 

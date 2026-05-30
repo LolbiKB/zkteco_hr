@@ -1,19 +1,38 @@
 import json
 import sys
 import unittest
-from datetime import date
+from datetime import date, time as dt_time
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 
+def _mock_get_time(value):
+    if value is None:
+        return None
+    if hasattr(value, "hour"):
+        return value
+    if isinstance(value, str):
+        parts = value.split(":")
+        return dt_time(
+            int(parts[0]),
+            int(parts[1]),
+            int(parts[2]) if len(parts) > 2 else 0,
+        )
+    return value
+
+
 def _install_frappe_mock():
     if "frappe" in sys.modules and isinstance(sys.modules["frappe"], MagicMock):
+        utils = sys.modules.get("frappe.utils")
+        if utils is not None and not hasattr(utils, "get_time"):
+            utils.get_time = _mock_get_time
         return
 
     frappe = MagicMock(name="frappe")
     frappe.utils = MagicMock()
     frappe.utils.now_datetime = MagicMock(return_value=date.today())
     frappe.utils.getdate = lambda value: value
+    frappe.utils.get_time = _mock_get_time
     frappe.utils.add_days = lambda value, days: value
     frappe.AuthenticationError = Exception
     frappe.throw = MagicMock(side_effect=lambda msg, exc=None: (_ for _ in ()).throw(exc or Exception(msg)))
@@ -46,6 +65,7 @@ def _install_frappe_mock():
     utils_mod.now_datetime = frappe.utils.now_datetime
     utils_mod.getdate = lambda value: value
     utils_mod.get_datetime = lambda value: value
+    utils_mod.get_time = _mock_get_time
     utils_mod.add_days = lambda value, days: value
     utils_mod.nowdate = lambda: str(date.today())
 

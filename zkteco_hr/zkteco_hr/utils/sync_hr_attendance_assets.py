@@ -3,6 +3,9 @@ import shutil
 
 import frappe
 
+# Before changing this module or asset URLs, read docs/HR_ATTENDANCE_DEPLOY.md
+# (sync onto a symlink deletes the bundle → 404 / text/html MIME on CSS).
+
 
 def sync_hr_attendance_assets():
     """

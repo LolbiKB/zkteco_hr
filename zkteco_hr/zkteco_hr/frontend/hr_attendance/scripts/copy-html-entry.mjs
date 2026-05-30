@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "../../..");
 const builtHtmlPath = path.join(appRoot, "public/hr_attendance/index.html");
-const targetHtmlPath = path.join(appRoot, "www/hr-attendance.html");
+const targetHtmlPaths = [
+  path.join(appRoot, "www/hr-attendance.html"),
+  path.join(appRoot, "www/hr-schedule.html"),
+];
 const buildIdPath = path.join(appRoot, "public/hr_attendance/assets/build-id.txt");
 
 if (!fs.existsSync(builtHtmlPath)) {
@@ -13,7 +16,7 @@ if (!fs.existsSync(builtHtmlPath)) {
   process.exit(1);
 }
 
-// Literal cache-bust token (Frappe www templates do not render {{ }} in copied asset URLs).
+// Literal cache-bust token — do NOT use Jinja {{ }} here; see docs/HR_ATTENDANCE_DEPLOY.md
 const buildId = String(Math.floor(Date.now() / 1000));
 
 function injectAssetVersion(html) {
@@ -30,6 +33,14 @@ function injectAssetVersion(html) {
 
 const html = injectAssetVersion(fs.readFileSync(builtHtmlPath, "utf8"));
 fs.writeFileSync(builtHtmlPath, html);
-fs.writeFileSync(targetHtmlPath, html);
+for (const targetHtmlPath of targetHtmlPaths) {
+  const scheduleHtml =
+    targetHtmlPath.endsWith("hr-schedule.html")
+      ? html.replace("<title>HR Attendance</title>", "<title>Weekly Schedule</title>")
+      : html;
+  fs.writeFileSync(targetHtmlPath, scheduleHtml);
+}
 fs.writeFileSync(buildIdPath, `${buildId}\n`);
-console.log(`Copied ${builtHtmlPath} -> ${targetHtmlPath} (build v=${buildId})`);
+console.log(
+  `Copied ${builtHtmlPath} -> ${targetHtmlPaths.join(", ")} (build v=${buildId})`
+);

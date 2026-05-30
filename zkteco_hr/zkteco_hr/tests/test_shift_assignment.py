@@ -15,6 +15,24 @@ class TestShiftAssignmentQuery(unittest.TestCase):
 
         frappe.get_all = MagicMock(return_value=[])
 
+    def test_tuesday_in_mon_sat_block_is_assigned(self):
+        from zkteco_hr.attendance_engine.shift_assignment import _get_shift_assignment_query
+
+        import frappe
+
+        frappe.get_all.return_value = [
+            {
+                "name": "HR-SHA-26-05-00013",
+                "shift_type": "FT_Standard",
+                "start_date": date(2026, 6, 1),
+                "end_date": date(2026, 6, 6),
+            }
+        ]
+
+        row = _get_shift_assignment_query("DI-1138", date(2026, 6, 2))
+        self.assertIsNotNone(row)
+        self.assertEqual(row["name"], "HR-SHA-26-05-00013")
+
     def test_wednesday_in_mon_sat_june_block_is_assigned(self):
         """HR-SHA style range row: start Mon, end Sat — mid-week dates must match."""
         from zkteco_hr.attendance_engine.shift_assignment import _get_shift_assignment_query

@@ -1,6 +1,8 @@
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import {
-  CalendarIcon,
+  CalendarDaysIcon,
+  CalendarRangeIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   RefreshCwIcon,
@@ -130,6 +132,21 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
           onSuccess={props.onRunEngineSuccess}
           disabled={navDisabled}
         />
+
+        {props.employee ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="hidden h-8 gap-1.5 px-2 text-xs sm:inline-flex"
+            asChild
+          >
+            <Link to={`/hr-schedule?employee=${props.employee}`}>
+              <CalendarRangeIcon className="size-3.5 shrink-0 opacity-70" />
+              Edit weekly schedule
+            </Link>
+          </Button>
+        ) : null}
       </nav>
     </header>
   );
@@ -154,7 +171,7 @@ function WeekPicker(props: {
           disabled={props.disabled}
           className="h-8 min-w-0 flex-1 px-2 text-xs font-medium sm:min-w-[9.5rem] sm:flex-none sm:text-sm"
         >
-          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 opacity-60" />
+          <CalendarDaysIcon className="mr-1.5 size-3.5 shrink-0 opacity-60" />
           <span className="truncate">{props.weekLabel}</span>
         </Button>
       </PopoverTrigger>

@@ -20,6 +20,8 @@ add_to_apps_screen = [
 website_route_rules = [
     {"from_route": "/hr-attendance/<path:app_path>", "to_route": "hr-attendance"},
     {"from_route": "/hr-attendance", "to_route": "hr-attendance"},
+    {"from_route": "/hr-schedule/<path:app_path>", "to_route": "hr-schedule"},
+    {"from_route": "/hr-schedule", "to_route": "hr-schedule"},
 ]
 
 # Keep SPA assets available under sites/assets after every migrate.

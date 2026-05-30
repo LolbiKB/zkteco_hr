@@ -1,22 +1,7 @@
-import os
-
 import frappe
 from frappe.utils import get_system_timezone
 
 no_cache = 1
-
-
-def _hr_attendance_asset_version() -> str:
-    js_path = os.path.join(
-        frappe.get_app_path("zkteco_hr"),
-        "public",
-        "hr_attendance",
-        "assets",
-        "index.js",
-    )
-    if os.path.isfile(js_path):
-        return str(int(os.path.getmtime(js_path)))
-    return "0"
 
 
 def get_context(context):
@@ -26,7 +11,6 @@ def get_context(context):
     context.update(
         {
             "csrf_token": csrf_token,
-            "asset_version": _hr_attendance_asset_version(),
             "boot": get_boot(),
         }
     )

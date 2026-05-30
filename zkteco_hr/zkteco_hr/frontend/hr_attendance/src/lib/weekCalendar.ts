@@ -64,9 +64,17 @@ export function computeWeekNavBounds(
     employee?.first_checkin_date
   );
 
-  const minWeekStart = firstCheckinDate
-    ? startOfWeek(parseDateKey(firstCheckinDate), { weekStartsOn: 1 })
-    : startOfWeek(addMonths(now, -24), { weekStartsOn: 1 });
+  if (!firstCheckinDate) {
+    const calendarMaxDate = addDays(todayWeekStart, 6);
+    return {
+      minWeekStart: todayWeekStart,
+      maxWeekStart: todayWeekStart,
+      calendarMinDate: todayWeekStart,
+      calendarMaxDate,
+    };
+  }
+
+  const minWeekStart = startOfWeek(parseDateKey(firstCheckinDate), { weekStartsOn: 1 });
 
   const hasShiftAssignment =
     overrides?.hasShiftAssignment ?? employee?.has_shift_assignment ?? false;

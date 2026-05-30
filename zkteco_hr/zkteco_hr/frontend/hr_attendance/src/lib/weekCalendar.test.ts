@@ -56,7 +56,7 @@ test("calendar payload first_checkin_date overrides missing employee field", () 
   );
 });
 
-test("unknown first checkin allows navigating back 24 months", () => {
+test("no checkins locks navigation to present week", () => {
   const bounds = computeWeekNavBounds(
     employee({
       has_shift_assignment: true,
@@ -65,7 +65,11 @@ test("unknown first checkin allows navigating back 24 months", () => {
     now
   );
 
-  assert.ok(bounds.minWeekStart.getTime() < startOfWeek(now, { weekStartsOn: 1 }).getTime());
+  const todayWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+  assert.equal(bounds.minWeekStart.getTime(), todayWeekStart.getTime());
+  assert.equal(bounds.maxWeekStart.getTime(), todayWeekStart.getTime());
+  assert.equal(bounds.calendarMinDate.getTime(), todayWeekStart.getTime());
+  assert.equal(bounds.calendarMaxDate.getTime(), addDays(todayWeekStart, 6).getTime());
 });
 
 test("fixes inverted bounds when assignment ends before first punch", () => {

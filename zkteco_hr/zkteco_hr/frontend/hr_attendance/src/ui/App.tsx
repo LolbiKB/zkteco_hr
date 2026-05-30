@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { countWeekAssignedShiftDays } from "@/lib/weekCalendar";
+import { employeeShortName } from "@/lib/employeeCard";
 import {
   AttendanceHeaderSkeleton,
   AttendancePageSkeleton,
@@ -235,6 +236,7 @@ export function App() {
                   onEmployeeChange={setEmployee}
                   employeeLoading={employeeLoading && isCalendarLoading}
                   weekDates={weekDates}
+                  weekStart={weekStart}
                   weekAssignedShiftDays={weekAssignedShiftDays}
                   showWeekScheduleHint={!!employee && !isCalendarLoading}
                   daysByDate={daysByDate}
@@ -244,6 +246,8 @@ export function App() {
                   onNextWeek={goNext}
                   onToday={goToday}
                   onRefresh={() => void refetchPage()}
+                  onRunEngineSuccess={() => void refreshCalendar()}
+                  employeeLabel={employeeShortName(selectedEmployee, employee)}
                   canGoPrev={canGoPrev}
                   canGoNext={canGoNext}
                   isRefreshing={isRefreshing}

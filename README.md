@@ -41,6 +41,24 @@ generate_auto_flags_for_device_date("DEVICE-SN", "2026-05-28", undelivered=[])
 - “My Week” API (whitelisted):
   - `zkteco_hr.attendance_engine.api.get_my_week(employee, start_date, end_date)`
 
+## Dev testing (flag engine backfill)
+
+Seeded or historical **Employee Checkin** rows do not always produce **Attendance Flag** rows (System Console cannot enqueue intraday jobs; cron only refreshes today; closeout requires a device webhook).
+
+**Whitelisted API** (System Manager / HR User):
+
+- `zkteco_hr.attendance_engine.dev_tools.run_engine_for_employee(employee, start_date, end_date, mode)`
+- `mode`: `intraday` | `closeout` | `both` (max 31-day range)
+- `both` runs intraday then closeout per day; final AUTO flags are `day_closed=1` (closeout wins)
+
+**UI:** `/hr-attendance` — flag icon in the week header opens a dialog (remove before production MVP deploy):
+
+1. Select employee and date range (defaults to visible week)
+2. **Both** after seeding checkins (or **Closeout** alone to re-debug a range)
+3. Verify flag chips in the week view and rows in Desk **Attendance Flag**
+
+Closeout is **idempotent for AUTO flags**: each run deletes and recreates AUTO rows for that employee/date; HR and employee-sourced flags are untouched.
+
 ## HR Attendance Calendar (Desk)
 
 - Open from Awesomebar: **HR Attendance Calendar** or route `/app/hr-attendance-calendar`

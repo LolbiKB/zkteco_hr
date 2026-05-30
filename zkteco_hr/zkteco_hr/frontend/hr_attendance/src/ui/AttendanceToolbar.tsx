@@ -15,6 +15,7 @@ import type { CalendarEmployee, Day } from "@/types/calendar";
 
 import { formatWeekRangeLabel } from "@/lib/weekSchedule";
 import { EmployeePicker } from "@/ui/EmployeePicker";
+import { RunEngineDialog } from "@/ui/RunEngineDialog";
 
 export type AttendanceToolbarProps = {
   employees: CalendarEmployee[];
@@ -22,6 +23,7 @@ export type AttendanceToolbarProps = {
   onEmployeeChange: (id: string) => void;
   employeeLoading?: boolean;
   weekDates: Date[];
+  weekStart: Date;
   weekAssignedShiftDays: number;
   showWeekScheduleHint: boolean;
   daysByDate: Map<string, Day>;
@@ -31,6 +33,8 @@ export type AttendanceToolbarProps = {
   onNextWeek: () => void;
   onToday: () => void;
   onRefresh: () => void;
+  onRunEngineSuccess?: () => void;
+  employeeLabel?: string | null;
   canGoPrev: boolean;
   canGoNext: boolean;
   isRefreshing: boolean;
@@ -114,6 +118,14 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
         >
           <RefreshCwIcon className={cn("size-4", props.isRefreshing && "animate-spin")} />
         </Button>
+
+        <RunEngineDialog
+          employee={props.employee}
+          employeeLabel={props.employeeLabel}
+          weekStart={props.weekStart}
+          onSuccess={props.onRunEngineSuccess}
+          disabled={navDisabled}
+        />
       </nav>
     </header>
   );

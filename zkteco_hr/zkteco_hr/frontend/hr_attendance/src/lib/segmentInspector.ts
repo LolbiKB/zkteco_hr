@@ -1,5 +1,8 @@
-import { format } from "date-fns";
-
+import {
+  detectObservedLunch,
+  observedLunchMinuteRange,
+  scheduledLunchMinuteRange,
+} from "@/lib/lunchDetection";
 import {
   clamp,
   minutesFromDateTime,
@@ -9,27 +12,31 @@ import {
   deriveSegments as deriveSegmentsFromCheckins,
   deriveTimelineGaps,
   deriveUnpairedPunches,
+  hasPunchBranch,
   shiftTimelinePolicyFromShift,
   sortCheckinsByTime as sortCheckinsByTimeLib,
   type Segment as AttendanceSegment,
 } from "@/lib/attendancePunches";
-import type { Day, ShiftContext } from "@/types/calendar";
+import type { Day, ObservedLunch, ShiftContext } from "@/types/calendar";
 
 type Checkin = NonNullable<Day["checkins"]>[number];
 
-export type AwayGap = {
-  start?: Checkin | null;
-  end?: Checkin | null;
-  minutes: number | null;
-  startMin?: number | null;
-  endMin?: number | null;
-  topPct?: number;
-  heightPct?: number;
-};
-
 export type SegmentInspectorItem =
   | { kind: "segment"; segment: AttendanceSegment }
-  | { kind: "away"; gap: AwayGap };
+  | { kind: "unpaired"; checkin: Checkin; isRogue: boolean }
+  | {
+      kind: "lunch";
+      startMin: number;
+      endMin: number;
+      minutes: number;
+      source: "observed" | "scheduled";
+      observed?: ObservedLunch | null;
+    }
+  | { kind: "away"; startMin: number; endMin: number; minutes: number };
+
+type TimelineBlock =
+  | { kind: "segment"; segment: AttendanceSegment; startMin: number; endMin: number }
+  | { kind: "unpaired"; checkin: Checkin; min: number };
 
 export function deriveSegments(checkins: Checkin[]): AttendanceSegment[] {
   return deriveSegmentsFromCheckins(checkins, {
@@ -43,65 +50,108 @@ export function sortCheckinsByTime(checkins: Checkin[]): Checkin[] {
   return sortCheckinsByTimeLib(checkins, parseDateTimeLocal);
 }
 
-/** Real punch at this minute, or a display-only stub using the day's date from checkins. */
-function checkinAtMinuteOfDay(checkins: Checkin[], min: number): Checkin {
-  const match = checkins.find((c) => minutesFromDateTime(c.time) === min);
-  if (match) return match;
+function buildTimelineBlocks(
+  segments: AttendanceSegment[],
+  unpaired: Checkin[]
+): TimelineBlock[] {
+  const blocks: TimelineBlock[] = [];
 
-  const ref = checkins.find((c) => c.time)?.time;
-  const base = ref ? parseDateTimeLocal(ref) : new Date();
-  const d = new Date(base);
-  d.setHours(Math.floor(min / 60), min % 60, 0, 0);
-  return { time: format(d, "yyyy-MM-dd HH:mm:ss") } as Checkin;
+  for (const segment of segments) {
+    if (segment.startMin == null || segment.endMin == null) continue;
+    blocks.push({
+      kind: "segment",
+      segment,
+      startMin: segment.startMin,
+      endMin: segment.endMin,
+    });
+  }
+
+  for (const checkin of unpaired) {
+    const min = minutesFromDateTime(checkin.time);
+    if (min == null) continue;
+    blocks.push({ kind: "unpaired", checkin, min });
+  }
+
+  blocks.sort((a, b) => {
+    const aStart = a.kind === "segment" ? a.startMin : a.min;
+    const bStart = b.kind === "segment" ? b.startMin : b.min;
+    return aStart - bStart;
+  });
+
+  return blocks;
 }
 
+/** Inspector list: segments, lunch/away gaps, and unpaired punches (chronological). */
 export function buildSegmentInspectorItems(
   segments: AttendanceSegment[],
   checkins: Checkin[],
-  shift?: ShiftContext
+  options?: {
+    dateKey?: string;
+    shift?: ShiftContext;
+    observedLunch?: ObservedLunch | null;
+  }
 ): SegmentInspectorItem[] {
   if (!segments.length && !checkins.length) return [];
 
   const sorted = [...segments].sort((a, b) => (a.startMin ?? 0) - (b.startMin ?? 0));
   const unpaired = deriveUnpairedPunches(checkins, parseDateTimeLocal);
-  const timelineGaps = deriveTimelineGaps(
-    sorted,
-    unpaired,
-    minutesFromDateTime,
-    shiftTimelinePolicyFromShift(shift)
+  const blocks = buildTimelineBlocks(sorted, unpaired);
+  if (!blocks.length) return [];
+
+  const observed =
+    options?.observedLunch ??
+    (options?.dateKey && options?.shift
+      ? detectObservedLunch(checkins, options.shift, options.dateKey)
+      : null);
+  const shiftPolicy = options?.shift ? shiftTimelinePolicyFromShift(options.shift) : null;
+  const gaps = deriveTimelineGaps(sorted, unpaired, minutesFromDateTime, {
+    shiftPolicy,
+    observedLunchRange: observedLunchMinuteRange(observed),
+    scheduledLunchRange: scheduledLunchMinuteRange(options?.shift),
+  });
+
+  type Sortable = { sortMin: number; item: SegmentInspectorItem };
+
+  const items: Sortable[] = blocks.map((block) =>
+    block.kind === "segment"
+      ? { sortMin: block.startMin, item: { kind: "segment" as const, segment: block.segment } }
+      : {
+          sortMin: block.min,
+          item: {
+            kind: "unpaired" as const,
+            checkin: block.checkin,
+            isRogue: !hasPunchBranch(block.checkin),
+          },
+        }
   );
-  const items: SegmentInspectorItem[] = [];
 
-  type Entry =
-    | { kind: "segment"; segment: AttendanceSegment; orderMin: number }
-    | { kind: "away"; gap: AwayGap; orderMin: number };
+  for (const gap of gaps) {
+    if (gap.kind === "lunch") {
+      items.push({
+        sortMin: gap.startMin,
+        item: {
+          kind: "lunch",
+          startMin: gap.startMin,
+          endMin: gap.endMin,
+          minutes: gap.minutes,
+          source: gap.source === "observed" ? "observed" : "scheduled",
+          observed: gap.source === "observed" ? observed : null,
+        },
+      });
+      continue;
+    }
 
-  const entries: Entry[] = [];
-
-  for (const segment of sorted) {
-    entries.push({ kind: "segment", segment, orderMin: segment.startMin ?? 0 });
-  }
-
-  for (const gap of timelineGaps) {
-    entries.push({
-      kind: "away",
-      orderMin: gap.startMin,
-      gap: {
-        start: checkinAtMinuteOfDay(checkins, gap.startMin),
-        end: checkinAtMinuteOfDay(checkins, gap.endMin),
-        minutes: gap.minutes,
+    items.push({
+      sortMin: gap.startMin,
+      item: {
+        kind: "away",
         startMin: gap.startMin,
         endMin: gap.endMin,
+        minutes: gap.minutes,
       },
     });
   }
 
-  entries.sort((a, b) => a.orderMin - b.orderMin);
-
-  for (const entry of entries) {
-    if (entry.kind === "segment") items.push({ kind: "segment", segment: entry.segment });
-    else items.push({ kind: "away", gap: entry.gap });
-  }
-
-  return items;
+  items.sort((a, b) => a.sortMin - b.sortMin);
+  return items.map((entry) => entry.item);
 }

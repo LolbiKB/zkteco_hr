@@ -51,12 +51,29 @@ export function formatDurationMinutes(
 
 export function formatBranchLabel(branch: string | null | undefined) {
   if (!branch) return null;
-  return branch.replace(/^BRANCH-/i, "");
+  let label = branch.trim();
+  label = label.replace(/^BRANCH-/i, "");
+  label = label.replace(/^Branch\s+/i, "");
+  return label || null;
 }
 
 export function formatCheckinTime(value: string | null | undefined) {
   if (!value) return "—";
   return format(parseDateTimeLocal(value), "h:mm a");
+}
+
+/** Parse yyyy-MM-dd as local noon (avoids UTC date-only timezone shifts). */
+export function parseDateKey(value: string): Date {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y!, m! - 1, d!, 12, 0, 0, 0);
+}
+
+export function formatMinuteOnDay(dateKey: string, minutes: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const hh = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  const dt = new Date(y!, m! - 1, d!, hh, mm, 0, 0);
+  return format(dt, "h:mm a");
 }
 
 /** First–last time label; only when there are at least two punches and they differ. */

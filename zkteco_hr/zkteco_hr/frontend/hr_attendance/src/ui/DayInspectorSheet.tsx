@@ -20,13 +20,14 @@ import {
   formatBranchLabel,
   formatCheckinTime,
   formatDurationMinutes,
+  formatMinuteOnDay,
 } from "@/lib/attendanceTime";
 import { directionForCheckin, type Segment as AttendanceSegment } from "@/lib/attendancePunches";
 import {
   buildSegmentInspectorItems,
   deriveSegments,
   sortCheckinsByTime,
-  type AwayGap,
+  type SegmentInspectorItem,
 } from "@/lib/segmentInspector";
 import { cn } from "@/lib/utils";
 import { DeviceAlertRow } from "@/ui/DeviceAlerts";
@@ -56,9 +57,19 @@ export function DayInspectorSheet(props: DayInspectorSheetProps) {
       buildSegmentInspectorItems(
         segments,
         props.inspectingDay?.checkins ?? [],
-        props.inspectingDay?.shift
+        {
+          dateKey: props.inspectingDate ?? undefined,
+          shift: props.inspectingDay?.shift,
+          observedLunch: props.inspectingDay?.observed_lunch ?? null,
+        }
       ),
-    [props.inspectingDay?.checkins, props.inspectingDay?.shift, segments]
+    [
+      props.inspectingDate,
+      props.inspectingDay?.checkins,
+      props.inspectingDay?.observed_lunch,
+      props.inspectingDay?.shift,
+      segments,
+    ]
   );
 
   const punches = sortCheckinsByTime(props.inspectingDay?.checkins ?? []);
@@ -113,22 +124,48 @@ export function DayInspectorSheet(props: DayInspectorSheetProps) {
               <TabsContent value="timeline" className="mt-3 min-h-0">
                 <Card className="border-border/60">
                   <CardContent className="space-y-3 pt-4">
-                    {segments.length === 0 ? (
+                    {segmentInspectorItems.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-3 py-6 text-center">
-                        <div className="text-sm font-medium">No segments</div>
+                        <div className="text-sm font-medium">No timeline items</div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          Not enough punches to form segments for this day.
+                          No punches recorded for this day.
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {segmentInspectorItems.map((item, idx) =>
-                          item.kind === "segment" ? (
-                            <SegmentInspectorRow key={`segment-${idx}`} segment={item.segment} />
-                          ) : (
-                            <AwayInspectorRow key={`away-${idx}`} gap={item.gap} />
-                          )
-                        )}
+                        {segmentInspectorItems.map((item, idx) => {
+                          if (item.kind === "segment") {
+                            return (
+                              <SegmentInspectorRow key={`segment-${idx}`} segment={item.segment} />
+                            );
+                          }
+                          if (item.kind === "lunch") {
+                            return (
+                              <LunchInspectorRow
+                                key={`lunch-${idx}`}
+                                item={item}
+                                dateKey={props.inspectingDate ?? ""}
+                              />
+                            );
+                          }
+                          if (item.kind === "away") {
+                            return (
+                              <AwayInspectorRow
+                                key={`away-${idx}`}
+                                item={item}
+                                dateKey={props.inspectingDate ?? ""}
+                              />
+                            );
+                          }
+                          return (
+                            <UnpairedInspectorRow
+                              key={`unpaired-${item.checkin.time}-${idx}`}
+                              checkin={item.checkin}
+                              isRogue={item.isRogue}
+                              direction={directionForCheckin(punches, item.checkin)}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -271,28 +308,123 @@ function SegmentInspectorRow(props: { segment: AttendanceSegment }) {
   );
 }
 
-function AwayInspectorRow(props: { gap: AwayGap }) {
-  const { gap } = props;
+function LunchInspectorRow(props: {
+  item: Extract<SegmentInspectorItem, { kind: "lunch" }>;
+  dateKey: string;
+}) {
+  const { item, dateKey } = props;
+  const startLabel =
+    item.source === "observed" && item.observed?.lunch_out
+      ? formatCheckinTime(item.observed.lunch_out)
+      : formatMinuteOnDay(dateKey, item.startMin);
+  const endLabel =
+    item.source === "observed" && item.observed?.lunch_in
+      ? formatCheckinTime(item.observed.lunch_in)
+      : formatMinuteOnDay(dateKey, item.endMin);
 
   return (
-    <div className="flex gap-3 rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-3 shadow-xs">
+    <div className="flex gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 px-3 py-3 shadow-xs">
       <div className="mt-0.5 flex w-8 shrink-0 flex-col items-center gap-1">
-        <div className="h-full min-h-10 w-1 rounded-full bg-destructive/60" aria-hidden="true" />
+        <div className="h-full min-h-10 w-1 rounded-full bg-sky-500" aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold tracking-tight text-sky-950 dark:text-sky-100">
+              <span>{startLabel}</span>
+              <ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <span>{endLabel}</span>
+            </div>
+          </div>
+          <Badge
+            variant="secondary"
+            className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-900 dark:text-sky-100"
+          >
+            {formatDurationMinutes(item.minutes)}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge
+            variant="outline"
+            className="h-5 rounded-md border-sky-500/30 bg-sky-500/10 px-1.5 text-[10px] font-semibold text-sky-900 dark:text-sky-100"
+          >
+            Lunch · {item.source}
+          </Badge>
+          {item.observed?.late_return ? (
+            <Badge
+              variant="outline"
+              className="h-5 rounded-md border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] font-semibold text-amber-900 dark:text-amber-100"
+            >
+              Late return
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AwayInspectorRow(props: {
+  item: Extract<SegmentInspectorItem, { kind: "away" }>;
+  dateKey: string;
+}) {
+  const { item, dateKey } = props;
+
+  return (
+    <div className="flex gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-3 shadow-xs">
+      <div className="mt-0.5 flex w-8 shrink-0 flex-col items-center gap-1">
+        <div className="h-full min-h-10 w-1 rounded-full bg-destructive/80" aria-hidden="true" />
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold tracking-tight text-destructive">
-              <span>{formatCheckinTime(gap.start?.time ?? null)}</span>
-              <ArrowRightIcon className="size-3.5 text-destructive/70" aria-hidden="true" />
-              <span>{formatCheckinTime(gap.end?.time ?? null)}</span>
+              <span>{formatMinuteOnDay(dateKey, item.startMin)}</span>
+              <ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <span>{formatMinuteOnDay(dateKey, item.endMin)}</span>
             </div>
+          </div>
+          <Badge
+            variant="secondary"
+            className="shrink-0 rounded-md border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[11px] font-semibold text-destructive"
+          >
+            {formatDurationMinutes(item.minutes)}
+          </Badge>
+        </div>
+        <Badge
+          variant="outline"
+          className="h-5 rounded-md border-destructive/40 bg-destructive/10 px-1.5 text-[10px] font-semibold text-destructive"
+        >
+          Away
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+function UnpairedInspectorRow(props: {
+  checkin: Checkin;
+  isRogue: boolean;
+  direction: "IN" | "OUT";
+}) {
+  const branch = formatBranchLabel(props.checkin.custom_device_branch);
+  const label = props.isRogue ? "Rogue punch" : "Unpaired punch";
+
+  return (
+    <div className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-3 shadow-xs">
+      <div className="mt-0.5 flex w-8 shrink-0 flex-col items-center gap-1">
+        <div className="h-full min-h-10 w-1 rounded-full bg-destructive" aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 text-sm font-semibold tracking-tight text-destructive">
+            {formatCheckinTime(props.checkin.time)}
           </div>
           <Badge
             variant="outline"
             className="shrink-0 rounded-md border-destructive/30 bg-background/80 px-2 py-0.5 text-[11px] font-semibold text-destructive"
           >
-            {formatDurationMinutes(gap.minutes)}
+            {props.direction}
           </Badge>
         </div>
         <div className="flex items-end justify-between gap-3">
@@ -300,9 +432,13 @@ function AwayInspectorRow(props: { gap: AwayGap }) {
             variant="outline"
             className="h-5 rounded-md border-destructive/30 bg-destructive/10 px-1.5 text-[10px] font-semibold text-destructive"
           >
-            Away
+            {label}
           </Badge>
-          <span className="shrink-0 text-right text-xs text-muted-foreground">Unaccounted time</span>
+          {branch ? (
+            <span className="shrink-0 text-right text-xs text-destructive/70">{branch}</span>
+          ) : (
+            <span className="shrink-0 text-right text-xs text-destructive/70">No branch</span>
+          )}
         </div>
       </div>
     </div>

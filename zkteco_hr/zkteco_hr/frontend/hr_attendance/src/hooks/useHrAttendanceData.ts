@@ -1,7 +1,8 @@
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { useFrappeGetCall } from "frappe-react-sdk";
 import { useEffect, useMemo } from "react";
 
+import { calendarFetchRange } from "@/lib/weekCalendar";
 import type { CalendarEmployee, CalendarPayload, DeviceAlert } from "@/types/calendar";
 
 const EMPLOYEES_METHOD = "zkteco_hr.attendance_engine.hr_calendar.list_calendar_employees";
@@ -25,10 +26,9 @@ export function useCalendarEmployees() {
 }
 
 export function useEmployeeCalendar(employee: string | null, anchor: Date) {
-  const monthStart = useMemo(() => startOfMonth(anchor), [anchor]);
-  const monthEnd = useMemo(() => endOfMonth(anchor), [anchor]);
-  const startDate = format(monthStart, "yyyy-MM-dd");
-  const endDate = format(monthEnd, "yyyy-MM-dd");
+  const { rangeStart, rangeEnd } = useMemo(() => calendarFetchRange(anchor), [anchor]);
+  const startDate = format(rangeStart, "yyyy-MM-dd");
+  const endDate = format(rangeEnd, "yyyy-MM-dd");
 
   const params = useMemo(
     () =>
@@ -56,8 +56,8 @@ export function useEmployeeCalendar(employee: string | null, anchor: Date) {
 
   return {
     payload,
-    monthStart,
-    monthEnd,
+    rangeStart,
+    rangeEnd,
     error,
     isLoading,
     refresh: mutate,

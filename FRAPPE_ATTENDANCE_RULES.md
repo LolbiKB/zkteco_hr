@@ -109,10 +109,15 @@ If shift type has `custom_lunch_start` and `custom_lunch_end`:
 - Expected lunch start/end define a *window*.
 - Grace around lunch can reuse `custom_grace_minutes` or have its own (deferred).
 
-MVP detection:
+MVP detection (shared by closeout flags and HR calendar UI):
 
-- Find the first checkin after `custom_lunch_start` and treat it as candidate lunch out/in pair.
-- If you cannot find a reasonable pair, do not fabricate lunch; set lunch flags instead.
+- **Observed lunch** = first plausible punch OUT→IN pair where:
+  - OUT punch time is at or after `custom_lunch_start`
+  - IN punch time is after OUT and on or before `custom_lunch_end + grace + 1 hour` slack
+- Do **not** fabricate lunch when no pair is found; emit **MISSING_LUNCH** instead.
+- **Late return** = observed IN after `custom_lunch_end + grace` → **LATE_FROM_LUNCH**.
+
+The calendar API exposes `observed_lunch` on each day (same heuristic as closeout). UI uses this to distinguish **lunch** bands from **away** bands on the timeline.
 
 Flags:
 
@@ -158,8 +163,13 @@ HR calendar **segments** are derived from punches (not stored). Rules:
 4. Within each **named** branch run only, pair punches **IN → OUT** using the MVP order heuristic (earliest = IN, latest = OUT, middle alternates). Each pair is one segment; segment `branch` is that run’s branch.
 5. **Never** pair punches across different branches (e.g. OUT at site A must not close an IN at site B).
 6. **Unpaired punch**: any rogue (no branch) punch, or the last punch in a named branch run when that run has an odd count (week timeline red tick).
-7. **Away gaps** (UI): elapsed time between consecutive timeline blocks — segment end → next segment start, segment end → unpaired punch, or unpaired → segment start — **minus** exempt windows when a shift is assigned: `[shift_start, shift_start + grace]` and `[lunch_start, lunch_end + grace]` (same `custom_grace_minutes` as late-start / late-from-lunch). Gaps fully inside lunch are not shown. Remaining intervals are labeled **Unaccounted time** in the inspector.
-8. **Week timeline scale** (UI): one time window for the whole week (earliest→latest punch ±30 min). **10 hours** of time map to the full viewport height; if the week span is shorter, that span is stretched to fill the column; if longer, the week grid grows taller and the week section scrolls internally (page stays `100dvh` without page scroll).
+7. **Lunch vs away** (UI timeline — **away** only between consecutive paired segments: segment end → next segment start):
+   - **Observed lunch** (priority): when `observed_lunch` is present (punch-derived OUT→IN per §5), render a **Lunch · observed** band for that interval (sky). Inspector shows a **Lunch** row with OUT/IN times and duration; not labeled away.
+   - **Scheduled lunch** (fallback): when no observed lunch but the segment→segment gap overlaps `[lunch_start, lunch_end + grace]`, the overlapping portion is **Lunch · scheduled** (solid muted fill). Remaining portions are **Away** (red solid).
+   - **Away**: unaccounted time in a segment→segment gap, minus `[shift_start, shift_start + grace]` if overlapping. Not used for gaps involving unpaired punches — those show as unpaired markers only.
+8. **Missing expected** (UI timeline — dashed red): on-shift obligation (shift start→end minus scheduled lunch) not covered by paired segments, **excluding** mid-day away intervals. Covers late start (before first segment), early leave / no return (after last segment), and holes when punch pairing is incomplete. On **today**, bands end at the **start of the present hour** (past only); they must not overlap the scheduled future band.
+9. **Scheduled reference** (UI timeline — grey dashed): shift work windows (start→end minus scheduled lunch) from Shift Type. On **today**, bands start at the **present hour** through scheduled end; past days hide them; future days show the full windows. Tooltip: `Scheduled · {duration}`. Lunch is not a separate scheduled reference band — use observed/scheduled lunch gap bands instead.
+10. **Week timeline scale** (UI): one time window for the whole week (earliest→latest punch ±30 min). **10 hours** of time map to the full viewport height; if the week span is shorter, that span is stretched to fill the column; if longer, the week grid grows taller and the week section scrolls internally (page stays `100dvh` without page scroll).
 
 `Employee Checkin.log_type` is not used for segments in MVP (same as punch list IN/OUT labels).
 

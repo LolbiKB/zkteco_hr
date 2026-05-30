@@ -1,4 +1,5 @@
 import { formatDeviceAlertStatus } from "@/hooks/useHrAttendanceData";
+import { formatBranchLabel } from "@/lib/attendanceTime";
 import type { DeviceAlert } from "@/types/calendar";
 import { AlertTriangleIcon } from "lucide-react";
 
@@ -37,7 +38,7 @@ export function DeviceAlertRow({ alert }: { alert: DeviceAlert }) {
       <div className="font-medium text-foreground">{alert.device_sn}</div>
       <div className="mt-0.5 text-muted-foreground">
         {formatDeviceAlertStatus(alert.status)}
-        {alert.branch ? ` · ${alert.branch}` : null}
+        {alert.branch ? ` · ${formatBranchLabel(alert.branch)}` : null}
       </div>
       {alert.last_error ? (
         <div className="mt-1 text-muted-foreground">{alert.last_error}</div>

@@ -15,6 +15,8 @@ export type TimelineGap = {
   startMin: number;
   endMin: number;
   minutes: number;
+  kind: "lunch" | "away";
+  source: "observed" | "scheduled" | "gap";
   startCheckin?: Checkin | null;
   endCheckin?: Checkin | null;
 };
@@ -258,78 +260,136 @@ export function subtractExemptFromGap(
   return parts.filter((p) => p.endMin > p.startMin);
 }
 
+export type TimelineGapOptions = {
+  shiftPolicy?: ShiftTimelinePolicy | null;
+  /** Punch-derived lunch OUT→IN (same heuristic as closeout flags). */
+  observedLunchRange?: { startMin: number; endMin: number } | null;
+  /** Scheduled lunch window incl. return grace — used when no observed lunch. */
+  scheduledLunchRange?: { startMin: number; endMin: number } | null;
+};
+
 /**
- * Away intervals between consecutive timeline blocks (segments and unpaired punches),
- * using minute-of-day positions so the UI can scale height linearly with elapsed time.
- * When shift policy is provided, scheduled lunch and grace windows are excluded.
+ * Lunch and away intervals on the timeline.
+ * Away applies only between consecutive paired segments (segment end → next segment start).
+ * Gaps involving unpaired punches are not labeled away — use missing expected instead.
+ * Observed lunch from punches takes priority over schedule-only inference.
  */
 export function deriveTimelineGaps(
   segments: Segment[],
-  unpaired: Checkin[],
-  minutesFromDateTime: (value: string | null | undefined) => number | null,
-  shiftPolicy?: ShiftTimelinePolicy | null
+  _unpaired: Checkin[],
+  _minutesFromDateTime: (value: string | null | undefined) => number | null,
+  shiftPolicyOrOptions?: ShiftTimelinePolicy | null | TimelineGapOptions
 ): TimelineGap[] {
-  type Block =
-    | { kind: "segment"; startMin: number; endMin: number }
-    | { kind: "unpaired"; min: number };
+  const options: TimelineGapOptions =
+    shiftPolicyOrOptions && "observedLunchRange" in shiftPolicyOrOptions
+      ? shiftPolicyOrOptions
+      : { shiftPolicy: shiftPolicyOrOptions ?? null };
 
-  const blocks: Block[] = [];
+  const shiftPolicy = options.shiftPolicy ?? null;
+  const observedLunchRange = options.observedLunchRange ?? null;
+  const scheduledLunchRange =
+    options.scheduledLunchRange ??
+    (shiftPolicy?.lunchStartMin != null &&
+    shiftPolicy?.lunchEndMin != null &&
+    shiftPolicy.lunchEndMin > shiftPolicy.lunchStartMin
+      ? {
+          startMin: shiftPolicy.lunchStartMin,
+          endMin: shiftPolicy.lunchEndMin + Math.max(0, shiftPolicy.graceMinutes ?? 0),
+        }
+      : null);
 
-  for (const segment of segments) {
-    if (segment.startMin == null || segment.endMin == null) continue;
-    blocks.push({
-      kind: "segment",
-      startMin: segment.startMin,
-      endMin: segment.endMin,
-    });
-  }
+  const sortedSegments = segments
+    .filter((segment) => segment.startMin != null && segment.endMin != null)
+    .sort((a, b) => a.startMin! - b.startMin!);
 
-  for (const checkin of unpaired) {
-    const min = minutesFromDateTime(checkin.time);
-    if (min != null) blocks.push({ kind: "unpaired", min });
-  }
+  const results: TimelineGap[] = [];
 
-  blocks.sort((a, b) => {
-    const aStart = a.kind === "segment" ? a.startMin : a.min;
-    const bStart = b.kind === "segment" ? b.startMin : b.min;
-    return aStart - bStart;
-  });
-
-  const gaps: TimelineGap[] = [];
-
-  for (let i = 0; i < blocks.length - 1; i++) {
-    const current = blocks[i]!;
-    const next = blocks[i + 1]!;
-    const endMin = current.kind === "segment" ? current.endMin : current.min;
-    const startMin = next.kind === "segment" ? next.startMin : next.min;
-    if (startMin <= endMin) continue;
-
-    gaps.push({
-      startMin: endMin,
-      endMin: startMin,
-      minutes: startMin - endMin,
-    });
-  }
-
-  if (!shiftPolicy) return gaps;
-
-  const exempt = buildShiftExemptIntervals(shiftPolicy);
-  if (!exempt.length) return gaps;
-
-  const filtered: TimelineGap[] = [];
-  for (const gap of gaps) {
-    for (const part of subtractExemptFromGap(gap, exempt)) {
-      const minutes = part.endMin - part.startMin;
-      if (minutes <= 0) continue;
-      filtered.push({
-        startMin: part.startMin,
-        endMin: part.endMin,
+  if (observedLunchRange) {
+    const minutes = observedLunchRange.endMin - observedLunchRange.startMin;
+    if (minutes > 0) {
+      results.push({
+        startMin: observedLunchRange.startMin,
+        endMin: observedLunchRange.endMin,
         minutes,
+        kind: "lunch",
+        source: "observed",
       });
     }
   }
 
-  return filtered;
+  const startGraceInterval =
+    shiftPolicy?.startMin != null && Number.isFinite(shiftPolicy.startMin)
+      ? {
+          startMin: shiftPolicy.startMin,
+          endMin: shiftPolicy.startMin + Math.max(0, shiftPolicy.graceMinutes ?? 0),
+        }
+      : null;
+
+  for (let i = 0; i < sortedSegments.length - 1; i++) {
+    const current = sortedSegments[i]!;
+    const next = sortedSegments[i + 1]!;
+    const endMin = current.endMin!;
+    const startMin = next.startMin!;
+    if (startMin <= endMin) continue;
+
+    let parts = [{ startMin: endMin, endMin: startMin }];
+
+    if (observedLunchRange) {
+      parts = subtractExemptFromGap(
+        { startMin: endMin, endMin: startMin },
+        [observedLunchRange]
+      );
+    }
+
+    if (startGraceInterval) {
+      const trimmed: typeof parts = [];
+      for (const part of parts) {
+        trimmed.push(...subtractExemptFromGap(part, [startGraceInterval]));
+      }
+      parts = trimmed;
+    }
+
+    for (const part of parts) {
+      if (scheduledLunchRange) {
+        const lunchOverlapStart = Math.max(part.startMin, scheduledLunchRange.startMin);
+        const lunchOverlapEnd = Math.min(part.endMin, scheduledLunchRange.endMin);
+        if (lunchOverlapEnd > lunchOverlapStart) {
+          results.push({
+            startMin: lunchOverlapStart,
+            endMin: lunchOverlapEnd,
+            minutes: lunchOverlapEnd - lunchOverlapStart,
+            kind: "lunch",
+            source: "scheduled",
+          });
+        }
+        for (const awayPart of subtractExemptFromGap(part, [scheduledLunchRange])) {
+          const minutes = awayPart.endMin - awayPart.startMin;
+          if (minutes <= 0) continue;
+          results.push({
+            startMin: awayPart.startMin,
+            endMin: awayPart.endMin,
+            minutes,
+            kind: "away",
+            source: "gap",
+          });
+        }
+        continue;
+      }
+
+      const minutes = part.endMin - part.startMin;
+      if (minutes <= 0) continue;
+      results.push({
+        startMin: part.startMin,
+        endMin: part.endMin,
+        minutes,
+        kind: "away",
+        source: "gap",
+      });
+    }
+  }
+
+  results.sort((a, b) => a.startMin - b.startMin);
+  return results;
 }
 
 /** Week timeline: 10 hours of time map to the full scroll viewport height. */

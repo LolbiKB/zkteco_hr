@@ -92,7 +92,7 @@ test("groupCheckinsByBranchRuns splits on branch change", () => {
   assert.equal(runs[1]!.length, 1);
 });
 
-test("timeline gap between segment end and unpaired punch", () => {
+test("no away gap between segment end and unpaired punch", () => {
   const checkins = [
     punch("2026-05-28 08:00:00", "BRANCH-A"),
     punch("2026-05-28 12:00:00", "BRANCH-A"),
@@ -105,10 +105,27 @@ test("timeline gap between segment end and unpaired punch", () => {
 
   assert.equal(segments.length, 1);
   assert.equal(unpaired.length, 1);
+  assert.equal(gaps.length, 0);
+});
+
+test("away only between consecutive paired segments", () => {
+  const checkins = [
+    punch("2026-05-28 08:00:00", "BRANCH-A"),
+    punch("2026-05-28 11:00:00", "BRANCH-A"),
+    punch("2026-05-28 14:00:00", "BRANCH-A"),
+    punch("2026-05-28 17:00:00", "BRANCH-A"),
+  ];
+
+  const segments = deriveSegments(checkins, { parseTime, minutesFromDateTime, clamp });
+  const unpaired = deriveUnpairedPunches(checkins, parseTime);
+  const gaps = deriveTimelineGaps(segments, unpaired, minutesFromDateTime);
+
+  assert.equal(segments.length, 2);
+  assert.equal(unpaired.length, 0);
   assert.equal(gaps.length, 1);
-  assert.equal(gaps[0]!.startMin, 12 * 60);
-  assert.equal(gaps[0]!.endMin, 15 * 60);
-  assert.equal(gaps[0]!.minutes, 3 * 60);
+  assert.equal(gaps[0]!.kind, "away");
+  assert.equal(gaps[0]!.startMin, 11 * 60);
+  assert.equal(gaps[0]!.endMin, 14 * 60);
 });
 
 test("away gaps exclude scheduled lunch and lunch-end grace", () => {
@@ -149,11 +166,48 @@ test("deriveTimelineGaps applies shift policy for lunch", () => {
   });
 
   const gaps = deriveTimelineGaps(segments, unpaired, minutesFromDateTime, policy);
-  assert.equal(gaps.length, 2);
+  assert.equal(gaps.length, 3);
+  const away = gaps.filter((g) => g.kind === "away");
+  const lunch = gaps.filter((g) => g.kind === "lunch");
+  assert.equal(away.length, 2);
+  assert.equal(lunch.length, 1);
   assert.equal(
-    gaps.reduce((sum, gap) => sum + gap.minutes, 0),
+    away.reduce((sum, gap) => sum + gap.minutes, 0),
     15 + 5
   );
+  assert.equal(lunch[0]!.minutes, 75);
+  assert.equal(lunch[0]!.source, "scheduled");
+});
+
+test("deriveTimelineGaps prefers observed lunch over away", () => {
+  const checkins = [
+    punch("2026-05-28 08:00:00", "BRANCH-A"),
+    punch("2026-05-28 12:05:00", "BRANCH-A"),
+    punch("2026-05-28 12:50:00", "BRANCH-A"),
+    punch("2026-05-28 17:00:00", "BRANCH-A"),
+  ];
+
+  const segments = deriveSegments(checkins, { parseTime, minutesFromDateTime, clamp });
+  const unpaired = deriveUnpairedPunches(checkins, parseTime);
+  const policy = shiftTimelinePolicyFromShift({
+    shift_assigned: true,
+    lunch_start: "12:00",
+    lunch_end: "13:00",
+    grace_minutes: 15,
+  });
+
+  const gaps = deriveTimelineGaps(segments, unpaired, minutesFromDateTime, {
+    shiftPolicy: policy,
+    observedLunchRange: { startMin: 12 * 60 + 5, endMin: 12 * 60 + 50 },
+    scheduledLunchRange: { startMin: 12 * 60, endMin: 13 * 60 + 15 },
+  });
+
+  const lunch = gaps.filter((g) => g.kind === "lunch");
+  const away = gaps.filter((g) => g.kind === "away");
+  assert.equal(lunch.length, 1);
+  assert.equal(lunch[0]!.source, "observed");
+  assert.equal(lunch[0]!.minutes, 45);
+  assert.equal(away.length, 0);
 });
 
 test("week timeline canvas is 100% when span is at most 10 hours", () => {

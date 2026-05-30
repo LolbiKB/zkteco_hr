@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import get_datetime, getdate
 
 from zkteco_hr.attendance_engine.closeout import _get_shift_meta
+from zkteco_hr.attendance_engine.lunch_detection import detect_observed_lunch
 from zkteco_hr.attendance_engine.shift_assignment import (
     get_shift_assignment as _get_shift_assignment,
     shift_assignment_bounds_by_employee,
@@ -183,6 +184,39 @@ def _shift_context_for_day(*, employee: str, attendance_date):
     }
 
 
+def first_checkin_date_by_employee(employee_ids: list[str]) -> dict[str, dict]:
+    """
+    Earliest calendar day (`Employee Checkin.time`) with any punch row, per employee.
+    Includes off-shift / demo seed rows — week-nav backward bound only (not flag logic).
+    """
+    if not employee_ids or not frappe.db.table_exists("Employee Checkin"):
+        return {}
+
+    placeholders = ", ".join(["%s"] * len(employee_ids))
+    rows = frappe.db.sql(
+        f"""
+        SELECT employee, MIN(DATE(`time`)) AS first_checkin_date
+        FROM `tabEmployee Checkin`
+        WHERE employee IN ({placeholders})
+          AND `time` IS NOT NULL
+        GROUP BY employee
+        """,
+        tuple(employee_ids),
+        as_dict=True,
+    )
+
+    out: dict[str, dict] = {}
+    for row in rows or []:
+        emp = row.get("employee")
+        if not emp:
+            continue
+        first = row.get("first_checkin_date")
+        out[emp] = {
+            "first_checkin_date": str(getdate(first)) if first else None,
+        }
+    return out
+
+
 @frappe.whitelist()
 def list_calendar_employees(include_without_shifts=True):
     """
@@ -219,12 +253,18 @@ def list_calendar_employees(include_without_shifts=True):
     except Exception:
         frappe.log_error(title="list_calendar_employees shift bounds failed")
         assignment_bounds = {}
+    try:
+        checkin_bounds = first_checkin_date_by_employee(employee_ids)
+    except Exception:
+        frappe.log_error(title="list_calendar_employees first checkin bounds failed")
+        checkin_bounds = {}
 
     employees = []
     for row in rows:
         emp_id = row["name"]
         ssa = ssa_by_employee.get(emp_id, {})
         bounds = assignment_bounds.get(emp_id, {})
+        checkins = checkin_bounds.get(emp_id, {})
         has_shift_assignment = ssa.get("has_shift_assignment") is True
         if not include_all and not has_shift_assignment:
             continue
@@ -254,6 +294,7 @@ def list_calendar_employees(include_without_shifts=True):
                 "shift_schedule_assignment": ssa.get("shift_schedule_assignment"),
                 "schedule_min_date": schedule_min_date,
                 "schedule_max_date": schedule_max_date,
+                "first_checkin_date": checkins.get("first_checkin_date"),
             }
         )
 
@@ -264,6 +305,16 @@ def list_calendar_employees(include_without_shifts=True):
         )
     )
     return employees
+
+
+def _employee_nav_meta(employee: str) -> dict:
+    checkin = first_checkin_date_by_employee([employee]).get(employee, {})
+    bounds = shift_assignment_bounds_by_employee([employee]).get(employee, {})
+    return {
+        "first_checkin_date": checkin.get("first_checkin_date"),
+        "schedule_max_date": bounds.get("schedule_max_date"),
+        "has_shift_assignment": bool(bounds.get("has_shift_assignment")),
+    }
 
 
 @frappe.whitelist()
@@ -384,15 +435,30 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
             if last_dt >= first_dt:
                 gross_minutes = int((last_dt - first_dt).total_seconds() / 60)
 
+        observed_lunch = None
+        shift = _shift_context_for_day(employee=employee, attendance_date=cur)
+        if shift.get("shift_assigned") and day_checkins:
+            assignment = _get_shift_assignment(employee=employee, attendance_date=cur)
+            if assignment and assignment.get("shift_type"):
+                meta = _get_shift_meta(assignment["shift_type"])
+                if meta:
+                    observed_lunch = detect_observed_lunch(
+                        checkins=day_checkins,
+                        shift_meta=meta,
+                        attendance_date=cur,
+                        grace_minutes=int(meta.get("custom_grace_minutes") or 0),
+                    )
+
         days.append(
             {
                 "date": key,
-                "shift": _shift_context_for_day(employee=employee, attendance_date=cur),
+                "shift": shift,
                 "leave": leave_by_date.get(key, {"on_leave": False}),
                 "checkins": day_checkins,
                 "first_in": first_in,
                 "last_out": last_out,
                 "gross_minutes": gross_minutes,
+                "observed_lunch": observed_lunch,
                 "flags": flags_by_day.get(key, []),
             }
         )
@@ -404,4 +470,5 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
         "end_date": str(end),
         "days": days,
         "device_alerts": device_alerts,
+        **_employee_nav_meta(employee),
     }

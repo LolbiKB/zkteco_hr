@@ -7,6 +7,7 @@ _install_frappe_mock()
 
 from zkteco_hr.attendance_engine.hr_calendar import (
     _shift_schedule_assignment_start_field,
+    first_checkin_date_by_employee,
     is_full_time_employment,
 )
 
@@ -32,6 +33,20 @@ class TestHrCalendarHelpers(unittest.TestCase):
         with patch("zkteco_hr.attendance_engine.hr_calendar.frappe.db.has_column") as has_column:
             has_column.side_effect = lambda _dt, col: col == "from_date"
             self.assertEqual(_shift_schedule_assignment_start_field(), "from_date")
+
+    def test_first_checkin_date_includes_offshift_rows(self):
+        with patch("zkteco_hr.attendance_engine.hr_calendar.frappe.db.table_exists") as table_exists:
+            with patch("zkteco_hr.attendance_engine.hr_calendar.frappe.db.sql") as sql:
+                table_exists.return_value = True
+                sql.return_value = [
+                    {"employee": "EMP-1", "first_checkin_date": "2026-05-16"},
+                ]
+                out = first_checkin_date_by_employee(["EMP-1"])
+                self.assertEqual(out["EMP-1"]["first_checkin_date"], "2026-05-16")
+                query = sql.call_args[0][0]
+                self.assertIn("MIN(DATE(`time`))", query)
+                self.assertNotIn("offshift", query)
+                self.assertNotIn("skip_auto_attendance", query)
 
 
 if __name__ == "__main__":

@@ -7,13 +7,19 @@ import {
   useEmployeeCalendar,
 } from "@/hooks/useHrAttendanceData";
 import type { CalendarPayload, Day, Flag } from "@/types/calendar";
-import { addDays, addMonths, format, parseISO, startOfWeek } from "date-fns";
+import { addDays, format, startOfWeek } from "date-fns";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { countWeekAssignedShiftDays } from "@/lib/weekCalendar";
+import {
+  clampDateToNavBounds,
+  computeWeekNavBounds,
+  countWeekAssignedShiftDays,
+  earliestDayWithCheckins,
+  pickEarliestDateKey,
+} from "@/lib/weekCalendar";
 import { employeeShortName } from "@/lib/employeeCard";
 import {
   AttendanceHeaderSkeleton,
@@ -44,8 +50,6 @@ export function App() {
 
   const {
     payload: apiPayload,
-    monthStart,
-    monthEnd,
     error: calendarError,
     isLoading: calendarLoading,
     refresh: refreshCalendar,
@@ -65,11 +69,16 @@ export function App() {
     apiPayload ??
     ({
       employee: employee ?? "",
-      start_date: format(monthStart, "yyyy-MM-dd"),
-      end_date: format(monthEnd, "yyyy-MM-dd"),
+      start_date: "",
+      end_date: "",
       days: [],
       device_alerts: [],
     } as CalendarPayload);
+
+  const earliestInPayload = useMemo(
+    () => earliestDayWithCheckins(payload.days),
+    [payload.days]
+  );
 
   const [inspectingDate, setInspectingDate] = useState<string | null>(null);
   const [inspectingFlag, setInspectingFlag] = useState<Flag | null>(null);
@@ -79,16 +88,6 @@ export function App() {
     for (const d of payload.days || []) m.set(d.date, d);
     return m;
   }, [payload.days]);
-
-  const monthStartIso = format(monthStart, "yyyy-MM-dd");
-  const monthEndIso = format(monthEnd, "yyyy-MM-dd");
-  useEffect(() => {
-    const cur = anchor;
-    const start = new Date(monthStartIso);
-    const end = new Date(monthEndIso);
-    if (cur < start) setAnchor(start);
-    else if (cur > end) setAnchor(end);
-  }, [anchor, employee, monthEndIso, monthStartIso]);
 
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
   const weekKey = format(weekStart, "yyyy-MM-dd");
@@ -108,30 +107,41 @@ export function App() {
     [employees, employee]
   );
 
-  const scheduleStart = useMemo(() => {
-    if (selectedEmployee?.schedule_min_date) {
-      return parseISO(selectedEmployee.schedule_min_date);
-    }
-    return monthStart;
-  }, [monthStart, selectedEmployee?.schedule_min_date]);
-
-  const minWeekStart = useMemo(
-    () => startOfWeek(scheduleStart, { weekStartsOn: 1 }),
-    [scheduleStart]
+  const firstCheckinDate = useMemo(
+    () =>
+      pickEarliestDateKey(
+        payload.first_checkin_date,
+        selectedEmployee?.first_checkin_date,
+        earliestInPayload
+      ),
+    [earliestInPayload, payload.first_checkin_date, selectedEmployee?.first_checkin_date]
   );
 
-  const maxWeekStart = useMemo(() => {
-    if (selectedEmployee?.schedule_max_date) {
-      return startOfWeek(parseISO(selectedEmployee.schedule_max_date), { weekStartsOn: 1 });
-    }
-    if (selectedEmployee?.has_shift_assignment) {
-      return startOfWeek(addMonths(new Date(), 12), { weekStartsOn: 1 });
-    }
-    return startOfWeek(new Date(), { weekStartsOn: 1 });
-  }, [selectedEmployee]);
+  const weekNavBounds = useMemo(
+    () =>
+      computeWeekNavBounds(selectedEmployee, new Date(), {
+        firstCheckinDate,
+        scheduleMaxDate: payload.schedule_max_date ?? selectedEmployee?.schedule_max_date,
+        hasShiftAssignment:
+          payload.has_shift_assignment ?? selectedEmployee?.has_shift_assignment,
+      }),
+    [
+      firstCheckinDate,
+      payload.has_shift_assignment,
+      payload.schedule_max_date,
+      selectedEmployee,
+    ]
+  );
 
-  const canGoPrev = weekStart > minWeekStart;
-  const canGoNext = weekStart < maxWeekStart;
+  const { minWeekStart, maxWeekStart, calendarMinDate, calendarMaxDate } = weekNavBounds;
+
+  const canGoPrev = weekStart.getTime() > minWeekStart.getTime();
+  const canGoNext = weekStart.getTime() < maxWeekStart.getTime();
+
+  useEffect(() => {
+    if (!employee) return;
+    setAnchor((current) => clampDateToNavBounds(current, weekNavBounds));
+  }, [employee, calendarMinDate, calendarMaxDate, weekNavBounds]);
 
   const weekAssignedShiftDays = useMemo(
     () => countWeekAssignedShiftDays(weekDates, daysByDate),
@@ -155,32 +165,25 @@ export function App() {
   }
 
   function goPrev() {
-    if (!canGoPrev || isCalendarLoading) return;
+    if (!canGoPrev) return;
     setWeekNavDirection("prev");
     setAnchor((d) => addDays(d, -7));
   }
 
   function goNext() {
-    if (!canGoNext || isCalendarLoading) return;
+    if (!canGoNext) return;
     setWeekNavDirection("next");
     setAnchor((d) => addDays(d, 7));
   }
 
   function goToday() {
-    if (isCalendarLoading) return;
     setWeekNavDirection("jump");
-    const today = new Date();
-    let target = today;
-    if (target < scheduleStart) target = scheduleStart;
-    const maxAnchor = addDays(maxWeekStart, 6);
-    if (target > maxAnchor) target = maxAnchor;
-    setAnchor(target);
+    setAnchor(clampDateToNavBounds(new Date(), weekNavBounds));
   }
 
   function selectAnchor(date: Date) {
-    if (isCalendarLoading) return;
     setWeekNavDirection("jump");
-    setAnchor(date);
+    setAnchor(clampDateToNavBounds(date, weekNavBounds));
   }
 
   const inspectingDay = inspectingDate ? daysByDate.get(inspectingDate) : undefined;
@@ -250,6 +253,8 @@ export function App() {
                   employeeLabel={employeeShortName(selectedEmployee, employee)}
                   canGoPrev={canGoPrev}
                   canGoNext={canGoNext}
+                  calendarMinDate={calendarMinDate}
+                  calendarMaxDate={calendarMaxDate}
                   isRefreshing={isRefreshing}
                   isCalendarLoading={isCalendarLoading}
                 />

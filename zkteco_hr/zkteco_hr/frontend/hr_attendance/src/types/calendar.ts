@@ -40,6 +40,16 @@ export type Flag = {
   evidence?: unknown;
 };
 
+export type ObservedLunch = {
+  lunch_out: string;
+  lunch_in: string;
+  minutes: number;
+  lunch_start: string;
+  lunch_end: string;
+  return_threshold: string;
+  late_return: boolean;
+};
+
 export type LeaveContext = {
   on_leave: boolean;
   leave_type?: string | null;
@@ -53,6 +63,8 @@ export type Day = {
   first_in?: string | null;
   last_out?: string | null;
   gross_minutes?: number | null;
+  /** Punch-derived lunch OUT→IN (same heuristic as closeout flags). */
+  observed_lunch?: ObservedLunch | null;
   flags?: Flag[];
 };
 
@@ -62,6 +74,10 @@ export type CalendarPayload = {
   end_date: string;
   days: Day[];
   device_alerts?: DeviceAlert[];
+  /** From Employee Checkin ledger — week nav backward bound. */
+  first_checkin_date?: string | null;
+  schedule_max_date?: string | null;
+  has_shift_assignment?: boolean;
 };
 
 export type CalendarEmployee = {
@@ -82,4 +98,6 @@ export type CalendarEmployee = {
   shift_schedule_assignment?: string | null;
   schedule_min_date?: string | null;
   schedule_max_date?: string | null;
+  /** Earliest Employee Checkin day (`time`); includes off-shift rows. Week nav backward bound. */
+  first_checkin_date?: string | null;
 };

@@ -37,6 +37,8 @@ export type AttendanceToolbarProps = {
   employeeLabel?: string | null;
   canGoPrev: boolean;
   canGoNext: boolean;
+  calendarMinDate: Date;
+  calendarMaxDate: Date;
   isRefreshing: boolean;
   isCalendarLoading: boolean;
 };
@@ -69,7 +71,7 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
           size="icon"
           className="size-8 shrink-0"
           onClick={props.onPrevWeek}
-          disabled={!props.canGoPrev || navDisabled}
+          disabled={!props.canGoPrev}
           aria-label="Previous week"
         >
           <ChevronLeftIcon className="size-4" />
@@ -80,6 +82,8 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
           weekLabel={weekLabel}
           onSelectDate={props.onSelectDate}
           disabled={navDisabled}
+          minDate={props.calendarMinDate}
+          maxDate={props.calendarMaxDate}
         />
 
         <Button
@@ -88,7 +92,7 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
           size="icon"
           className="size-8 shrink-0"
           onClick={props.onNextWeek}
-          disabled={!props.canGoNext || navDisabled}
+          disabled={!props.canGoNext}
           aria-label="Next week"
         >
           <ChevronRightIcon className="size-4" />
@@ -136,6 +140,8 @@ function WeekPicker(props: {
   weekLabel: string;
   onSelectDate: (date: Date) => void;
   disabled?: boolean;
+  minDate: Date;
+  maxDate: Date;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -162,6 +168,9 @@ function WeekPicker(props: {
             setOpen(false);
           }}
           weekStartsOn={1}
+          disabled={{ before: props.minDate, after: props.maxDate }}
+          startMonth={props.minDate}
+          endMonth={props.maxDate}
         />
       </PopoverContent>
     </Popover>

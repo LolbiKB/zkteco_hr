@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   clamp,
+  formatBranchLabel,
   formatDurationMinutes,
   minutesFromDateTime,
   parseDateTimeLocal,
@@ -15,18 +16,28 @@ import {
   deriveUnpairedPunches,
   shiftTimelinePolicyFromShift,
 } from "@/lib/attendancePunches";
+import {
+  detectObservedLunch,
+  observedLunchMinuteRange,
+  scheduledLunchMinuteRange,
+} from "@/lib/lunchDetection";
 import { deriveSegments } from "@/lib/segmentInspector";
 import {
-  computeAdherenceOpacity,
+  clipScheduledBandToFuture,
   computeDaySpan,
-  computeExpectedWindowPct,
   computeLateness,
-  computeLunchWindowPct,
+  deriveMissingExpectedIntervals,
+  deriveScheduledFutureIntervals,
+  missingExpectedMaxEndMin,
 } from "@/lib/shiftTimeline";
 import { cn } from "@/lib/utils";
-import type { Day, Flag, ShiftContext } from "@/types/calendar";
+import type { Day, Flag, ObservedLunch, ShiftContext } from "@/types/calendar";
 
 type Checkin = NonNullable<Day["checkins"]>[number];
+
+/** Shift schedule reference overlay (expected work window only). */
+const scheduledBandClass =
+  "border-2 border-dashed border-muted-foreground/80 bg-muted/50 dark:border-muted-foreground/65 dark:bg-muted/40";
 
 export function DayCell(props: {
   date: Date;
@@ -78,7 +89,8 @@ export function DayCell(props: {
             lastOut={props.info?.last_out ?? null}
             checkins={checkins}
             shift={props.info?.shift ?? { shift_assigned: false }}
-            grossMinutes={props.info?.gross_minutes ?? null}
+            dateKey={format(props.date, "yyyy-MM-dd")}
+            observedLunch={props.info?.observed_lunch ?? null}
             dense={props.dense}
             windowStartMin={props.timelineStartMin}
             windowEndMin={props.timelineEndMin}
@@ -94,7 +106,8 @@ function DayDayTrack(props: {
   lastOut: string | null;
   checkins: Checkin[];
   shift: ShiftContext;
-  grossMinutes: number | null;
+  dateKey: string;
+  observedLunch: ObservedLunch | null;
   dense: boolean;
   windowStartMin?: number;
   windowEndMin?: number;
@@ -111,14 +124,51 @@ function DayDayTrack(props: {
     () => shiftTimelinePolicyFromShift(props.shift),
     [props.shift]
   );
-  const gaps = useMemo(
-    () => deriveTimelineGaps(segments, roguePunches, minutesFromDateTime, shiftPolicy),
-    [roguePunches, segments, shiftPolicy]
+  const observedLunchRange = useMemo(() => {
+    const observed =
+      props.observedLunch ??
+      detectObservedLunch(props.checkins, props.shift, props.dateKey);
+    return observedLunchMinuteRange(observed);
+  }, [props.checkins, props.dateKey, props.observedLunch, props.shift]);
+  const scheduledLunchRange = useMemo(
+    () => scheduledLunchMinuteRange(props.shift),
+    [props.shift]
   );
-  const expected = computeExpectedWindowPct(props.shift);
-  const lunch = computeLunchWindowPct(props.shift);
+  const gaps = useMemo(
+    () =>
+      deriveTimelineGaps(segments, roguePunches, minutesFromDateTime, {
+        shiftPolicy,
+        observedLunchRange,
+        scheduledLunchRange,
+      }),
+    [observedLunchRange, roguePunches, scheduledLunchRange, segments, shiftPolicy]
+  );
+  const awayIntervals = useMemo(
+    () =>
+      gaps
+        .filter((gap) => gap.kind === "away")
+        .map((gap) => ({ startMin: gap.startMin, endMin: gap.endMin })),
+    [gaps]
+  );
+  const scheduledFuture = useMemo(
+    () => deriveScheduledFutureIntervals(props.shift, props.dateKey),
+    [props.dateKey, props.shift]
+  );
+  const missingExpected = useMemo(() => {
+    const maxEndMin = missingExpectedMaxEndMin(props.dateKey);
+    const excludeIntervals = [
+      ...awayIntervals,
+      ...scheduledFuture.map((interval) => ({
+        startMin: interval.startMin,
+        endMin: interval.endMin,
+      })),
+    ];
+    return deriveMissingExpectedIntervals(props.shift, segments, {
+      maxEndMin,
+      excludeIntervals,
+    });
+  }, [awayIntervals, props.dateKey, props.shift, scheduledFuture, segments]);
   const lateness = computeLateness(props.shift, props.firstIn);
-  const adherence = computeAdherenceOpacity(props.shift, props.grossMinutes);
 
   const window = useMemo(() => {
     if (props.dense) return null;
@@ -138,6 +188,44 @@ function DayDayTrack(props: {
   function pctFromMinute(min: number) {
     if (!window) return clamp((min / (24 * 60)) * 100, 0, 100);
     return clamp(((min - window.startMin) / window.span) * 100, 0, 100);
+  }
+
+  function pctFromMinuteDay(min: number) {
+    return clamp((min / (24 * 60)) * 100, 0, 100);
+  }
+
+  function renderTimelineBand(
+    key: string,
+    interval: { startMin: number; endMin: number; minutes: number },
+    className: string,
+    label: string,
+    useWeekWindow: boolean
+  ) {
+    const topPct = useWeekWindow
+      ? pctFromMinute(interval.startMin)
+      : pctFromMinuteDay(interval.startMin);
+    const bottomPct = useWeekWindow
+      ? pctFromMinute(interval.endMin)
+      : pctFromMinuteDay(interval.endMin);
+    const heightPct = Math.max(2, bottomPct - topPct);
+    if (heightPct <= 0) return null;
+    const topStyle = useWeekWindow ? `${topPct}%` : `calc(${topPct}% + 8px)`;
+    const heightStyle = useWeekWindow ? `${heightPct}%` : `calc(${heightPct}% - 16px)`;
+    return (
+      <HoverCard key={key} openDelay={220} closeDelay={120}>
+        <HoverCardTrigger asChild>
+          <div
+            className={cn("absolute inset-x-2 rounded-sm", className)}
+            style={{ top: topStyle, height: heightStyle }}
+          />
+        </HoverCardTrigger>
+        <HoverCardContent className="w-auto p-2">
+          <div className="text-xs">
+            {label} · {formatDurationMinutes(interval.minutes)}
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
   }
 
   return (
@@ -165,64 +253,19 @@ function DayDayTrack(props: {
           );
         })}
 
-        {expected && !window ? (
-          <div
-            className="absolute inset-x-3 rounded-md border border-dashed border-border/70 bg-background/10"
-            style={{
-              top: `calc(${expected.topPct}% + 8px)`,
-              height: `calc(${expected.heightPct}% - 16px)`,
-            }}
-            title={`Expected: ${props.shift.start_time ?? ""}–${props.shift.end_time ?? ""}`}
-          />
-        ) : null}
-
-        {lunch && !window ? (
-          <div
-            className="absolute inset-x-3 rounded-md bg-muted/20"
-            style={{
-              top: `calc(${lunch.topPct}% + 8px)`,
-              height: `calc(${lunch.heightPct}% - 16px)`,
-            }}
-            title={`Lunch: ${props.shift.lunch_start ?? ""}–${props.shift.lunch_end ?? ""}`}
-          />
-        ) : null}
-
-        {window && props.shift.shift_assigned ? (
-          <>
-            {(() => {
-              const startMin = parseTimeToMinutes(props.shift.start_time ?? null);
-              const endMin = parseTimeToMinutes(props.shift.end_time ?? null);
-              if (startMin == null || endMin == null || endMin <= startMin) return null;
-              const topPct = pctFromMinute(startMin);
-              const bottomPct = pctFromMinute(endMin);
-              const heightPct = Math.max(2, bottomPct - topPct);
-              return (
-                <div
-                  className="absolute inset-x-3 rounded-md border border-dashed border-border/70 bg-background/10"
-                  style={{ top: `calc(${topPct}% + 8px)`, height: `calc(${heightPct}% - 16px)` }}
-                />
-              );
-            })()}
-            {(() => {
-              const ls = parseTimeToMinutes(props.shift.lunch_start ?? null);
-              const le = parseTimeToMinutes(props.shift.lunch_end ?? null);
-              if (ls == null || le == null || le <= ls) return null;
-              const topPct = pctFromMinute(ls);
-              const bottomPct = pctFromMinute(le);
-              const heightPct = Math.max(2, bottomPct - topPct);
-              return (
-                <div
-                  className="absolute inset-x-3 rounded-md bg-muted/20"
-                  style={{ top: `calc(${topPct}% + 8px)`, height: `calc(${heightPct}% - 16px)` }}
-                />
-              );
-            })()}
-          </>
-        ) : null}
+        {scheduledFuture.map((interval, idx) =>
+          renderTimelineBand(
+            `scheduled-${idx}`,
+            interval,
+            scheduledBandClass,
+            "Scheduled",
+            window != null
+          )
+        )}
 
         {props.dense && span && segments.length === 0 ? (
           <div
-            className={cn("absolute left-1/2 w-[12px] -translate-x-1/2 rounded-sm opacity-20", color)}
+            className={cn("absolute left-1/2 w-[12px] -translate-x-1/2 rounded-sm", color)}
             style={{
               top: `calc(${span.topPct}% + 8px)`,
               height: `calc(${span.heightPct}% - 16px)`,
@@ -230,16 +273,36 @@ function DayDayTrack(props: {
           />
         ) : null}
 
-        {gaps.slice(0, props.dense ? 3 : 6).map((g, idx) => {
+        {missingExpected.map((interval, idx) =>
+          renderTimelineBand(
+            `missing-${idx}`,
+            interval,
+            "border border-dashed border-destructive/75 bg-destructive/5",
+            "Missing expected",
+            window != null
+          )
+        )}
+
+        {gaps.map((g, idx) => {
           const topPct = pctFromMinute(g.startMin);
           const endPct = pctFromMinute(g.endMin);
           const heightPct = endPct - topPct;
           if (heightPct <= 0) return null;
+          const isLunch = g.kind === "lunch";
+          const isObservedLunch = isLunch && g.source === "observed";
+          const isScheduledLunch = isLunch && g.source === "scheduled";
           return (
             <HoverCard key={idx} openDelay={220} closeDelay={120}>
               <HoverCardTrigger asChild>
                 <div
-                  className="absolute inset-x-2 rounded-sm border-2 border-solid border-destructive/70 bg-destructive/5"
+                  className={cn(
+                    "absolute inset-x-2 rounded-sm border",
+                    isObservedLunch
+                      ? "border-sky-500/40 bg-sky-500/15"
+                      : isScheduledLunch
+                        ? "border-muted-foreground/45 bg-muted/35 dark:bg-muted/30"
+                        : "border-destructive/40 bg-destructive/15"
+                  )}
                   style={{
                     top: `${topPct}%`,
                     height: `${heightPct}%`,
@@ -248,7 +311,9 @@ function DayDayTrack(props: {
               </HoverCardTrigger>
               <HoverCardContent className="w-auto p-2">
                 <div className="text-xs">
-                  Away · {formatDurationMinutes(g.minutes)}
+                  {isLunch ? "Lunch" : "Away"} · {formatDurationMinutes(g.minutes)}
+                  {isObservedLunch ? " · observed" : null}
+                  {isScheduledLunch ? " · scheduled" : null}
                 </div>
               </HoverCardContent>
             </HoverCard>
@@ -262,14 +327,13 @@ function DayDayTrack(props: {
             const endPct = pctFromMinute(s.endMin);
             const heightPct = endPct - topPct;
             if (heightPct <= 0) return null;
-            const branch = s.branch ?? null;
-            const branchShort = branch ? branch.replace(/^BRANCH-/, "") : "";
+            const branchLabel = formatBranchLabel(s.branch);
             const startLabel = s.start?.time ? format(new Date(s.start.time), "h:mma") : "—";
             const endLabel = s.end?.time ? format(new Date(s.end.time), "h:mma") : "—";
             const compactTip = [
               `${startLabel}–${endLabel}`,
               s.minutes != null ? formatDurationMinutes(s.minutes) : null,
-              branchShort ? `Branch ${branchShort}` : null,
+              branchLabel,
               lateness?.isLate && lateness.deltaMinutes != null
                 ? `Late ${formatDurationMinutes(lateness.deltaMinutes, { signed: true })}`
                 : null,
@@ -288,7 +352,6 @@ function DayDayTrack(props: {
                     style={{
                       top: `${topPct}%`,
                       height: `${heightPct}%`,
-                      opacity: adherence,
                     }}
                   >
                     {!props.dense && heightPct >= 12 ? (
@@ -308,7 +371,7 @@ function DayDayTrack(props: {
                         ) : null}
                         {heightPct >= 24 ? (
                           <div className="absolute left-2 right-2 top-[22px] truncate text-[10px] font-medium text-white/85">
-                            {branchShort ? `Branch ${branchShort}` : "Branch —"}
+                            {branchLabel ?? "—"}
                           </div>
                         ) : null}
                         <div className="absolute bottom-1.5 left-2 text-[11px] font-semibold leading-tight">

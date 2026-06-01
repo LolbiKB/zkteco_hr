@@ -1,6 +1,6 @@
 import json
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from zkteco_hr.tests.test_closeout import _install_frappe_mock
@@ -170,6 +170,30 @@ class TestMatchShiftType(unittest.TestCase):
         self.assertEqual(result["proposed_name"], "FT_0800_1200")
 
 
+class TestShiftGenerationEndDate(unittest.TestCase):
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.add_days")
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.getdate")
+    def test_open_ended_uses_hrms_default_window(self, getdate, add_days):
+        from zkteco_hr.attendance_engine.schedule_resolver import (
+            DEFAULT_SHIFT_GENERATION_DAYS,
+            shift_generation_end_date,
+        )
+
+        getdate.side_effect = lambda value: date.fromisoformat(str(value))
+        add_days.side_effect = lambda value, days: date.fromisoformat(str(value)) + timedelta(days=days)
+
+        end = shift_generation_end_date("2026-06-01", None)
+        self.assertEqual(end, date(2026, 6, 1) + timedelta(days=DEFAULT_SHIFT_GENERATION_DAYS))
+
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.getdate")
+    def test_explicit_through(self, getdate):
+        from zkteco_hr.attendance_engine.schedule_resolver import shift_generation_end_date
+
+        getdate.side_effect = lambda value: date.fromisoformat(str(value))
+        end = shift_generation_end_date("2026-06-01", "2026-09-01")
+        self.assertEqual(end, date(2026, 9, 1))
+
+
 class TestEnabledSsaGate(unittest.TestCase):
     def test_inactive_or_disabled_ssa_not_enabled(self):
         from zkteco_hr.attendance_engine.schedule_resolver import is_ssa_enabled
@@ -191,18 +215,23 @@ class TestEnabledSsaGate(unittest.TestCase):
 
 class TestScheduleApi(unittest.TestCase):
     @patch("zkteco_hr.attendance_engine.schedule_api.employee_has_enabled_ssas")
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.add_days")
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.getdate")
     @patch("zkteco_hr.attendance_engine.schedule_api.getdate")
     @patch("zkteco_hr.attendance_engine.schedule_api.build_resolve_plan")
     @patch("zkteco_hr.attendance_engine.schedule_api._employee_header")
     @patch("zkteco_hr.attendance_engine.schedule_api._require_hr_role")
     def test_apply_returns_needs_confirm_without_flag(
-        self, _role, _header, build_plan, getdate, has_enabled
+        self, _role, _header, build_plan, api_getdate, resolver_getdate, resolver_add_days, has_enabled
     ):
         from zkteco_hr.attendance_engine import schedule_api
 
         has_enabled.return_value = False
         build_plan.return_value = {"needs_create": True, "groups": []}
-        getdate.side_effect = lambda value: date.fromisoformat(str(value))
+        parse = lambda value: date.fromisoformat(str(value))
+        api_getdate.side_effect = parse
+        resolver_getdate.side_effect = parse
+        resolver_add_days.side_effect = lambda value, days: parse(value) + timedelta(days=days)
 
         result = schedule_api.apply_weekly_schedule(
             employee="EMP-1",

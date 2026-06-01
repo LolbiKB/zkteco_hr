@@ -14,9 +14,11 @@ from zkteco_hr.attendance_engine.schedule_resolver import (
     create_shift_schedule,
     create_shift_type,
     employee_has_enabled_ssas,
+    DEFAULT_SHIFT_GENERATION_DAYS,
     generate_shifts_for_ssa,
     group_week_pattern,
     is_ssa_enabled,
+    shift_generation_end_date,
     list_employee_ssas,
     upsert_ssa,
     week_pattern_from_ssas,
@@ -245,7 +247,9 @@ def get_employee_schedule_context(employee: str):
             "days": week_pattern_from_ssas(employee),
         },
         "default_effective_from": str(add_days(getdate(nowdate()), 1)),
-        "default_generate_through": str(add_days(getdate(nowdate()), 91)),
+        "default_generate_through": str(
+            add_days(getdate(nowdate()), 1 + DEFAULT_SHIFT_GENERATION_DAYS)
+        ),
     }
 
 
@@ -309,7 +313,7 @@ def apply_weekly_schedule(
         frappe.throw("employee is required")
 
     pattern = _parse_week_pattern(week_pattern or frappe.form_dict.get("week_pattern"))
-    _employee_header(employee)
+    employee_info = _employee_header(employee)
 
     if employee_has_enabled_ssas(employee):
         frappe.throw(
@@ -327,13 +331,8 @@ def apply_weekly_schedule(
         if generate_through is not None
         else frappe.form_dict.get("generate_through")
     )
-    through = None
-    if through_raw is not None and str(through_raw).strip():
-        through = getdate(through_raw)
-        if through < effective:
-            frappe.throw("generate_through must be on or after create_shifts_after")
-        if (through - effective).days > 365:
-            frappe.throw("generate_through cannot be more than 365 days after create_shifts_after")
+    through = through_raw if through_raw is not None and str(through_raw).strip() else None
+    generation_end = shift_generation_end_date(effective, through)
 
     confirm = confirm_create
     if isinstance(confirm, str):
@@ -377,9 +376,9 @@ def apply_weekly_schedule(
                 employee=employee,
                 shift_schedule=pat_name,
                 create_shifts_after=effective,
+                company=employee_info.get("company"),
             )
-            if through is not None:
-                generate_shifts_for_ssa(ssa_name, effective, through)
+            generate_shifts_for_ssa(ssa_name, effective, generation_end)
             ssas_out.append({"name": ssa_name, "shift_schedule": pat_name})
 
         frappe.db.commit()
@@ -408,6 +407,7 @@ def apply_weekly_schedule(
             "shift_types": created_shift_types,
             "shift_schedules": created_shift_schedules,
         },
-        "assignments_generated_through": str(through) if through else None,
+        "assignments_generated_through": str(generation_end),
+        "assignments_open_ended": through is None,
         "attendance_url": f"/hr-attendance?employee={employee}",
     }

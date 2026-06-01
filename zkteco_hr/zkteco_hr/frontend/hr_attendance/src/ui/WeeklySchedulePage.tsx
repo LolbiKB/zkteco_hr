@@ -422,7 +422,7 @@ export function WeeklySchedulePage() {
                       />
                     ) : (
                       <p className="flex h-10 items-center text-xs text-muted-foreground">
-                        Open-ended — SSA cursor only; HRMS extends assignments later.
+                        Open-ended — generates shift assignments for 90 days; HRMS extends later.
                       </p>
                     )}
                   </div>

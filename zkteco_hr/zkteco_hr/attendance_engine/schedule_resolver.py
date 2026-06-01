@@ -554,7 +554,13 @@ def create_shift_schedule(
     return doc.name
 
 
-def upsert_ssa(*, employee: str, shift_schedule: str, create_shifts_after) -> str:
+def upsert_ssa(
+    *,
+    employee: str,
+    shift_schedule: str,
+    create_shifts_after,
+    company: str | None = None,
+) -> str:
     create_shifts_after = getdate(create_shifts_after)
     filters = {"employee": employee, "shift_schedule": shift_schedule}
     existing = frappe.get_all("Shift Schedule Assignment", filters=filters, pluck="name") or []
@@ -565,6 +571,11 @@ def upsert_ssa(*, employee: str, shift_schedule: str, create_shifts_after) -> st
         doc = frappe.new_doc("Shift Schedule Assignment")
         doc.employee = employee
         doc.shift_schedule = shift_schedule
+
+    if not company:
+        company = frappe.db.get_value("Employee", employee, "company")
+    if company and frappe.db.has_column("Shift Schedule Assignment", "company"):
+        doc.company = company
 
     if frappe.db.has_column("Shift Schedule Assignment", "enabled"):
         doc.enabled = 1
@@ -592,15 +603,33 @@ def upsert_ssa(*, employee: str, shift_schedule: str, create_shifts_after) -> st
     return doc.name
 
 
-def generate_shifts_for_ssa(ssa_name: str, start_date, end_date=None) -> None:
+def generate_shifts_for_ssa(ssa_name: str, start_date, end_date) -> None:
+    """Create Shift Assignment rows via HRMS SSA.create_shifts."""
     doc = frappe.get_doc("Shift Schedule Assignment", ssa_name)
-    if hasattr(doc, "create_shifts"):
-        start = getdate(start_date)
-        if end_date:
-            doc.create_shifts(start, getdate(end_date))
+    if not hasattr(doc, "create_shifts"):
+        return
+    start = getdate(start_date)
+    end = getdate(end_date)
+    doc.create_shifts(start, end)
 
 
 _CLEAR_SAMPLE_CAP = 10
+
+# Matches HRMS ShiftScheduleAssignment.create_shifts when end_date is omitted.
+DEFAULT_SHIFT_GENERATION_DAYS = 90
+
+
+def shift_generation_end_date(effective, generate_through=None):
+    """End date for create_shifts: explicit generate_through or HRMS default window."""
+    start = getdate(effective)
+    if generate_through is not None and str(generate_through).strip():
+        end = getdate(generate_through)
+        if end < start:
+            frappe.throw("generate_through must be on or after create_shifts_after")
+        if (end - start).days > 365:
+            frappe.throw("generate_through cannot be more than 365 days after create_shifts_after")
+        return end
+    return add_days(start, DEFAULT_SHIFT_GENERATION_DAYS)
 
 
 def _list_employee_shift_assignment_names(employee: str) -> list[str]:

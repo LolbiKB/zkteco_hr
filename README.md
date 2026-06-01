@@ -83,7 +83,7 @@ Calendar filter semantics (Shift Assignment docstatus, leave, flags): see `zktec
   - `zkteco_hr.attendance_engine.schedule_api.get_holiday_preview(employee, start_date, end_date)`
   - `zkteco_hr.attendance_engine.schedule_api.apply_weekly_schedule(employee, week_pattern, create_shifts_after, generate_through, confirm_create)`
 
-Effective-from defaults to **tomorrow** (site date).
+Effective-from defaults to **tomorrow** (site date). On save, HRMS **`create_shifts`** runs for each new SSA through the chosen **Generate through** date, or **90 days** after effective-from when open-ended (same default as Desk). HRMS background jobs can extend further later.
 
 **Policy:** Save is allowed only when the employee has **no active SSA** (greenfield setup). If SSAs already exist, the wizard is **preview-only** — disable old SSAs and adjust Shift Assignments in Desk, then return after cleanup.
 

@@ -3,7 +3,11 @@ import { format, isSameDay } from "date-fns";
 import { useEffect, useMemo, useRef } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatDayCheckinTimeRange, minutesFromDateTime } from "@/lib/attendanceTime";
+import {
+  formatDayCheckinTimeRange,
+  minutesFromDateTime,
+  parseTimeToMinutes,
+} from "@/lib/attendanceTime";
 import { computeWeekTimelineWindow, weekTimelineCanvasHeightPct } from "@/lib/attendancePunches";
 import { cn } from "@/lib/utils";
 import { DayCell } from "@/ui/DayTimeline";
@@ -93,6 +97,17 @@ export function WeekView(props: WeekViewProps) {
       if (info?.last_out) {
         const m = minutesFromDateTime(info.last_out);
         if (m != null) mins.push(m);
+      }
+      const shift = info?.shift;
+      if (shift?.shift_assigned) {
+        const start = parseTimeToMinutes(shift.start_time ?? null);
+        const end = parseTimeToMinutes(shift.end_time ?? null);
+        if (start != null) mins.push(start);
+        if (end != null) mins.push(end);
+        const lunchStart = parseTimeToMinutes(shift.lunch_start ?? null);
+        const lunchEnd = parseTimeToMinutes(shift.lunch_end ?? null);
+        if (lunchStart != null) mins.push(lunchStart);
+        if (lunchEnd != null) mins.push(lunchEnd);
       }
     }
     return computeWeekTimelineWindow(mins);

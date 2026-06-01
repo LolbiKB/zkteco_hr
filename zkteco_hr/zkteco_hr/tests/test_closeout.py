@@ -190,6 +190,56 @@ class TestDeviceCloseoutWebhook(unittest.TestCase):
         enqueue.assert_called_once()
 
 
+class TestLateAndEarlyFlags(unittest.TestCase):
+    @patch("zkteco_hr.attendance_engine.closeout.evaluate_lunch_flags", return_value=[])
+    @patch("zkteco_hr.attendance_engine.closeout._insert_flag")
+    @patch("zkteco_hr.attendance_engine.closeout._delete_auto_flags_for_employee_date")
+    @patch("zkteco_hr.attendance_engine.closeout._get_shift_meta")
+    @patch("zkteco_hr.attendance_engine.closeout._get_checkins_for_day")
+    @patch("zkteco_hr.attendance_engine.closeout._get_shift_assignment")
+    @patch("zkteco_hr.attendance_engine.closeout.frappe.get_cached_doc")
+    def test_closeout_late_start_and_left_early(
+        self,
+        get_cached_doc,
+        get_shift,
+        get_checkins,
+        get_shift_meta,
+        _delete_flags,
+        insert_flag,
+        _lunch,
+    ):
+        from datetime import datetime
+
+        from zkteco_hr.attendance_engine.closeout import _generate_for_employee_date
+
+        employee = MagicMock()
+        employee.branch = "BRANCH-A"
+        employee.company = "Test Co"
+        get_cached_doc.return_value = employee
+        get_shift.return_value = {"shift_type": "FT_0800_1700"}
+        get_shift_meta.return_value = {
+            "start_time": dt_time(8, 0),
+            "end_time": dt_time(17, 0),
+            "custom_grace_minutes": 10,
+            "custom_lunch_start": None,
+            "custom_lunch_end": None,
+        }
+        get_checkins.return_value = [
+            {"name": "IN-1", "time": datetime(2026, 5, 27, 8, 30), "custom_device_branch": "BRANCH-A"},
+            {"name": "OUT-1", "time": datetime(2026, 5, 27, 16, 0), "custom_device_branch": "BRANCH-A"},
+        ]
+
+        _generate_for_employee_date(
+            employee="EMP-1",
+            attendance_date=date(2026, 5, 27),
+            include_unnotified_absence=False,
+        )
+
+        flag_codes = [call.kwargs["flag_code"] for call in insert_flag.call_args_list]
+        self.assertIn("LATE_START", flag_codes)
+        self.assertIn("LEFT_EARLY", flag_codes)
+
+
 class TestDeviceCloseoutFlags(unittest.TestCase):
     @patch("zkteco_hr.attendance_engine.closeout._insert_flag")
     @patch("zkteco_hr.attendance_engine.closeout._generate_for_employee_date")

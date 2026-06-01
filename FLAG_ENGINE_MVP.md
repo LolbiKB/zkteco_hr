@@ -58,6 +58,7 @@ Do **not** duplicate logic in `closeout.py`. All callers import this module:
 | Flag | When | `day_closed` | Requires |
 |------|------|----------------|----------|
 | `LATE_START` | Intraday + closeout | 0 / 1 | On-shift; `Shift Type.start_time`, `custom_grace_minutes` |
+| `LEFT_EARLY` | Closeout | 1 | On-shift; ≥2 checkins; last punch before `end_time − grace` |
 | `NO_CHECKIN_YET` | Intraday only | 0 | On-shift; no checkins; after start + grace (default 2h); no open device alert; no `DELIVERY_FAILED` today |
 | `OFF_SHIFT_PUNCH` | Closeout | 1 | **Off-shift** (no assignment) but has checkins |
 | `MISSING_IN_OR_OUT` | Closeout | 1 | On-shift; exactly one checkin |

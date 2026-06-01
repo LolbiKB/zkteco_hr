@@ -29,6 +29,7 @@ import {
   sortCheckinsByTime,
   type SegmentInspectorItem,
 } from "@/lib/segmentInspector";
+import { formatFlagLabel } from "@/lib/flagLabels";
 import { cn } from "@/lib/utils";
 import { DeviceAlertRow } from "@/ui/DeviceAlerts";
 
@@ -90,10 +91,12 @@ export function DayInspectorSheet(props: DayInspectorSheetProps) {
           <SheetTitle>
             {props.inspectingDate ? format(new Date(props.inspectingDate), "EEE, MMM d") : "Day"}
           </SheetTitle>
-          <SheetDescription className="flex items-center gap-2">
-            <span className="text-foreground">{props.employee}</span>
-            <Separator orientation="vertical" className="h-4" />
-            <span>Inspector</span>
+          <SheetDescription asChild>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="text-foreground">{props.employee}</span>
+              <Separator orientation="vertical" className="h-4" />
+              <span>Inspector</span>
+            </div>
           </SheetDescription>
         </SheetHeader>
 
@@ -234,7 +237,8 @@ export function DayInspectorSheet(props: DayInspectorSheetProps) {
                             </TooltipTrigger>
                             <TooltipContent>
                               <div className="text-xs">
-                                <div className="font-medium">{f.flag_code}</div>
+                                <div className="font-medium">{formatFlagLabel(f.flag_code)}</div>
+                                <div className="text-muted-foreground">{f.flag_code}</div>
                                 <div className="text-muted-foreground">
                                   {f.status ?? "OPEN"} · {f.severity ?? "WARNING"}
                                 </div>
@@ -480,15 +484,16 @@ function PunchInspectorRow(props: { checkin: Checkin; index: number; direction: 
 function FlagBadge({ flag }: { flag: Flag }) {
   const sev = flag.severity ?? "WARNING";
   const provisional = flag.is_provisional === true || flag.day_closed === 0;
+  const label = formatFlagLabel(flag.flag_code);
 
   if (provisional) {
     return (
       <Badge
         variant="outline"
         className="rounded-full border border-dashed border-amber-500/70 bg-amber-500/10 text-[11px] text-amber-950 dark:text-amber-100"
-        title="Provisional (intraday)"
+        title={`${label} (${flag.flag_code}) · provisional`}
       >
-        {flag.flag_code}
+        {label}
       </Badge>
     );
   }
@@ -504,9 +509,9 @@ function FlagBadge({ flag }: { flag: Flag }) {
           "border-amber-600 bg-amber-500/20 text-amber-950 dark:text-amber-100",
         sev === "INFO" && "border-border bg-foreground/5 text-foreground"
       )}
-      title={`Final · ${flag.status ?? "OPEN"}`}
+      title={`${label} (${flag.flag_code}) · ${flag.status ?? "OPEN"}`}
     >
-      {flag.flag_code}
+      {label}
     </Badge>
   );
 }

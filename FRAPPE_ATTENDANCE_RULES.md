@@ -124,6 +124,17 @@ Flags:
 - **MISSING_LUNCH**: no plausible lunch out/in pair detected.
 - **LATE_FROM_LUNCH**: first checkin after expected lunch end (plus grace) is late.
 
+### 5b) Early departure (flag)
+
+Applies on **on-shift** days with at least two punches.
+
+- Expected end = Shift Type `end_time`
+- Grace = `custom_grace_minutes` (same as late start)
+
+Flag: **LEFT_EARLY** if:
+
+- `last_out` exists and `last_out` < \(end − grace\)
+
 ### 6) Missing punches / insufficient data (flag)
 
 Applies on **on-shift** days.

@@ -20,6 +20,7 @@ AUTO_FLAG_CODES = [
     "NON_PRIMARY_SITE_PUNCH",
     "LATE_START",
     "LATE_FROM_LUNCH",
+    "LEFT_EARLY",
     "MISSING_LUNCH",
     "OFF_SHIFT_PUNCH",
     "MISSING_IN_OR_OUT",
@@ -31,6 +32,7 @@ DEVICE_CLOSEOUT_FLAG_CODES = [
     "NON_PRIMARY_SITE_PUNCH",
     "LATE_START",
     "LATE_FROM_LUNCH",
+    "LEFT_EARLY",
     "MISSING_LUNCH",
     "OFF_SHIFT_PUNCH",
     "MISSING_IN_OR_OUT",
@@ -49,7 +51,7 @@ FLAG_SEVERITY = {
     "NO_CHECKIN_YET": "WARNING",
     "MISSING_LUNCH": "INFO",
     "LATE_FROM_LUNCH": "WARNING",
-    "LATE_CHECKIN_AFTER_CLOSE": "INFO",
+    "LEFT_EARLY": "WARNING",
 }
 
 
@@ -406,6 +408,26 @@ def _generate_for_employee_date(
                         grace_minutes=grace,
                     )
                 )
+
+            if (
+                checkins_count >= 2
+                and last_out_dt
+                and shift_meta.get("end_time") is not None
+            ):
+                end_dt = _combine_date_time(attendance_date, shift_meta["end_time"])
+                early_threshold = end_dt - timedelta(minutes=grace)
+                evidence["shift_end"] = end_dt.isoformat()
+                evidence["early_threshold"] = early_threshold.isoformat()
+                if last_out_dt < early_threshold:
+                    flags_to_create.append(
+                        (
+                            "LEFT_EARLY",
+                            {
+                                "last_out": last_out_dt.isoformat(),
+                                "early_threshold": early_threshold.isoformat(),
+                            },
+                        )
+                    )
 
     for flag_code, extra_evidence in flags_to_create:
         _insert_flag(

@@ -35,7 +35,7 @@ import type { Day, Flag, ObservedLunch, ShiftContext } from "@/types/calendar";
 
 type Checkin = NonNullable<Day["checkins"]>[number];
 
-/** Shift schedule reference overlay (expected work window only). */
+/** Expected shift window (today: from current hour; future days: full shift). Hover for label. */
 const scheduledBandClass =
   "border-2 border-dashed border-muted-foreground/80 bg-muted/50 dark:border-muted-foreground/65 dark:bg-muted/40";
 

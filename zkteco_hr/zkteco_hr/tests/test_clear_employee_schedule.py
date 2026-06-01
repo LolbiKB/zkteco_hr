@@ -52,6 +52,43 @@ class TestClearEmployeeSchedule(unittest.TestCase):
         frappe.delete_doc = MagicMock()
         frappe.get_doc = MagicMock()
 
+    @patch("zkteco_hr.attendance_engine.schedule_resolver._count_attendance_flags", return_value=0)
+    @patch(
+        "zkteco_hr.attendance_engine.schedule_resolver._list_employee_ssa_names",
+        return_value=[],
+    )
+    @patch(
+        "zkteco_hr.attendance_engine.schedule_resolver._list_employee_shift_assignment_names",
+        return_value=["SA-1"],
+    )
+    def test_clear_deletes_linked_checkins_before_cancel(self, _sas, _ssas, _flags):
+        from zkteco_hr.attendance_engine.schedule_resolver import clear_employee_schedule
+
+        doc = MagicMock()
+        doc.docstatus = 1
+        doc.employee = "DI-1138"
+        doc.shift_type = "Morning"
+        doc.start_date = "2026-05-01"
+        doc.end_date = "2026-05-31"
+        frappe.get_doc.return_value = doc
+
+        def get_all_side_effect(doctype, filters=None, pluck=None):
+            if doctype == "Employee Checkin":
+                return ["EMP-CKIN-1"]
+            if doctype == "Attendance":
+                return []
+            return []
+
+        frappe.get_all = MagicMock(side_effect=get_all_side_effect)
+        frappe.db.table_exists = MagicMock(return_value=True)
+
+        clear_employee_schedule("DI-1138")
+
+        frappe.delete_doc.assert_any_call(
+            "Employee Checkin", "EMP-CKIN-1", force=1, ignore_permissions=True
+        )
+        doc.cancel.assert_called_once()
+
     @patch("zkteco_hr.attendance_engine.schedule_resolver._count_attendance_flags", return_value=3)
     @patch(
         "zkteco_hr.attendance_engine.schedule_resolver._list_employee_ssa_names",
@@ -66,7 +103,13 @@ class TestClearEmployeeSchedule(unittest.TestCase):
 
         doc = MagicMock()
         doc.docstatus = 1
+        doc.employee = "DI-1138"
+        doc.shift_type = "Morning"
+        doc.start_date = "2026-05-01"
+        doc.end_date = None
         frappe.get_doc.return_value = doc
+        frappe.get_all = MagicMock(return_value=[])
+        frappe.db.table_exists = MagicMock(return_value=True)
 
         result = clear_employee_schedule("DI-1138")
 
@@ -91,6 +134,9 @@ class TestClearEmployeeSchedule(unittest.TestCase):
     @patch("zkteco_hr.attendance_engine.schedule_resolver._disable_ssa")
     def test_clear_ssa_delete_link_error_disables(self, disable_ssa, _sas, _ssas, _flags):
         from zkteco_hr.attendance_engine.schedule_resolver import clear_employee_schedule
+
+        frappe.get_all = MagicMock(return_value=[])
+        frappe.db.table_exists = MagicMock(return_value=True)
 
         def delete_side_effect(doctype, name, force=1):
             if doctype == "Shift Schedule Assignment":

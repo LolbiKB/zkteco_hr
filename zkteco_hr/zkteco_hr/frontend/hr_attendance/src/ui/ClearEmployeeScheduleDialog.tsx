@@ -145,8 +145,9 @@ export function ClearEmployeeScheduleDialog(props: ClearEmployeeScheduleDialogPr
               </Badge>
             </div>
             <DialogDescription className="text-sm leading-relaxed">
-              Permanently removes this employee&apos;s shift assignments, schedule assignments, and
-              attendance flags. Shared Shift Types and Patterns are not deleted.
+              Permanently removes this employee&apos;s shift assignments, schedule assignments,
+              attendance flags, and linked HRMS check-ins/attendance in those shift windows. Shared
+              Shift Types and Patterns are not deleted.
             </DialogDescription>
           </DialogHeader>
 

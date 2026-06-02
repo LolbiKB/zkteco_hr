@@ -22,6 +22,7 @@ from zkteco_hr.attendance_engine.shift_grace import (
     grace_evidence,
     grace_fields_from_shift_doc,
 )
+from zkteco_hr.attendance_engine.shift_times import combine_date_time as _combine_date_time
 # Shared with hr_calendar + intraday: range-aware Shift Assignment lookup (not start_date == D only).
 from zkteco_hr.attendance_engine.shift_assignment import get_shift_assignment as _get_shift_assignment
 
@@ -667,10 +668,3 @@ def _get_checkins_for_day(*, employee: str, attendance_date):
         or []
     )
 
-
-def _combine_date_time(d, t):
-    if isinstance(d, str):
-        d = getdate(d)
-    if hasattr(t, "hour"):
-        return datetime(d.year, d.month, d.day, t.hour, t.minute, t.second)
-    return get_datetime(str(d) + " 00:00:00")

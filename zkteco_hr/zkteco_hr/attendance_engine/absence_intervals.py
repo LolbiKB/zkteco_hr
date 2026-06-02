@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import frappe
@@ -12,6 +12,7 @@ from zkteco_hr.attendance_engine.shift_grace import (
     effective_lunch_return_grace,
     effective_start_grace,
 )
+from zkteco_hr.attendance_engine.shift_times import shift_time_to_minutes
 
 
 def absence_threshold_minutes() -> int:
@@ -34,22 +35,7 @@ def _subtract_ranges(
 
 
 def _parse_shift_time_to_minutes(value) -> int | None:
-    if value is None:
-        return None
-    if hasattr(value, "hour"):
-        return value.hour * 60 + value.minute
-    text = str(value).strip()
-    parts = text.split(":")
-    if len(parts) < 2:
-        return None
-    try:
-        hh = int(parts[0])
-        mm = int(parts[1])
-    except ValueError:
-        return None
-    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
-        return None
-    return hh * 60 + mm
+    return shift_time_to_minutes(value)
 
 
 def present_hour_start_min(now: datetime | None = None) -> int:

@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 from frappe.utils import getdate
 
+from zkteco_hr.attendance_engine.shift_times import combine_date_time
+
 
 def detect_observed_lunch(
     *,
@@ -82,17 +84,6 @@ def coerce_punch_datetime(value, attendance_date) -> datetime | None:
         return get_datetime(value)
     except Exception:
         return None
-
-
-def combine_date_time(d, t) -> datetime:
-    d = getdate(d)
-    if isinstance(t, datetime):
-        return datetime(d.year, d.month, d.day, t.hour, t.minute, t.second)
-    if hasattr(t, "hour"):
-        return datetime(d.year, d.month, d.day, t.hour, t.minute, t.second)
-    from frappe.utils import get_datetime
-
-    return get_datetime(f"{d} {t}")
 
 
 def find_plausible_lunch_pair(

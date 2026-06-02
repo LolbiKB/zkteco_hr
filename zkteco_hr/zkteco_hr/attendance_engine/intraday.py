@@ -11,7 +11,6 @@ from zkteco_hr.attendance_engine.absence_flags import (
     missing_time_max_end_min_for_date,
 )
 from zkteco_hr.attendance_engine.closeout import (
-    _combine_date_time,
     _delete_auto_flags_for_employee_date,
     _get_checkins_for_day,
     _get_shift_assignment,
@@ -21,6 +20,7 @@ from zkteco_hr.attendance_engine.closeout import (
     has_open_device_closeout_alert,
 )
 from zkteco_hr.attendance_engine.shift_grace import effective_start_grace, grace_evidence
+from zkteco_hr.attendance_engine.shift_times import combine_date_time as _combine_date_time
 
 INTRADAY_FLAG_CODES = [
     "LATE_START",

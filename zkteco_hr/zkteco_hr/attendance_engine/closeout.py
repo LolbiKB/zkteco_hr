@@ -483,7 +483,8 @@ def _generate_for_employee_date(
         evidence["shift_start"] = start_dt.isoformat()
         evidence.update(grace_evidence(shift_meta))
         evidence["late_threshold"] = late_threshold.isoformat()
-        if first_in_dt and first_in_dt > late_threshold:
+        # Only flag LATE_START when there is a complete IN/OUT pair (≥2 punches).
+        if checkins_count >= 2 and first_in_dt and first_in_dt > late_threshold:
             flags_to_create.append(
                 (
                     "LATE_START",

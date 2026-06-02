@@ -369,6 +369,55 @@ class TestLateAndEarlyFlags(unittest.TestCase):
         flag_codes = [call.kwargs["flag_code"] for call in insert_flag.call_args_list]
         self.assertNotIn("LATE_START", flag_codes)
 
+    @patch("zkteco_hr.attendance_engine.closeout.evaluate_record_issue_flags", return_value=[])
+    @patch("zkteco_hr.attendance_engine.closeout.evaluate_missing_time_flags", return_value=[])
+    @patch("zkteco_hr.attendance_engine.closeout.evaluate_lunch_flags", return_value=[])
+    @patch("zkteco_hr.attendance_engine.closeout._insert_flag")
+    @patch("zkteco_hr.attendance_engine.closeout._delete_auto_flags_for_employee_date")
+    @patch("zkteco_hr.attendance_engine.closeout._get_shift_meta")
+    @patch("zkteco_hr.attendance_engine.closeout._get_checkins_for_day")
+    @patch("zkteco_hr.attendance_engine.closeout._get_shift_assignment")
+    @patch("zkteco_hr.attendance_engine.closeout.frappe.get_cached_doc")
+    def test_late_start_suppressed_with_single_punch(
+        self,
+        get_cached_doc,
+        get_shift,
+        get_checkins,
+        get_shift_meta,
+        _delete_flags,
+        insert_flag,
+        _lunch,
+        _missing,
+        _record,
+    ):
+        from datetime import datetime
+
+        from zkteco_hr.attendance_engine.closeout import _generate_for_employee_date
+
+        employee = MagicMock()
+        employee.branch = "BRANCH-A"
+        employee.company = "Test Co"
+        get_cached_doc.return_value = employee
+        get_shift.return_value = {"shift_type": "FT_0800_1700"}
+        get_shift_meta.return_value = self._shift_meta_with_grace(
+            custom_grace_minutes=0,
+            late_entry_grace_period=0,
+            early_exit_grace_period=0,
+        )
+        # Only one punch — no complete pair, no LATE_START even though it's after shift start.
+        get_checkins.return_value = [
+            {"name": "IN-1", "time": datetime(2026, 5, 27, 9, 0), "custom_device_branch": "BRANCH-A"},
+        ]
+
+        _generate_for_employee_date(
+            employee="EMP-1",
+            attendance_date=date(2026, 5, 27),
+            include_unnotified_absence=False,
+        )
+
+        flag_codes = [call.kwargs["flag_code"] for call in insert_flag.call_args_list]
+        self.assertNotIn("LATE_START", flag_codes)
+
 
 class TestDeviceCloseoutFlags(unittest.TestCase):
     @patch("zkteco_hr.attendance_engine.closeout._on_shift_zero_checkin_employees_at_branch", return_value=[])

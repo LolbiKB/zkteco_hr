@@ -23,9 +23,7 @@ class TestLunchFlags(unittest.TestCase):
         flags = evaluate_lunch_flags(
             checkins=checkins, shift_meta=meta, attendance_date=d, grace_minutes=15
         )
-        codes = [c for c, _ in flags]
-        self.assertIn("MISSING_LUNCH", codes)
-        self.assertNotIn("LATE_FROM_LUNCH", codes)
+        self.assertEqual(flags, [])
 
     def test_no_flags_when_lunch_out_in_present(self):
         from zkteco_hr.attendance_engine.lunch_flags import evaluate_lunch_flags

@@ -150,12 +150,14 @@ class TestMatchShiftType(unittest.TestCase):
     @patch("zkteco_hr.attendance_engine.schedule_resolver.frappe.get_all")
     @patch("zkteco_hr.attendance_engine.schedule_resolver.frappe.db.table_exists")
     @patch("zkteco_hr.attendance_engine.schedule_resolver.frappe.db.has_column")
-    def test_no_match_returns_create(self, has_column, table_exists, get_all):
+    @patch("zkteco_hr.attendance_engine.schedule_resolver.frappe.db.exists")
+    def test_no_match_returns_create(self, exists, has_column, table_exists, get_all):
         from zkteco_hr.attendance_engine.schedule_resolver import match_shift_type
 
         table_exists.return_value = True
         has_column.return_value = True
         get_all.return_value = []
+        exists.return_value = False
 
         result = match_shift_type(
             {

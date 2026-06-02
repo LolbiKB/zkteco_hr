@@ -64,16 +64,7 @@ def evaluate_lunch_flags(
         punch_times, lunch_start_dt=lunch_start_dt, lunch_end_dt=lunch_end_dt, grace=grace
     )
     if lunch_pair is None:
-        flags.append(
-            (
-                "MISSING_LUNCH",
-                {
-                    **expected_lunch,
-                    "reason": "no_plausible_lunch_out_in_pair",
-                    "punch_count": len(punch_times),
-                },
-            )
-        )
+        return []
     else:
         _lunch_out, lunch_in = lunch_pair
         if lunch_in > return_threshold:

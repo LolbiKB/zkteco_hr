@@ -19,11 +19,8 @@ from zkteco_hr.attendance_engine.closeout import (
     has_delivery_or_record_failure_today,
     has_open_device_closeout_alert,
 )
-from zkteco_hr.attendance_engine.shift_grace import effective_start_grace, grace_evidence
-from zkteco_hr.attendance_engine.shift_times import combine_date_time as _combine_date_time
 
 INTRADAY_FLAG_CODES = [
-    "LATE_START",
     "MISSING_TIME",
     "NON_PRIMARY_SITE_PUNCH",
 ]
@@ -108,47 +105,22 @@ def refresh_intraday_flags_for_employee_date(employee: str, attendance_date):
                 day_closed=0,
             )
 
-    if shift_meta.get("start_time") is not None:
-        start_grace = effective_start_grace(shift_meta)
-        start_dt = _combine_date_time(attendance_date, shift_meta["start_time"])
-        late_threshold = start_dt + timedelta(minutes=start_grace)
-        evidence["shift_start"] = start_dt.isoformat()
-        evidence.update(grace_evidence(shift_meta))
-        evidence["late_threshold"] = late_threshold.isoformat()
-
-        if checkins_count > 0:
-            first_in_dt = checkins[0]["time"]
-            if first_in_dt > late_threshold:
-                _insert_flag(
-                    employee=employee,
-                    company=employee_company,
-                    attendance_date=attendance_date,
-                    flag_code="LATE_START",
-                    evidence={
-                        **evidence,
-                        **grace_evidence(shift_meta),
-                        "first_in": first_in_dt.isoformat(),
-                        "late_threshold": late_threshold.isoformat(),
-                    },
-                    day_closed=0,
-                )
-
-        if not skip_absence:
-            max_end_min = missing_time_max_end_min_for_date(attendance_date)
-            for flag_code, extra in evaluate_missing_time_flags(
-                checkins=checkins,
-                shift_meta=shift_meta,
+    if not skip_absence:
+        max_end_min = missing_time_max_end_min_for_date(attendance_date)
+        for flag_code, extra in evaluate_missing_time_flags(
+            checkins=checkins,
+            shift_meta=shift_meta,
+            attendance_date=attendance_date,
+            max_end_min=max_end_min,
+        ):
+            _insert_flag(
+                employee=employee,
+                company=employee_company,
                 attendance_date=attendance_date,
-                max_end_min=max_end_min,
-            ):
-                _insert_flag(
-                    employee=employee,
-                    company=employee_company,
-                    attendance_date=attendance_date,
-                    flag_code=flag_code,
-                    evidence={**evidence, **extra},
-                    day_closed=0,
-                )
+                flag_code=flag_code,
+                evidence={**evidence, **extra},
+                day_closed=0,
+            )
 
 
 def enqueue_intraday_refresh(employee: str, attendance_date):

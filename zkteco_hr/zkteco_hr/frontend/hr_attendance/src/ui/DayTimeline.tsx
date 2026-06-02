@@ -64,8 +64,7 @@ export function DayCell(props: {
         "group relative min-h-0 border-b border-r border-border/60 p-3 pl-5 text-left outline-hidden transition-colors hover:bg-muted/20 focus:bg-muted/20 focus:ring-2 focus:ring-ring/40",
         props.dense ? "h-full" : "h-full",
         props.outside && "bg-muted/10 text-muted-foreground",
-        props.today && "bg-primary/3 ring-1 ring-primary/20",
-        holiday && "bg-amber-500/[0.04]"
+        props.today && "bg-primary/3 ring-1 ring-primary/20"
       )}
     >
       <div className={cn("grid h-full gap-2", props.dense ? "grid-rows-[20px_1fr]" : "grid-rows-[1fr]")}>
@@ -89,7 +88,16 @@ export function DayCell(props: {
 
         <div className="min-h-0 h-full">
           {holiday ? (
-            <HolidayBoard description={holiday.description} weeklyOff={holiday.weekly_off} />
+            <div
+              className={cn(
+                "relative rounded-xl bg-muted/25",
+                props.dense ? "" : "min-h-0 h-full"
+              )}
+            >
+              <div className="absolute inset-2">
+                <HolidayBoard description={holiday.description} weeklyOff={holiday.weekly_off} />
+              </div>
+            </div>
           ) : (
             <DayDayTrack
               firstIn={props.info?.first_in ?? null}
@@ -115,7 +123,7 @@ function HolidayBoard(props: { description: string; weeklyOff: boolean }) {
 
   // Show as multiple vertical “lines” using columns; keep it stable and non-wrapping in height.
   return (
-    <div className="relative h-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-2">
+    <div className="relative h-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-2 shadow-sm">
       <div className="text-[15px] leading-snug text-amber-950/80 dark:text-amber-100/80 whitespace-normal break-words line-clamp-6">
         {text}
       </div>

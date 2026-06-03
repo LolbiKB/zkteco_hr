@@ -25,7 +25,7 @@ type Checkin = NonNullable<Day["checkins"]>[number];
 
 export type SegmentInspectorItem =
   | { kind: "segment"; segment: AttendanceSegment }
-  | { kind: "unpaired"; checkin: Checkin; isRogue: boolean }
+  | { kind: "unpaired"; checkin: Checkin; isRogue: boolean; offShift?: boolean }
   | {
       kind: "openSession";
       checkin: Checkin;
@@ -82,6 +82,7 @@ export function buildSegmentInspectorItems(
           dateKey: options.dateKey,
           shiftEndMin,
           deviceSync: options.deviceSync,
+          shiftAssigned: options.shift?.shift_assigned === true,
         })
       : [];
 
@@ -124,6 +125,18 @@ export function buildSegmentInspectorItems(
             confirmedEndMin: row.confirmedEndMin,
             uncertainEndMin: row.uncertainEndMin,
             syncLagging: row.syncLagging,
+          },
+        });
+        continue;
+      }
+      if (row.kind === "offShiftPunch") {
+        items.push({
+          sortMin: row.startMin,
+          item: {
+            kind: "unpaired",
+            checkin: row.checkin,
+            isRogue: false,
+            offShift: true,
           },
         });
         continue;

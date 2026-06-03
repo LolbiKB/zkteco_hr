@@ -171,7 +171,7 @@ export function deriveUnpairedPunches(
   return unpaired;
 }
 
-export type PunchPresentationKind = "rogue" | "openSession" | "unpairedError";
+export type PunchPresentationKind = "rogue" | "openSession" | "unpairedError" | "offShiftPunch";
 
 export type DeviceSyncStatus = {
   device_sn: string;
@@ -264,6 +264,8 @@ export function classifyUnpairedPresentations(
     now?: Date;
     shiftEndMin?: number | null;
     deviceSync?: DeviceSyncStatus[];
+    /** When false, never show open session; unpaired punches are off-shift. */
+    shiftAssigned?: boolean;
   },
   helpers: {
     parseTime: (value: string) => Date;
@@ -289,6 +291,7 @@ export function classifyUnpairedPresentations(
 
   const nowMin = minutesNow(now);
   const capEnd = Math.min(nowMin, options.shiftEndMin ?? 24 * 60);
+  const onShift = options.shiftAssigned === true;
 
   const presentations: PunchPresentation[] = [];
 
@@ -314,6 +317,7 @@ export function classifyUnpairedPresentations(
       checkin.time === lastCheckin.time;
 
     const isOpenSession =
+      onShift &&
       options.dateKey >= todayKey &&
       isLastPunch &&
       !isInsidePairedSegment(startMin, segments);
@@ -338,7 +342,7 @@ export function classifyUnpairedPresentations(
     }
 
     presentations.push({
-      kind: "unpairedError",
+      kind: onShift ? "unpairedError" : "offShiftPunch",
       checkin,
       branch,
       startMin,

@@ -253,7 +253,7 @@ test("classify trailing punch on today as open session", () => {
   const helpers = { parseTime, minutesFromDateTime, clamp };
   const rows = classifyUnpairedPresentations(
     checkins,
-    { dateKey: "2026-06-03", now, shiftEndMin: 17 * 60 },
+    { dateKey: "2026-06-03", now, shiftEndMin: 17 * 60, shiftAssigned: true },
     helpers
   );
 
@@ -296,6 +296,7 @@ test("sync horizon caps open session confirmed end", () => {
           pending_count: 1,
         },
       ],
+      shiftAssigned: true,
     },
     { parseTime, minutesFromDateTime, clamp }
   );
@@ -304,4 +305,34 @@ test("sync horizon caps open session confirmed end", () => {
   assert.equal(rows[0]!.confirmedEndMin, 14 * 60);
   assert.equal(rows[0]!.uncertainEndMin, 15 * 60 + 30);
   assert.equal(rows[0]!.syncLagging, true);
+});
+
+test("classify off-shift day unpaired punch as offShiftPunch not open session", () => {
+  const checkins = [punch("2026-06-08 09:00:00", "BRANCH-A")];
+  const now = new Date("2026-06-08T10:00:00");
+  const rows = classifyUnpairedPresentations(
+    checkins,
+    { dateKey: "2026-06-08", now, shiftAssigned: false },
+    { parseTime, minutesFromDateTime, clamp }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.kind, "offShiftPunch");
+});
+
+test("classify does not open session on off-shift today", () => {
+  const checkins = [
+    punch("2026-06-08 08:00:00", "BRANCH-A"),
+    punch("2026-06-08 12:00:00", "BRANCH-A"),
+    punch("2026-06-08 13:00:00", "BRANCH-A"),
+  ];
+  const now = new Date("2026-06-08T15:30:00");
+  const rows = classifyUnpairedPresentations(
+    checkins,
+    { dateKey: "2026-06-08", now, shiftAssigned: false },
+    { parseTime, minutesFromDateTime, clamp }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.kind, "offShiftPunch");
 });

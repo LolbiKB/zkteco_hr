@@ -164,7 +164,11 @@ function DayDayTrack(props: {
   windowStartMin?: number;
   windowEndMin?: number;
 }) {
-  const color = "bg-emerald-600";
+  const onShift = props.shift?.shift_assigned === true;
+  const color = onShift ? "bg-emerald-600" : "bg-amber-600/80";
+  const offShiftSegmentClass = onShift
+    ? cn(color, "shadow-sm ring-1 ring-foreground/10")
+    : "border border-dashed border-amber-600/50 bg-amber-500/25 shadow-sm ring-1 ring-amber-600/20";
   const openSessionUncertainClass =
     "border border-dashed border-amber-500/50 bg-amber-500/20 dark:bg-amber-500/15";
 
@@ -182,13 +186,18 @@ function DayDayTrack(props: {
           dateKey: props.dateKey,
           shiftEndMin,
           deviceSync: props.deviceSync,
+          shiftAssigned: props.shift?.shift_assigned === true,
         },
         punchHelpers
       ),
-    [props.checkins, props.dateKey, props.deviceSync, shiftEndMin]
+    [props.checkins, props.dateKey, props.deviceSync, props.shift?.shift_assigned, shiftEndMin]
   );
   const errorPresentations = useMemo(
-    () => punchPresentations.filter((row) => row.kind !== "openSession"),
+    () => punchPresentations.filter((row) => row.kind === "rogue" || row.kind === "unpairedError"),
+    [punchPresentations]
+  );
+  const offShiftPresentations = useMemo(
+    () => punchPresentations.filter((row) => row.kind === "offShiftPunch"),
     [punchPresentations]
   );
   const openSessions = useMemo(
@@ -329,6 +338,11 @@ function DayDayTrack(props: {
         className={cn("relative rounded-xl bg-muted/25", props.dense ? "" : "min-h-0 flex-1")}
         style={props.dense ? { height: 96 } : undefined}
       >
+        {!onShift && props.checkins.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center px-3">
+            <span className="text-xs text-muted-foreground">Day off</span>
+          </div>
+        ) : null}
         <div
           className="absolute inset-y-2 w-px bg-border/60"
           style={{ left: "calc(50% - 0.5px)" }}
@@ -351,6 +365,24 @@ function DayDayTrack(props: {
               </TooltipTrigger>
               <TooltipContent side="right" className="text-xs">
                 {label} · {format(parseDateTimeLocal(row.checkin.time), "h:mm a")}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+
+        {offShiftPresentations.map((row, idx) => {
+          const m = row.startMin;
+          const topPct = pctFromMinute(m);
+          return (
+            <Tooltip key={`off-${row.checkin.time}-${idx}`}>
+              <TooltipTrigger asChild>
+                <div
+                  className="absolute inset-x-2 h-1 rounded-full border border-amber-600/60 bg-amber-500/40 shadow-sm"
+                  style={{ top: `calc(${topPct}% - 2px)` }}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Off-shift punch · {format(parseDateTimeLocal(row.checkin.time), "h:mm a")}
               </TooltipContent>
             </Tooltip>
           );
@@ -402,7 +434,10 @@ function DayDayTrack(props: {
 
         {props.dense && span && segments.length === 0 ? (
           <div
-            className={cn("absolute left-1/2 w-[12px] -translate-x-1/2 rounded-sm", color)}
+            className={cn(
+              "absolute left-1/2 w-[12px] -translate-x-1/2 rounded-sm",
+              onShift ? color : "border border-dashed border-amber-600/50 bg-amber-500/25"
+            )}
             style={{
               top: `calc(${span.topPct}% + 8px)`,
               height: `calc(${span.heightPct}% - 16px)`,
@@ -483,8 +518,8 @@ function DayDayTrack(props: {
                 <HoverCardTrigger asChild>
                   <div
                     className={cn(
-                      "absolute inset-x-2 rounded-sm shadow-sm ring-1 ring-foreground/10",
-                      color
+                      "absolute inset-x-2 rounded-sm",
+                      onShift ? cn(color, "shadow-sm ring-1 ring-foreground/10") : offShiftSegmentClass
                     )}
                     style={{
                       top: `${topPct}%`,

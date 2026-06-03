@@ -373,7 +373,9 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
 
     device_sync = []
     if employee_branch and frappe.db.table_exists("Device Sync Status"):
-        device_sync = (
+        from zkteco_hr.attendance_engine.device_sync import dedupe_device_sync_for_calendar
+
+        raw_sync = (
             frappe.get_all(
                 "Device Sync Status",
                 filters={
@@ -381,6 +383,7 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
                     "local_date": ["between", [start, end]],
                 },
                 fields=[
+                    "name",
                     "device_sn",
                     "branch",
                     "local_date",
@@ -388,16 +391,19 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
                     "last_delivered_at",
                     "pending_count",
                     "last_error",
+                    "modified",
                 ],
-                order_by="local_date asc, device_sn asc",
+                order_by="modified desc",
             )
             or []
         )
+        device_sync = dedupe_device_sync_for_calendar(raw_sync)
         for row in device_sync:
             if row.get("local_date"):
                 row["local_date"] = str(row["local_date"])
             row["last_device_log_at"] = _format_datetime(row.get("last_device_log_at"))
             row["last_delivered_at"] = _format_datetime(row.get("last_delivered_at"))
+            row.pop("modified", None)
 
     flags = []
     if frappe.db.table_exists("Attendance Flag"):

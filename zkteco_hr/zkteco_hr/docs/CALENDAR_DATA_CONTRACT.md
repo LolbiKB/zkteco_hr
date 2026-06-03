@@ -124,7 +124,7 @@ Flag object (in `day.flags[]`):
 }
 ```
 
-Written by bridge via `notify_device_sync_status`. See [`docs/BRIDGE_AGENT_HANDOFF.md`](../../../docs/BRIDGE_AGENT_HANDOFF.md).
+Written by bridge via `notify_device_sync_status` (one Frappe row per `device_sn` + `local_date`). Calendar returns **at most one** object per device+date (latest `modified`). See [`docs/BRIDGE_AGENT_HANDOFF.md`](../../../docs/BRIDGE_AGENT_HANDOFF.md).
 
 ## HR flag review (UI)
 

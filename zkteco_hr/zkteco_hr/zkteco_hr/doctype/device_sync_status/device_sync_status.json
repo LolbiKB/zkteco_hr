@@ -112,5 +112,11 @@
   "sort_field": "modified",
   "sort_order": "DESC",
   "states": [],
-  "track_changes": 1
+  "track_changes": 1,
+  "index": [
+    {
+      "fields": ["device_sn", "local_date"],
+      "unique": 1
+    }
+  ]
 }

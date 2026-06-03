@@ -189,7 +189,7 @@ Errors: standard Frappe `exc` / `message` (401 auth, 400 validation).
 2. **Update after every delivery cycle** — whenever one or more checkins are inserted (or attempted), refresh watermarks from device cursor + delivery cursor.
 3. **Heartbeat when idle** — during business hours, POST at least every **1–5 minutes** per **online** device, even if `pending_count = 0`, so HR knows the device was reachable.
 4. **Device offline** — either stop posting (watermark goes stale) **or** post with unchanged `last_delivered_at`, best-known `last_device_log_at`, and `last_error` (e.g. `device_unreachable`).
-5. **One logical row per (`device_sn`, `local_date`)** — upsert; Frappe doc name pattern: `DSS-{scrub(device_sn)}-{local_date}`.
+5. **One logical row per (`device_sn`, `local_date`)** — upsert on `(device_sn, local_date)`; stable doc name `DSS-{scrub(device_sn)}-{local_date}`; each POST merges any legacy duplicates then `get_doc` + `save`. DB unique index on `(device_sn, local_date)`.
 6. **Does not replace closeout** — keep EOD `notify_device_closeout_status` + `undelivered[]`.
 
 ### 3.6 When to call (checklist)
@@ -317,11 +317,21 @@ After Frappe implements calendar API changes:
 | Item | Status |
 |------|--------|
 | DocType `Device Sync Status` | **In repo** — run `bench migrate` on site |
-| `notify_device_sync_status` webhook | **In repo** — validates branch + watermark order |
-| `device_sync[]` in `get_employee_calendar` | **In repo** |
+| `notify_device_sync_status` webhook | **In repo** — upsert + duplicate merge; validates branch + watermark order |
+| `device_sync[]` in `get_employee_calendar` | **In repo** — one row per `(device_sn, local_date)` (latest `modified`) |
+| Unique `(device_sn, local_date)` | **In repo** — DocType index + `validate` |
 | HR timeline open-session + sync cap | **In repo** — built `hr_attendance` assets |
 
 **Site deploy:** `bench migrate` then rebuild/pull app. Bridge can POST immediately after migrate.
+
+**One-off duplicate cleanup** (e.g. three rows for `PYA8254100003` / `2026-06-03`):
+
+```python
+from zkteco_hr.attendance_engine.device_sync import merge_device_sync_duplicates
+merge_device_sync_duplicates("PYA8254100003", "2026-06-03")
+```
+
+**Verify:** List `Device Sync Status` with `device_sn = PYA8254100003`, `local_date = 2026-06-03` → **1 row**. Bridge Supabase `device_frappe_sync_notify` for same keys → **1 row**, `frappe_sync_status` usually `success` after HTTP 200.
 
 **Related files:**
 

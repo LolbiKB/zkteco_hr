@@ -185,20 +185,42 @@ class TestShiftAssignmentQuery(unittest.TestCase):
         self.assertNotIn("schedule_superseded", row)
         frappe.get_all.assert_called_once()
 
+    @patch("zkteco_hr.attendance_engine.shift_assignment._get_shift_assignment_query")
     @patch("zkteco_hr.attendance_engine.shift_assignment._get_shift_assignment_hrms")
-    def test_hrms_path_used_when_available(self, hrms_mock):
+    def test_hrms_without_db_row_is_not_assigned(self, hrms_mock, query_mock):
+        """Weekly off: HRMS may return a shift even when no SA row exists for that date."""
         from zkteco_hr.attendance_engine.shift_assignment import get_shift_assignment
 
         hrms_mock.return_value = {
             "name": "SA-HRMS",
             "shift_type": "FT_A",
-            "start_date": "2026-05-27",
-            "end_date": "2026-06-06",
+            "start_date": "2026-06-07",
+            "end_date": "2026-06-07",
         }
+        query_mock.return_value = None
 
-        row = get_shift_assignment(employee="EMP-1", attendance_date=date(2026, 5, 27))
-        self.assertEqual(row["shift_type"], "FT_A")
-        hrms_mock.assert_called_once()
+        row = get_shift_assignment(employee="EMP-1", attendance_date=date(2026, 6, 7))
+        self.assertIsNone(row)
+
+    @patch("zkteco_hr.attendance_engine.shift_assignment._get_shift_assignment_hrms")
+    def test_query_path_used_for_assigned_day(self, hrms_mock):
+        from zkteco_hr.attendance_engine.shift_assignment import get_shift_assignment
+
+        hrms_mock.return_value = None
+
+        with patch(
+            "zkteco_hr.attendance_engine.shift_assignment._get_shift_assignment_query"
+        ) as query_mock:
+            query_mock.return_value = {
+                "name": "SA-1",
+                "shift_type": "FT_A",
+                "start_date": "2026-06-02",
+                "end_date": "2026-06-06",
+            }
+            row = get_shift_assignment(employee="EMP-1", attendance_date=date(2026, 6, 3))
+            self.assertEqual(row["shift_type"], "FT_A")
+            query_mock.assert_called_once()
+            hrms_mock.assert_not_called()
 
 
 class TestShiftContextForDay(unittest.TestCase):

@@ -8,7 +8,7 @@ Policy: [`docs/FRAPPE_ATTENDANCE_RULES.md`](../../../docs/FRAPPE_ATTENDANCE_RULE
 
 | Source | Used for | Filter rule |
 |--------|----------|-------------|
-| **Shift Assignment** | Expected shift per date (`day.shift`), on-shift rules, ghost band | `docstatus == 1` (Submitted), in range (`start_date <= D`, `end_date` null or `>= D`). **Live** (`D >= site today`): `status == "Active"`. **Historical** (`D < site today`): Active first, then Inactive if no Active row (`schedule_superseded` on API). Draft assignments ignored. Prefer HRMS `get_shifts_for_date(employee, noon on D)`. |
+| **Shift Assignment** | Expected shift per date (`day.shift`), on-shift rules, ghost band | Submitted row in range (`docstatus == 1`); **Active** for today/future, **Active then Inactive** for past. **No row = pattern off** (e.g. weekly off). Lookup uses the SA table only (not HRMS `get_shifts_for_date` alone). |
 | **Shift Assignment (bounds)** | Picker `schedule_min/max`, `has_shift_assignment` | Submitted **Active only** (live schedule window — not retired slices). |
 | **Shift Schedule** (`PAT_*`) | Pattern metadata when resolving SSA | Optional strict: linked schedule `docstatus == 1`; log if draft. |
 | **Shift Schedule Assignment** | Picker `has_shift_assignment`, SSA id, date bounds fallback | No docstatus. `enabled == 1`, not expired. Dated calendar still from **Shift Assignment**. |

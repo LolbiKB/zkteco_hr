@@ -26,12 +26,12 @@ def get_shift_assignment(*, employee: str, attendance_date):
 
     Live (today/future): status must be Active when the column exists.
     Historical (past): Active first, then Inactive if no Active row (HRMS retired slices).
-    Prefers HRMS get_shifts_for_date; falls back to equivalent get_all filters.
+
+    Source of truth is the Shift Assignment table (range + status). HRMS
+    get_shifts_for_date is not used when no row exists — avoids phantom on-shift
+    days on weekly off when PAT did not generate an assignment.
     """
     attendance_date = getdate(attendance_date)
-    row = _get_shift_assignment_hrms(employee, attendance_date)
-    if row:
-        return row
     return _get_shift_assignment_query(employee, attendance_date)
 
 

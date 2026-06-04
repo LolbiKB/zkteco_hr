@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
   GenericDataTable,
@@ -17,6 +18,7 @@ interface DeviceDataTableProps {
   filters: DeviceFilters
   onFiltersChange: (filters: DeviceFilters) => void
   onRefresh?: () => void
+  toolbarLeading?: ReactNode
 }
 
 export function DeviceDataTable({
@@ -28,6 +30,7 @@ export function DeviceDataTable({
   filters,
   onFiltersChange,
   onRefresh,
+  toolbarLeading,
 }: DeviceDataTableProps) {
   return (
     <GenericDataTable
@@ -42,6 +45,7 @@ export function DeviceDataTable({
         entityNameSingular: 'device',
         searchPlaceholder: 'Search by serial number, name, or location...',
       }}
+      toolbarLeading={toolbarLeading}
       actions={{
         onRefresh,
       }}

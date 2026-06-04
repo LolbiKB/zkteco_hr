@@ -97,6 +97,7 @@ function hrSyncConfig(syncStatus?: string | null): HrSyncConfig {
     SUCCESS: { label: 'Delivered', className: 'text-green-700 dark:text-green-400', icon: CloudUpload },
     FAILED: { label: 'Failed', className: 'text-destructive', icon: CloudOff },
     PENDING: { label: 'Pending', className: 'text-amber-700 dark:text-amber-400', icon: Clock },
+    SKIPPED: { label: 'Not HR', className: 'text-muted-foreground', icon: CloudOff },
   }
   return config[status] || config.PENDING
 }

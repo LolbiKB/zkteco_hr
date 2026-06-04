@@ -44,6 +44,7 @@ import {
 } from '@/hooks/use-attlog-closure'
 import { useExportAttendanceLogs } from '@/hooks/use-attendance-logs'
 import { attlogClosureLabel } from '@/lib/attlog-closure-display'
+import { useAuth } from '@/contexts/auth-context'
 import {
   formatCheckTimeForLog,
   formatIngestedTime,
@@ -84,6 +85,7 @@ function closureCalendarCellClass(status: string | undefined): string {
 
 export function DeviceAttlogTab({ deviceSn, isOnline, enabled }: DeviceAttlogTabProps) {
   const [purgeOpen, setPurgeOpen] = useState(false)
+  const { isSuperAdmin } = useAuth()
   const queryClient = useQueryClient()
   const { data: meta } = useDeviceAttlogMeta(deviceSn, enabled)
   const { data: closureHistory = [], isLoading: closureLoading } = useDeviceAttlogClosureHistory(
@@ -330,6 +332,7 @@ export function DeviceAttlogTab({ deviceSn, isOnline, enabled }: DeviceAttlogTab
           <Download className="h-3.5 w-3.5 mr-1" />
           Export CSV
         </Button>
+        {isSuperAdmin && (
         <Dialog open={purgeOpen} onOpenChange={setPurgeOpen}>
           <DialogTrigger asChild>
             <Button
@@ -370,6 +373,7 @@ export function DeviceAttlogTab({ deviceSn, isOnline, enabled }: DeviceAttlogTab
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div>

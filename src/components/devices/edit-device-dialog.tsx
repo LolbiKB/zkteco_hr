@@ -20,8 +20,11 @@ import {
 } from '@/components/ui/select'
 import { X, Plus, Loader2, ShieldCheck } from 'lucide-react'
 import type { DeviceEntry } from '@/services/device-service'
+import { DeviceService } from '@/services/device-service'
 import { useFrappeBranches } from '@/hooks/use-frappe-branches'
 import { ConfirmationDialog } from '@/components/ui/base-modal'
+import { useAuth } from '@/contexts/auth-context'
+import { notifyError, notifySuccess } from '@/lib/toast'
 
 interface EditDeviceDialogProps {
   device: DeviceEntry | null
@@ -82,9 +85,11 @@ export function EditDeviceDialog({
   isSaving = false,
 }: EditDeviceDialogProps) {
   const { data: branches = [], isLoading: isLoadingBranches } = useFrappeBranches()
+  const { isSuperAdmin } = useAuth()
   
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
+  const [approving, setApproving] = useState(false)
   const [isRegistrar, setIsRegistrar] = useState(false)
   const [capabilities, setCapabilities] = useState<string[]>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -115,9 +120,29 @@ export function EditDeviceDialog({
     return updates
   })()
 
+  const handleApproveSn = async () => {
+    if (!device) return
+    setApproving(true)
+    try {
+      await DeviceService.approveDevice(device.serial_number)
+      notifySuccess('Device approved', `${device.serial_number} can now connect.`)
+    } catch (e) {
+      notifyError('Approve failed', e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setApproving(false)
+    }
+  }
+
   const handleConfirmSave = async () => {
     if (!device || Object.keys(pendingUpdates).length === 0) return
-    await onSave(device.serial_number, pendingUpdates as any)
+    if (Object.keys(pendingUpdates).length > 0) {
+      await onSave(device.serial_number, pendingUpdates as {
+        name?: string
+        location?: string
+        is_registrar?: boolean
+        registrar_capabilities?: string[]
+      })
+    }
     setConfirmOpen(false)
     onOpenChange(false)
   }
@@ -202,6 +227,17 @@ export function EditDeviceDialog({
                 </Select>
               )}
             </div>
+
+            {device?.connection_status === 'pending' && isSuperAdmin && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 flex items-center justify-between gap-2">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Serial pending approval — device cannot sync until approved.
+                </p>
+                <Button size="sm" onClick={handleApproveSn} disabled={approving}>
+                  {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approve SN'}
+                </Button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">

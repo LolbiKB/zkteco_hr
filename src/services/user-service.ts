@@ -64,6 +64,8 @@ export interface UserEntry {
   frappe_image_path?: string | null
   photo_synced_at?: string | null
   privilege: number | null
+  is_device_admin?: boolean
+  device_menu_password?: string | null
   status?: 'active' | 'inactive' | 'compromised' | 'archived'
   created_at: string | null
   updated_at: string | null

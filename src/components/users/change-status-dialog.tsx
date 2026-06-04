@@ -22,6 +22,7 @@ import type { UserEntry } from '@/services/user-service'
 import { UserService } from '@/services/user-service'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { useAuth } from '@/contexts/auth-context'
 
 interface ChangeStatusDialogProps {
   user: UserEntry | null
@@ -41,6 +42,8 @@ const statusDescriptions: Record<UserStatus, string> = {
 export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDialogProps) {
   const [selectedStatus, setSelectedStatus] = useState<UserStatus>('active')
   const queryClient = useQueryClient()
+  const { isSuperAdmin } = useAuth()
+  const deviceAdminLocked = !!user?.is_device_admin && !isSuperAdmin
 
   useEffect(() => {
     if (user?.status) {
@@ -63,7 +66,7 @@ export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDia
   })
 
   const handleSave = () => {
-    if (!user?.id) return
+    if (!user?.id || deviceAdminLocked) return
     updateStatusMutation.mutate({ userId: user.id, status: selectedStatus })
   }
 
@@ -83,6 +86,15 @@ export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDia
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {deviceAdminLocked && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                Device admin user settings can only be changed by a Super Admin. You can still sync this user to devices.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="status">New Status</Label>
             <Select value={selectedStatus} onValueChange={(value: UserStatus) => setSelectedStatus(value)}>
@@ -129,7 +141,7 @@ export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDia
         <DialogFooter>
           <Button
             onClick={handleSave}
-            disabled={!hasChanged || updateStatusMutation.isPending}
+            disabled={deviceAdminLocked || !hasChanged || updateStatusMutation.isPending}
           >
             {updateStatusMutation.isPending ? (
               <>

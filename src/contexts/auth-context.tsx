@@ -2,10 +2,14 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 
+export type AdminRole = 'admin' | 'super_admin'
+
 interface AuthContextType {
   user: User | null
   session: Session | null
   isAdmin: boolean
+  adminRole: AdminRole | null
+  isSuperAdmin: boolean
   loading: boolean
   isAdminLoading: boolean
   signInWithGoogle: () => Promise<void>
@@ -18,26 +22,29 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
  * Check if the current user is an admin by querying the admin_users table directly.
  * This uses Supabase's built-in RLS (Row Level Security) - no custom API needed!
  */
-async function checkAdminStatus(session: Session | null): Promise<boolean> {
+async function checkAdminStatus(
+  session: Session | null
+): Promise<{ isAdmin: boolean; role: AdminRole | null }> {
   if (!session?.user?.email) {
-    return false
+    return { isAdmin: false, role: null }
   }
 
   try {
-    // Query admin_users table directly - RLS policy allows authenticated users to check
     const { data, error } = await supabase
       .from('admin_users')
-      .select('email')
+      .select('email, role, is_admin')
       .eq('email', session.user.email)
+      .eq('is_admin', true)
       .maybeSingle()
 
-    if (error) {
-      return false
+    if (error || !data) {
+      return { isAdmin: false, role: null }
     }
 
-    return !!data
+    const role = data.role === 'super_admin' ? 'super_admin' : 'admin'
+    return { isAdmin: true, role }
   } catch (error) {
-    return false
+    return { isAdmin: false, role: null }
   }
 }
 
@@ -45,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdminLoading, setIsAdminLoading] = useState(true)
 
@@ -52,15 +60,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAndSetAdminStatus = async (session: Session | null) => {
     if (!session?.user?.email) {
       setIsAdmin(false)
+      setAdminRole(null)
       setIsAdminLoading(false)
       return
     }
 
     try {
       const adminStatus = await checkAdminStatus(session)
-      setIsAdmin(adminStatus)
+      setIsAdmin(adminStatus.isAdmin)
+      setAdminRole(adminStatus.role)
     } catch (error) {
       setIsAdmin(false)
+      setAdminRole(null)
     } finally {
       setIsAdminLoading(false)
     }
@@ -140,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkAndSetAdminStatus(session)
       } else {
         setIsAdmin(false)
+        setAdminRole(null)
         setIsAdminLoading(false)
       }
     })
@@ -171,6 +183,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         session,
         isAdmin,
+        adminRole,
+        isSuperAdmin: adminRole === 'super_admin',
         loading,
         isAdminLoading,
         signInWithGoogle,

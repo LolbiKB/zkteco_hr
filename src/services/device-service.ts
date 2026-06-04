@@ -5,6 +5,8 @@
 import { supabase } from '@/lib/supabase'
 import { getDevicePresence } from '@/lib/device-status'
 
+const API_URL = import.meta.env.VITE_API_URL || ''
+
 // Base pagination filters
 export interface BaseFilters {
   page?: number
@@ -37,6 +39,8 @@ export interface DeviceEntry {
   face_algorithm_version?: string
   status?: 'online' | 'offline' // derived field
   last_seen_minutes?: number | null // derived field
+  comm_key?: string | null
+  connection_status?: 'pending' | 'approved' | 'rejected'
 }
 
 // API Response
@@ -421,6 +425,55 @@ export class DeviceService {
     }
 
     return response.json()
+  }
+
+  private static async authHeaders(): Promise<HeadersInit> {
+    const { data: { session } } = await supabase.auth.getSession()
+    return {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    }
+  }
+
+  /** Super Admin: set comm_key or connection_status via bridge API */
+  static async updateDeviceSecurity(
+    serialNumber: string,
+    updates: {
+      comm_key?: string | null
+      connection_status?: 'pending' | 'approved' | 'rejected'
+    }
+  ): Promise<DeviceEntry> {
+    const response = await fetch(
+      `${API_URL}/admin/devices/${encodeURIComponent(serialNumber)}/security`,
+      {
+        method: 'PATCH',
+        headers: await this.authHeaders(),
+        body: JSON.stringify(updates),
+      }
+    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(err.error || 'Failed to update device security')
+    }
+    const json = await response.json()
+    const d = json.data
+    const presence = getDevicePresence(d.last_seen)
+    return { ...d, status: presence.status, last_seen_minutes: presence.lastSeenMinutes }
+  }
+
+  static async approveDevice(serialNumber: string): Promise<DeviceEntry> {
+    const response = await fetch(
+      `${API_URL}/admin/devices/${encodeURIComponent(serialNumber)}/approve`,
+      { method: 'POST', headers: await this.authHeaders() }
+    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(err.error || 'Failed to approve device')
+    }
+    const json = await response.json()
+    const d = json.data
+    const presence = getDevicePresence(d.last_seen)
+    return { ...d, status: presence.status, last_seen_minutes: presence.lastSeenMinutes }
   }
 }
 

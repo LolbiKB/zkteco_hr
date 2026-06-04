@@ -25,6 +25,7 @@ import {
 import type { DeviceEntry } from '@/services/device-service'
 import type { DeviceAttlogClosureRow } from '@/hooks/use-attlog-closure'
 import { AttlogCatchUpBadge, AttlogClosureBadge } from '@/components/shared/status-badges'
+import { DeviceSecuritySerialHint } from '@/components/devices/device-security-banner'
 
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
@@ -70,11 +71,13 @@ export function createDeviceColumns({
       accessorKey: 'serial_number',
       header: 'Serial Number',
       cell: ({ row }) => {
+        const device = row.original
         const serialNumber = row.getValue('serial_number') as string
         return (
-          <code className="text-sm font-mono">
-            {serialNumber}
-          </code>
+          <div className="flex items-center gap-2 min-w-0">
+            <code className="text-sm font-mono truncate">{serialNumber}</code>
+            <DeviceSecuritySerialHint device={device} />
+          </div>
         )
       },
     },

@@ -34,7 +34,11 @@ export const columns: ColumnDef<UserEntry>[] = [
           frappeEmployeeId={user.frappe_employee_id}
           photoCacheStatus={user.photo_cache_status as PhotoCacheStatus | undefined}
           name={user.name || 'Unknown'}
-          secondaryText={user.frappe_employee_id}
+          secondaryText={
+            user.is_device_admin
+              ? undefined
+              : user.frappe_employee_id || undefined
+          }
           avatarSize="sm"
         />
       )
@@ -143,19 +147,23 @@ export const columns: ColumnDef<UserEntry>[] = [
     accessorKey: 'privilege',
     header: 'Level',
     cell: ({ row }) => {
-      const privilege = row.original.privilege
-      if (privilege === null || privilege === undefined) return <span className="text-muted-foreground text-sm">-</span>
+      const user = row.original
+      const privilege = user.privilege
+      if (privilege === null || privilege === undefined) {
+        return <span className="text-muted-foreground text-sm">-</span>
+      }
 
       const labels: Record<number, string> = {
-        0: 'User',
-        1: 'Enroller',
-        2: 'Admin',
-        3: 'Super',
+        0: 'Normal',
+        2: 'Registrar',
+        6: 'Administrator',
+        14: 'Pri 14',
       }
+      const label = labels[privilege] || String(privilege)
       return (
-        <Badge variant="secondary" className="text-xs">
-          {labels[privilege] || privilege}
-        </Badge>
+        <span className="text-xs text-muted-foreground" title={user.is_device_admin ? 'Terminal super admin (menu lock)' : undefined}>
+          {label}
+        </span>
       )
     },
   },

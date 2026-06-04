@@ -14,6 +14,7 @@ import {
   useAttlogCatchUpDepthMap,
 } from '@/hooks'
 import { EditDeviceDialog } from '@/components/devices/edit-device-dialog'
+import { DeviceSecuritySetupHint } from '@/components/devices/device-security-banner'
 import { DeviceDetailDialog } from '@/components/devices/device-detail-dialog'
 import type { DeviceFilters, DeviceEntry } from '@/services/device-service'
 
@@ -118,16 +119,20 @@ export function Devices() {
     )
   }
 
+  const tableDevices = (data?.devices || []).map((d) => ({
+    ...d,
+    status: d.isOnline ? 'online' : 'offline',
+  })) as DeviceEntry[]
+
   return (
     <div className="h-full flex flex-col gap-4">
-      {/* Data Table */}
       <div className="flex-1 min-h-0">
         <DeviceDataTable
           columns={columns}
-          data={(data?.devices || []).map((d) => ({
-            ...d,
-            status: d.isOnline ? 'online' : 'offline',
-          }))}
+          toolbarLeading={
+            <DeviceSecuritySetupHint />
+          }
+          data={tableDevices}
           meta={
             data
               ? {

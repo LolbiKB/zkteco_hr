@@ -34,6 +34,7 @@ import {
   Info,
   MapPin,
   ScrollText,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sparkles } from 'lucide-react'
@@ -46,7 +47,9 @@ import {
   useRealtimeCommands,
   useDeviceUsersPaginated,
   useCommandQueue,
+  useDevice,
 } from '@/hooks'
+import { parseDeviceRegistrationData } from '@/lib/device-registration'
 import { DeviceAttlogTab } from '@/components/devices/device-attlog-tab'
 import {
   buildComponentSyncOptions,
@@ -198,17 +201,34 @@ function UserSyncRow({
   )
 }
 
+function connectionStatusLabel(status?: string | null): string {
+  if (status === 'pending') return 'Pending approval'
+  if (status === 'rejected') return 'Rejected'
+  return 'Approved'
+}
+
+function connectionStatusClass(status?: string | null): string {
+  if (status === 'pending') return 'bg-amber-100 text-amber-800 border-amber-200'
+  if (status === 'rejected') return 'bg-red-100 text-red-800 border-red-200'
+  return 'bg-green-100 text-green-800 border-green-200'
+}
+
 export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetailDialogProps) {
   const [activeTab, setActiveTab] = useState('users')
   const [searchQuery, setSearchQuery] = useState('')
-  
   // Use centralized hooks - single source of truth
   const { 
     device, 
     stats,
     batches,
   } = useDeviceWithUsers(deviceSn || '')
-  
+
+  const { data: freshDevice } = useDevice(deviceSn || '', {
+    enabled: open && !!deviceSn && activeTab === 'info',
+  })
+  const infoDevice = freshDevice ?? device
+  const registration = parseDeviceRegistrationData(infoDevice?.registration_data)
+
   const queryClient = useQueryClient()
   
   // Infinite query for users (TanStack)
@@ -499,8 +519,9 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
             </div>
           </TabsContent>
           
-          <TabsContent value="info" className="flex-1 mt-4">
-            <div className="space-y-6">
+          <TabsContent value="info" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <div className="space-y-6 pb-4">
               {/* Header Card */}
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 text-white">
                 <div className="flex items-center justify-between">
@@ -564,6 +585,50 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
                   </div>
                 </div>
               )}
+
+              {/* Provisioning (MVP: approved SN only) */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  Provisioning
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Serial approval</p>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium border ${connectionStatusClass(infoDevice?.connection_status)}`}
+                    >
+                      {connectionStatusLabel(infoDevice?.connection_status)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">PUSH protocol</p>
+                    <p className="font-medium font-mono">
+                      {registration?.pushver ? `v${registration.pushver}` : 'Unknown'}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground mb-0.5">Last ADMS init</p>
+                    <p className="font-medium">
+                      {registration?.last_init
+                        ? new Date(registration.last_init).toLocaleString()
+                        : 'Not observed yet'}
+                    </p>
+                  </div>
+                </div>
+                {infoDevice?.connection_status === 'pending' && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    This serial is not approved yet. Use Edit device → Approve SN before the terminal
+                    can sync users or attendance.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  MVP security is approved serial number only. Use a plain Cloud Server URL on the
+                  device (no pairing query string). Communication keys are not required on SenseFace
+                  ADMS.
+                </p>
+              </div>
+            </div>
             </div>
           </TabsContent>
 

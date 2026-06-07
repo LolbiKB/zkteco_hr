@@ -4,6 +4,7 @@
   "title": "ZKTeco HR",
   "label": "ZKTeco HR",
   "module": "ZKTeco HR",
+  "app": "zkteco_hr",
   "icon": "calendar",
   "public": 1,
   "is_standard": 1,

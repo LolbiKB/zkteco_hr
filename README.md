@@ -72,7 +72,7 @@ Closeout is **idempotent for AUTO flags**: each run deletes and recreates AUTO r
 
 - **React SPA:** **`/hr-attendance`** (primary HR week view)
 - **Weekly Schedule:** **`/hr-schedule`** (same SPA bundle)
-- **Desk:** **`/desk`** — module **ZKTeco HR** workspace / sidebar shortcuts to the SPA and **Attendance Flag** list (`/app/attendance-flag`)
+- **Desk:** **`/desk`** — **ZKTeco HR** desktop tile (after migrate) or module workspace / sidebar shortcuts to the SPA and **Attendance Flag** list (`/app/attendance-flag`)
 - **Desktop app tile:** **ZKTeco HR** (via `add_to_apps_screen` in hooks) → `/hr-attendance`
 - **SPA shell:** top bar links back to **Desk**, **Flags inbox**, and tabs between Attendance / Weekly Schedule
 - **Awesomebar:** `Cmd+K` → “HR Attendance” or “Weekly Schedule”

@@ -1,0 +1,14 @@
+{
+  "doctype": "Desktop Icon",
+  "name": "ZKTeco HR",
+  "label": "ZKTeco HR",
+  "icon_type": "Link",
+  "link_type": "Workspace Sidebar",
+  "link_to": "ZKTeco HR",
+  "standard": 1,
+  "app": "zkteco_hr",
+  "icon": "calendar",
+  "logo_url": "/assets/zkteco_hr/images/zkteco_hr_logo.svg",
+  "hidden": 0,
+  "bg_color": "gray"
+}

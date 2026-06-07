@@ -4,9 +4,9 @@ import {
   deviceSyncByDate,
   formatAttendanceLoadError,
   useCalendarEmployees,
-  useDefaultEmployee,
   useEmployeeCalendar,
 } from "@/hooks/useHrAttendanceData";
+import { useEmployeeSelection } from "@/hooks/useEmployeeSelection";
 import type { CalendarPayload, Day, Flag } from "@/types/calendar";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useFrappeAuth } from "frappe-react-sdk";
@@ -39,7 +39,6 @@ import type { HrAccessOutletContext } from "@/lib/hrAccess";
 export function App() {
   const { hrStaff, sessionLoading } = useOutletContext<HrAccessOutletContext>();
   const { currentUser, isLoading: authLoading } = useFrappeAuth();
-  const [employee, setEmployee] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [weekNavDirection, setWeekNavDirection] = useState<"prev" | "next" | "jump">("jump");
   const [employeeLoading, setEmployeeLoading] = useState(false);
@@ -50,13 +49,13 @@ export function App() {
     isLoading: employeesLoading,
     refresh: refreshEmployees,
   } = useCalendarEmployees();
-  useDefaultEmployee(employees, employee, setEmployee);
+  const { employee, selectEmployee } = useEmployeeSelection(employees);
 
   useEffect(() => {
     if (sessionLoading || hrStaff || employees.length !== 1) return;
     const ownEmployee = employees[0]!.id;
-    if (employee !== ownEmployee) setEmployee(ownEmployee);
-  }, [employee, employees, hrStaff, sessionLoading]);
+    if (employee !== ownEmployee) selectEmployee(ownEmployee);
+  }, [employee, employees, hrStaff, selectEmployee, sessionLoading]);
 
   const {
     payload: apiPayload,
@@ -256,7 +255,7 @@ export function App() {
                 <AttendanceToolbar
                   employees={employees}
                   employee={employee}
-                  onEmployeeChange={setEmployee}
+                  onEmployeeChange={selectEmployee}
                   hrStaff={hrStaff}
                   employeeLoading={employeeLoading && isCalendarLoading}
                   weekDates={weekDates}

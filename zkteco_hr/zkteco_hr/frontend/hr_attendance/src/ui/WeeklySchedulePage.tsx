@@ -2,7 +2,7 @@ import { addDays, parseISO } from "date-fns";
 import { CheckIcon, Loader2Icon } from "lucide-react";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useSearchParams, useOutletContext } from "react-router-dom";
+import { Link, Navigate, useOutletContext } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,8 +26,8 @@ import { Switch } from "@/components/ui/switch";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
 import {
   useCalendarEmployees,
-  useDefaultEmployee,
 } from "@/hooks/useHrAttendanceData";
+import { useEmployeeSelection } from "@/hooks/useEmployeeSelection";
 import {
   useApplyWeeklySchedule,
   useScheduleContext,
@@ -69,10 +69,7 @@ import type { HrAccessOutletContext } from "@/lib/hrAccess";
 export function WeeklySchedulePage() {
   const { hrStaff, sessionLoading } = useOutletContext<HrAccessOutletContext>();
   const { currentUser, isLoading: authLoading } = useFrappeAuth();
-  const [searchParams] = useSearchParams();
-  const initialEmployee = searchParams.get("employee");
 
-  const [employee, setEmployee] = useState<string | null>(initialEmployee);
   const [shiftBlocks, setShiftBlocks] = useState<ShiftBlock[]>([]);
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [generateThrough, setGenerateThrough] = useState("");
@@ -91,7 +88,7 @@ export function WeeklySchedulePage() {
   );
 
   const { employees, isLoading: employeesLoading } = useCalendarEmployees();
-  useDefaultEmployee(employees, employee, setEmployee);
+  const { employee, selectEmployee } = useEmployeeSelection(employees);
 
   const { context, isLoading: contextLoading, refresh: refreshContext } = useScheduleContext(employee);
 
@@ -130,7 +127,7 @@ export function WeeklySchedulePage() {
   const isScheduleLoading = contextLoading && !!employee;
 
   const selectedEmployee = useMemo(
-    () => employees.find((e) => e.name === employee) ?? null,
+    () => employees.find((e) => e.id === employee) ?? null,
     [employees, employee]
   );
 
@@ -296,7 +293,7 @@ export function WeeklySchedulePage() {
                     <ScheduleEmployeePicker
                       employees={employees}
                       value={employee}
-                      onChange={setEmployee}
+                      onChange={selectEmployee}
                       isLoading={employeesLoading || (employeeLoading && isScheduleLoading)}
                       className="h-9 w-full sm:w-64"
                       compact

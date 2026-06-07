@@ -71,8 +71,11 @@ Closeout is **idempotent for AUTO flags**: each run deletes and recreates AUTO r
 ## HR Attendance Calendar
 
 - **React SPA:** **`/hr-attendance`** (primary HR week view)
-- **Desk:** Awesomebar **HR Attendance Calendar** or `/app/hr-attendance-calendar`
-- Module sidebar: **ZKTeco HR** (Frappe v16 `Workspace Sidebar` fixture)
+- **Weekly Schedule:** **`/hr-schedule`** (same SPA bundle)
+- **Desk:** **`/desk`** — module **ZKTeco HR** workspace / sidebar shortcuts to the SPA and **Attendance Flag** list (`/app/attendance-flag`)
+- **Desktop app tile:** **ZKTeco HR** (via `add_to_apps_screen` in hooks) → `/hr-attendance`
+- **SPA shell:** top bar links back to **Desk**, **Flags inbox**, and tabs between Attendance / Weekly Schedule
+- **Awesomebar:** `Cmd+K` → “HR Attendance” or “Weekly Schedule”
 
 HR calendar API:
 
@@ -125,5 +128,3 @@ npm run build
 ```
 
 **Frappe Cloud deploy notes** (404 / MIME errors, sync pitfalls, cache bust): see [`docs/HR_ATTENDANCE_DEPLOY.md`](zkteco_hr/zkteco_hr/docs/HR_ATTENDANCE_DEPLOY.md).
-
-Desk page (legacy entry): `/app/hr-attendance-calendar-react`

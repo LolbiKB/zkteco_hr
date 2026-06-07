@@ -1,5 +1,5 @@
 import { addDays, parseISO } from "date-fns";
-import { ArrowLeftIcon, CheckIcon, Loader2Icon } from "lucide-react";
+import { CheckIcon, Loader2Icon } from "lucide-react";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -190,7 +190,7 @@ export function WeeklySchedulePage() {
 
   if (authLoading) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center overflow-hidden bg-background">
+      <div className="flex h-full items-center justify-center overflow-hidden bg-background">
         <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -198,7 +198,7 @@ export function WeeklySchedulePage() {
 
   if (!currentUser || currentUser === "Guest") {
     return (
-      <div className="flex h-[100dvh] items-center justify-center overflow-hidden bg-background px-4">
+      <div className="flex h-full items-center justify-center overflow-hidden bg-background px-4">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Sign in required</CardTitle>
@@ -256,25 +256,15 @@ export function WeeklySchedulePage() {
 
   return (
     <>
-      <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
-        <div className="mx-auto flex h-full max-w-7xl flex-col px-5 py-5 sm:px-8 sm:py-6">
+      <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
+        <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-5 py-4 sm:px-8 sm:py-5">
           <header className="mb-3 shrink-0 space-y-2">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-3">
-                <Button asChild variant="ghost" size="icon-sm">
-                  <Link
-                    to={employee ? `/hr-attendance?employee=${employee}` : "/hr-attendance"}
-                    aria-label="Back to attendance"
-                  >
-                    <ArrowLeftIcon />
-                  </Link>
-                </Button>
-                <div>
-                  <h1 className="text-lg font-semibold tracking-tight">Weekly Schedule</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Configure shared shift patterns for an employee.
-                  </p>
-                </div>
+              <div>
+                <h1 className="text-lg font-semibold tracking-tight">Weekly Schedule</h1>
+                <p className="text-sm text-muted-foreground">
+                  Configure shared shift patterns for an employee.
+                </p>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

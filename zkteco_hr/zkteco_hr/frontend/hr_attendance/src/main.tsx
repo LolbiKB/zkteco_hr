@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./ui/App";
+import { HrAppShell } from "./ui/HrAppShell";
 import { WeeklySchedulePage } from "./ui/WeeklySchedulePage";
 import "./index.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,8 +14,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <TooltipProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/hr-attendance" element={<App />} />
-            <Route path="/hr-schedule" element={<WeeklySchedulePage />} />
+            <Route element={<HrAppShell />}>
+              <Route path="/hr-attendance" element={<App />} />
+              <Route path="/hr-schedule" element={<WeeklySchedulePage />} />
+            </Route>
             <Route path="*" element={<Navigate to="/hr-attendance" replace />} />
           </Routes>
         </BrowserRouter>

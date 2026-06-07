@@ -202,6 +202,7 @@ Evidence JSON on flags includes both raw fields and effective values (`shift_gra
 
 - Inbox: `Attendance Flag` where `status = OPEN`.
 - HR approves, rejects, closes, or adds notes in Desk.
+- Open the calendar from the **ZKTeco HR** workspace shortcut or desktop app tile; use the SPA shell **Desk** link to return.
 
 ### HR review in `/hr-attendance` SPA (read-only MVP)
 

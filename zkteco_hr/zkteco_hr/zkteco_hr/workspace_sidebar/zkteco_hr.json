@@ -19,6 +19,28 @@
       "show_arrow": 0
     },
     {
+      "label": "HR Attendance",
+      "link_to": "/hr-attendance",
+      "link_type": "URL",
+      "type": "Link",
+      "child": 0,
+      "collapsible": 1,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0
+    },
+    {
+      "label": "Weekly Schedule",
+      "link_to": "/hr-schedule",
+      "link_type": "URL",
+      "type": "Link",
+      "child": 0,
+      "collapsible": 1,
+      "indent": 0,
+      "keep_closed": 0,
+      "show_arrow": 0
+    },
+    {
       "label": "Attendance Flag",
       "link_to": "Attendance Flag",
       "link_type": "DocType",

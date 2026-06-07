@@ -203,7 +203,7 @@ export function App() {
       ? `${window.location.origin}${window.location.pathname}`
       : "/hr-attendance";
     return (
-      <div className="flex h-[100dvh] items-center justify-center bg-background px-4">
+      <div className="flex h-full items-center justify-center bg-background px-4">
         <Card className="max-w-md border-border/60">
           <CardContent className="space-y-3 py-6 text-sm">
             <div className="font-semibold">Sign in required</div>
@@ -222,8 +222,8 @@ export function App() {
 
   return (
     <>
-      <div className="h-[100dvh] overflow-hidden bg-background text-foreground">
-        <div className="mx-auto flex h-full max-w-7xl flex-col px-5 py-5 sm:px-8 sm:py-6">
+      <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
+        <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-5 py-4 sm:px-8 sm:py-5">
           {loadError ? (
             <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in duration-300">
               <CardContent className="py-3 text-sm text-destructive">

@@ -26,6 +26,83 @@ def _remove_dest(dest_dir: str) -> None:
 
 
 ATTENDANCE_APP_LOGO = "/assets/zkteco_hr/images/attendance-svgrepo-com.svg"
+ATTENDANCE_APP_LOGO_FILE = "attendance-svgrepo-com.svg"
+
+
+def _branding_assets_ok(base_dir: str) -> bool:
+    if not base_dir or not os.path.isdir(base_dir):
+        return False
+    return os.path.isfile(os.path.join(base_dir, ATTENDANCE_APP_LOGO_FILE))
+
+
+def _copy_branding_files(src_dir: str, dest_dir: str) -> None:
+    os.makedirs(dest_dir, exist_ok=True)
+    for name in os.listdir(src_dir):
+        src_file = os.path.join(src_dir, name)
+        if os.path.isfile(src_file):
+            shutil.copy2(src_file, os.path.join(dest_dir, name))
+
+
+def sync_app_branding_assets():
+    """
+    Publish app branding images under sites/assets/zkteco_hr/images/.
+
+    Frappe Cloud often has hr_attendance copied via migrate but no bench symlink
+    for public/images/, which breaks Desk logo_url and SPA favicon (404).
+    """
+    app = "zkteco_hr"
+    app_path = frappe.get_app_path(app)
+    src_dir = os.path.join(app_path, "public", "images")
+    dest_dir = os.path.join(frappe.local.sites_path, "assets", app, "images")
+
+    if not os.path.isdir(src_dir):
+        return
+
+    if not os.path.lexists(dest_dir):
+        shutil.copytree(src_dir, dest_dir)
+        return
+
+    try:
+        resolved = os.path.realpath(dest_dir)
+    except OSError:
+        resolved = ""
+
+    if os.path.islink(dest_dir) and _branding_assets_ok(resolved):
+        _copy_branding_files(src_dir, resolved)
+        return
+
+    if os.path.isdir(dest_dir) and _branding_assets_ok(dest_dir):
+        _copy_branding_files(src_dir, dest_dir)
+        return
+
+    _remove_dest(dest_dir)
+    if os.path.lexists(dest_dir):
+        return
+
+    shutil.copytree(src_dir, dest_dir)
+
+
+def force_sync_app_branding_assets():
+    """Unconditionally republish public/images/ into sites/assets/."""
+    app = "zkteco_hr"
+    app_path = frappe.get_app_path(app)
+    src_dir = os.path.join(app_path, "public", "images")
+    dest_dir = os.path.join(frappe.local.sites_path, "assets", app, "images")
+
+    if not os.path.isdir(src_dir):
+        frappe.log_error(
+            title="force_sync_app_branding_assets missing source",
+            message=f"Expected branding assets at {src_dir}",
+        )
+        return
+
+    if os.path.lexists(dest_dir):
+        _remove_dest(dest_dir)
+
+    if os.path.lexists(dest_dir):
+        return
+
+    shutil.copytree(src_dir, dest_dir)
 
 
 def force_sync_hr_attendance_assets():
@@ -55,6 +132,8 @@ def force_sync_hr_attendance_assets():
         ignore=shutil.ignore_patterns("index.html"),
     )
 
+    sync_app_branding_assets()
+
 
 def sync_hr_attendance_assets():
     """
@@ -74,6 +153,7 @@ def sync_hr_attendance_assets():
     dest_dir = os.path.join(frappe.local.sites_path, "assets", app, "hr_attendance")
 
     if not os.path.isdir(src_assets):
+        sync_app_branding_assets()
         return
 
     if os.path.lexists(dest_dir):
@@ -83,11 +163,13 @@ def sync_hr_attendance_assets():
             resolved = ""
 
         if _hr_attendance_bundle_ok(resolved):
+            sync_app_branding_assets()
             return
 
         _remove_dest(dest_dir)
 
     if os.path.lexists(dest_dir):
+        sync_app_branding_assets()
         return
 
     # index.html contains Jinja; served only via www/hr-attendance.
@@ -96,3 +178,5 @@ def sync_hr_attendance_assets():
         dest_dir,
         ignore=shutil.ignore_patterns("index.html"),
     )
+
+    sync_app_branding_assets()

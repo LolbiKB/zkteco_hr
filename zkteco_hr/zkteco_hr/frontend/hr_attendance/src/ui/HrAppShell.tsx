@@ -3,10 +3,9 @@ import { CalendarDaysIcon, CalendarRangeIcon, FlagIcon, LayoutGridIcon } from "l
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 
 import { useCalendarSession } from "@/hooks/useCalendarSession";
+import { APP_LOGO } from "@/lib/brand";
 import { defaultHrAccessContext, type HrAccessOutletContext } from "@/lib/hrAccess";
 import { cn } from "@/lib/utils";
-
-const APP_LOGO = "/assets/zkteco_hr/images/attendance-svgrepo-com.svg";
 const DESK_URL = "/desk";
 const FLAGS_INBOX_URL = "/app/attendance-flag";
 

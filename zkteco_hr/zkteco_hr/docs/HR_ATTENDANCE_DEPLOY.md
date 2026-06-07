@@ -55,9 +55,19 @@ Runs on every `bench migrate` (`hooks.py` → `after_migrate`).
 
 4. **Cache bust with a build-time literal** in `copy-html-entry.mjs` (`?v=1730123456`), not server-side template vars.
 
-One-time repair for sites that still 404 after deploy: patch `resync_hr_attendance_assets_v4` (runs on next Migrate — force full copy from app `public/`).
+One-time repair for sites that still 404 after deploy: patch `resync_hr_attendance_assets_v4` (SPA bundle) and `resync_hr_attendance_assets_v5` (branding SVG under `public/images/`).
 
 Implementation: `zkteco_hr/utils/sync_hr_attendance_assets.py`
+
+### App icon / favicon (`public/images/`)
+
+Desk `logo_url`, `hooks.py` `app_logo_url`, and SPA favicon use:
+
+`/assets/zkteco_hr/images/attendance-svgrepo-com.svg`
+
+On Frappe Cloud this path is **not** created by the SPA sync alone. Every migrate runs `sync_app_branding_assets()`; patch `v5` force-copies `public/images/` into `sites/assets/zkteco_hr/images/`.
+
+Verify: open that URL in the browser — must return **200** SVG, not HTML.
 
 ## Troubleshooting
 

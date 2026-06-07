@@ -1,3 +1,5 @@
+from zkteco_hr.utils.sync_hr_attendance_assets import ATTENDANCE_APP_LOGO
+
 app_name = "zkteco_hr"
 app_title = "ZKTeco HR"
 app_publisher = "ZKTeco HR"
@@ -5,13 +7,20 @@ app_description = "Attendance flags + weekly view (MVP)"
 app_email = "noreply@example.com"
 app_license = "MIT"
 
+app_logo_url = ATTENDANCE_APP_LOGO
+
+website_context = {
+    "favicon": ATTENDANCE_APP_LOGO,
+    "splash_image": ATTENDANCE_APP_LOGO,
+}
+
 # Frappe v16 Desktop / Sidebar integration
 # Provides a stable entry point for the app on the Desk desktop.
 add_to_apps_screen = [
     {
         "name": "zkteco_hr",
         "title": "ZKTeco HR",
-        "logo": "/assets/zkteco_hr/images/attendance-svgrepo-com.svg",
+        "logo": ATTENDANCE_APP_LOGO,
         "route": "/hr-attendance",
     }
 ]

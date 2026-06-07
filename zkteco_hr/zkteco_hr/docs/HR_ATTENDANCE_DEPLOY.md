@@ -59,15 +59,16 @@ One-time repair for sites that still 404 after deploy: patch `resync_hr_attendan
 
 Implementation: `zkteco_hr/utils/sync_hr_attendance_assets.py`
 
-### Site branding (`public/images/DI-logo.svg`)
+### Site branding (`public/images/`)
 
-Site-wide Desk/login favicon and navbar logo (`app_logo_url`, `website_context`) plus HR app tile and SPA favicon use:
+| Asset | URL | Used for |
+| --- | --- | --- |
+| `DI-logo.svg` | `/assets/zkteco_hr/images/DI-logo.svg` | Site favicon / Desk login (`app_logo_url`, `website_context`, SPA `<link rel="icon">`) |
+| `attendance-svgrepo-com.svg` | `/assets/zkteco_hr/images/attendance-svgrepo-com.svg` | ZKTeco HR app tile (`add_to_apps_screen`, Desktop Icon `logo_url`, SPA header) |
 
-`/assets/zkteco_hr/images/DI-logo.svg`
+Every migrate runs `sync_app_branding_assets()` (copies all of `public/images/`). Patch `v7` restores the attendance icon on the Desktop Icon after `v6` set DI site-wide.
 
-Every migrate runs `sync_app_branding_assets()` (copies all files under `public/images/`). Patch `v6` force-republishes branding and updates the Desktop Icon `logo_url`.
-
-Verify: open that URL in the browser — must return **200** SVG, not HTML.
+Verify both URLs return **200** SVG in the browser.
 
 ## Troubleshooting
 

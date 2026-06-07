@@ -25,17 +25,20 @@ def _remove_dest(dest_dir: str) -> None:
         os.remove(dest_dir)
 
 
-APP_BRAND_LOGO = "/assets/zkteco_hr/images/DI-logo.svg"
-APP_BRAND_LOGO_FILE = "DI-logo.svg"
+SITE_FAVICON_LOGO = "/assets/zkteco_hr/images/DI-logo.svg"
+HR_APP_LOGO = "/assets/zkteco_hr/images/attendance-svgrepo-com.svg"
 
-# Backward-compatible alias for older patches/imports.
-ATTENDANCE_APP_LOGO = APP_BRAND_LOGO
+# Site-wide Desk/login favicon (DI) vs ZKTeco HR app tile / SPA header (attendance).
+APP_BRAND_LOGO = SITE_FAVICON_LOGO
+ATTENDANCE_APP_LOGO = HR_APP_LOGO
+
+_BRANDING_FILES = ("DI-logo.svg", "attendance-svgrepo-com.svg")
 
 
 def _branding_assets_ok(base_dir: str) -> bool:
     if not base_dir or not os.path.isdir(base_dir):
         return False
-    return os.path.isfile(os.path.join(base_dir, APP_BRAND_LOGO_FILE))
+    return all(os.path.isfile(os.path.join(base_dir, name)) for name in _BRANDING_FILES)
 
 
 def _copy_branding_files(src_dir: str, dest_dir: str) -> None:

@@ -6,10 +6,17 @@ from zkteco_hr.tests.test_closeout import _install_frappe_mock
 _install_frappe_mock()
 
 from zkteco_hr.attendance_engine.hr_calendar import (
+    HR_STAFF_ROLES,
+    _employee_linked_to_user,
     _filter_auto_flags_for_calendar_day,
+    _is_hr_staff,
+    _list_calendar_employee_rows,
+    _require_calendar_access,
     _shift_schedule_assignment_start_field,
     first_checkin_date_by_employee,
+    get_calendar_session,
     is_full_time_employment,
+    list_calendar_employees,
 )
 
 
@@ -83,5 +90,63 @@ class TestCalendarFlagDisplay(unittest.TestCase):
         self.assertEqual([row["name"] for row in out], ["F1"])
 
 
+class TestCalendarAccess(unittest.TestCase):
+    def test_hr_staff_roles(self):
+        self.assertIn("HR User", HR_STAFF_ROLES)
+        self.assertIn("HR Manager", HR_STAFF_ROLES)
+        self.assertIn("System Manager", HR_STAFF_ROLES)
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.get_roles")
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "hr@example.com")
+    def test_is_hr_staff_for_hr_user(self, get_roles):
+        get_roles.return_value = ["HR User"]
+        self.assertTrue(_is_hr_staff())
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.get_roles")
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "emp@example.com")
+    def test_is_hr_staff_false_for_employee(self, get_roles):
+        get_roles.return_value = ["Employee"]
+        self.assertFalse(_is_hr_staff())
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.db.get_value")
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "emp@example.com")
+    def test_employee_linked_to_user(self, get_value):
+        get_value.return_value = "EMP-001"
+        self.assertEqual(_employee_linked_to_user(), "EMP-001")
+        get_value.assert_called_once_with(
+            "Employee",
+            {"user_id": "emp@example.com", "status": "Active"},
+            "name",
+        )
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar._employee_linked_to_user", return_value="EMP-001")
+    @patch("zkteco_hr.attendance_engine.hr_calendar._is_hr_staff", return_value=False)
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "emp@example.com")
+    def test_require_calendar_access_allows_self(self, _hr, _linked):
+        _require_calendar_access("EMP-001")
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar._employee_linked_to_user", return_value="EMP-001")
+    @patch("zkteco_hr.attendance_engine.hr_calendar._is_hr_staff", return_value=False)
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.throw")
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "emp@example.com")
+    def test_require_calendar_access_blocks_other_employee(self, throw, _hr, _linked):
+        _require_calendar_access("EMP-999")
+        throw.assert_called_once()
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar._employee_linked_to_user", return_value="EMP-001")
+    @patch("zkteco_hr.attendance_engine.hr_calendar._is_hr_staff", return_value=False)
+    @patch("zkteco_hr.attendance_engine.hr_calendar.frappe.session.user", "emp@example.com")
+    def test_get_calendar_session_personal(self, _hr, _linked):
+        out = get_calendar_session()
+        self.assertEqual(out, {"hr_staff": False, "employee_id": "EMP-001"})
+
+    @patch("zkteco_hr.attendance_engine.hr_calendar._list_calendar_employee_rows")
+    @patch("zkteco_hr.attendance_engine.hr_calendar._employee_linked_to_user", return_value="EMP-001")
+    @patch("zkteco_hr.attendance_engine.hr_calendar._is_hr_staff", return_value=False)
+    def test_list_calendar_employees_personal_scope(self, _hr, _linked, list_rows):
+        list_rows.return_value = [{"id": "EMP-001"}]
+        out = list_calendar_employees()
+        list_rows.assert_called_once_with(["EMP-001"], include_all=True)
+        self.assertEqual(out, [{"id": "EMP-001"}])
 if __name__ == "__main__":
     unittest.main()

@@ -49,6 +49,7 @@ export type DayInspectorSheetProps = {
   syncByDate: Map<string, DeviceSyncStatus[]>;
   reviewingFlag: Flag | null;
   onReviewingFlagChange: (flag: Flag | null) => void;
+  showDeskReview?: boolean;
   onClose: () => void;
 };
 
@@ -146,6 +147,7 @@ export function DayInspectorSheet(props: DayInspectorSheetProps) {
               date={props.inspectingDate}
               employeeLabel={props.employeeLabel}
               employeeId={props.employeeId}
+              showDeskReview={props.showDeskReview !== false}
               onViewTimeline={() => {
                 props.onReviewingFlagChange(null);
                 setActiveTab("timeline");

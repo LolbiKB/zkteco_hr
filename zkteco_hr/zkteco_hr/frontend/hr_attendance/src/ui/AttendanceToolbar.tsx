@@ -43,11 +43,13 @@ export type AttendanceToolbarProps = {
   calendarMaxDate: Date;
   isRefreshing: boolean;
   isCalendarLoading: boolean;
+  hrStaff?: boolean;
 };
 
 export function AttendanceToolbar(props: AttendanceToolbarProps) {
   const weekLabel = formatWeekRangeLabel(props.weekDates);
   const navDisabled = props.isCalendarLoading;
+  const hrStaff = props.hrStaff !== false;
 
   return (
     <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -56,6 +58,7 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
         value={props.employee}
         onChange={props.onEmployeeChange}
         isLoading={props.employeeLoading}
+        readOnly={!hrStaff}
         weekDates={props.weekDates}
         weekAssignedShiftDays={props.weekAssignedShiftDays}
         showWeekScheduleHint={props.showWeekScheduleHint}
@@ -125,15 +128,17 @@ export function AttendanceToolbar(props: AttendanceToolbarProps) {
           <RefreshCwIcon className={cn("size-4", props.isRefreshing && "animate-spin")} />
         </Button>
 
-        <RunEngineDialog
-          employee={props.employee}
-          employeeLabel={props.employeeLabel}
-          weekStart={props.weekStart}
-          onSuccess={props.onRunEngineSuccess}
-          disabled={navDisabled}
-        />
+        {hrStaff ? (
+          <RunEngineDialog
+            employee={props.employee}
+            employeeLabel={props.employeeLabel}
+            weekStart={props.weekStart}
+            onSuccess={props.onRunEngineSuccess}
+            disabled={navDisabled}
+          />
+        ) : null}
 
-        {props.employee ? (
+        {hrStaff && props.employee ? (
           <Button
             type="button"
             variant="ghost"

@@ -2,6 +2,8 @@ import type { ComponentType } from "react";
 import { CalendarDaysIcon, CalendarRangeIcon, FlagIcon, LayoutGridIcon } from "lucide-react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 
+import { useCalendarSession } from "@/hooks/useCalendarSession";
+import { defaultHrAccessContext, type HrAccessOutletContext } from "@/lib/hrAccess";
 import { cn } from "@/lib/utils";
 
 const APP_LOGO = "/assets/zkteco_hr/images/zkteco_hr_logo.svg";
@@ -24,6 +26,11 @@ export function HrAppShell() {
   const [searchParams] = useSearchParams();
   const employee = searchParams.get("employee");
   const tab = activeTab(pathname);
+  const { hrStaff, isLoading: sessionLoading } = useCalendarSession();
+
+  const outletContext: HrAccessOutletContext = sessionLoading
+    ? defaultHrAccessContext
+    : { hrStaff, sessionLoading: false };
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
@@ -50,27 +57,29 @@ export function HrAppShell() {
             <ShellTab
               to={tabHref("attendance", employee)}
               active={tab === "attendance"}
-              label="Attendance"
+              label={hrStaff ? "Attendance" : "My calendar"}
               icon={CalendarDaysIcon}
             />
-            <ShellTab
-              to={tabHref("schedule", employee)}
-              active={tab === "schedule"}
-              label="Weekly Schedule"
-              shortLabel="Schedule"
-              icon={CalendarRangeIcon}
-            />
+            {hrStaff ? (
+              <ShellTab
+                to={tabHref("schedule", employee)}
+                active={tab === "schedule"}
+                label="Weekly Schedule"
+                shortLabel="Schedule"
+                icon={CalendarRangeIcon}
+              />
+            ) : null}
           </nav>
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <DeskLink href={FLAGS_INBOX_URL} label="Flags" icon={FlagIcon} />
+            {hrStaff ? <DeskLink href={FLAGS_INBOX_URL} label="Flags" icon={FlagIcon} /> : null}
             <DeskLink href={DESK_URL} label="Desk" icon={LayoutGridIcon} />
           </div>
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <Outlet />
+        <Outlet context={outletContext} />
       </div>
     </div>
   );

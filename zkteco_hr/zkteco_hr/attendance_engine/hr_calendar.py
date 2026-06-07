@@ -17,14 +17,37 @@ from zkteco_hr.attendance_engine.shift_assignment import (
 )
 
 
-def _require_hr_role():
-    user = frappe.session.user
+HR_STAFF_ROLES = frozenset({"System Manager", "HR User", "HR Manager"})
+
+
+def _is_hr_staff(user: str | None = None) -> bool:
+    user = user or frappe.session.user
     if user == "Administrator":
-        return
+        return True
     roles = set(frappe.get_roles(user) or [])
-    if "System Manager" in roles or "HR User" in roles:
+    return bool(roles & HR_STAFF_ROLES)
+
+
+def _employee_linked_to_user(user: str | None = None) -> str | None:
+    user = user or frappe.session.user
+    if not user or user == "Guest":
+        return None
+    return frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "name")
+
+
+def _require_hr_role():
+    if _is_hr_staff():
         return
     frappe.throw("Not permitted")
+
+
+def _require_calendar_access(employee: str):
+    if _is_hr_staff():
+        return
+    linked = _employee_linked_to_user()
+    if linked and linked == employee:
+        return
+    frappe.throw("Not permitted", frappe.PermissionError)
 
 
 def _coerce_bool(value, *, default: bool) -> bool:
@@ -260,23 +283,56 @@ def first_checkin_date_by_employee(employee_ids: list[str]) -> dict[str, dict]:
 
 
 @frappe.whitelist()
+def get_calendar_session():
+    """SPA bootstrap: HR staff vs personal (linked Employee) calendar mode."""
+    linked = _employee_linked_to_user()
+    hr_staff = _is_hr_staff()
+    if not hr_staff and not linked:
+        frappe.throw(
+            "No active Employee is linked to your user account.",
+            frappe.PermissionError,
+        )
+    return {
+        "hr_staff": hr_staff,
+        "employee_id": linked,
+    }
+
+
+@frappe.whitelist()
 def list_calendar_employees(include_without_shifts=True):
     """
     Active employees for the HR attendance calendar picker.
 
-    include_without_shifts: when false, omit employees with no enabled Shift Schedule Assignment.
+    HR staff see all active employees; other users see only their linked Employee.
     """
-    _require_hr_role()
     include_all = _coerce_bool(include_without_shifts, default=True)
+    if _is_hr_staff():
+        employee_ids = None
+    else:
+        linked = _employee_linked_to_user()
+        if not linked:
+            frappe.throw(
+                "No active Employee is linked to your user account.",
+                frappe.PermissionError,
+            )
+        employee_ids = [linked]
 
+    return _list_calendar_employee_rows(employee_ids, include_all=include_all)
+
+
+def _list_calendar_employee_rows(employee_ids: list[str] | None, *, include_all: bool):
     fields = ["name", "employee_name", "designation", "department", "company", "image"]
     if frappe.db.has_column("Employee", "employment_type"):
         fields.append("employment_type")
 
+    filters: dict = {"status": "Active"}
+    if employee_ids is not None:
+        filters["name"] = ["in", employee_ids]
+
     rows = (
         frappe.get_all(
             "Employee",
-            filters={"status": "Active"},
+            filters=filters,
             fields=fields,
             order_by="employee_name asc",
             limit_page_length=500,
@@ -368,7 +424,7 @@ def get_employee_calendar(employee: str, start_date: str, end_date: str):
     - flags per day (chips)
     - shift context per day (when assigned)
     """
-    _require_hr_role()
+    _require_calendar_access(employee)
 
     start = getdate(start_date)
     end = getdate(end_date)

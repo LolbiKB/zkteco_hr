@@ -11,6 +11,7 @@ import type { CalendarPayload, Day, Flag } from "@/types/calendar";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,8 +34,10 @@ import { AttendanceToolbar } from "@/ui/AttendanceToolbar";
 import { DayInspectorSheet } from "@/ui/DayInspectorSheet";
 import { DeviceCloseoutBanner } from "@/ui/DeviceAlerts";
 import { WeekView } from "@/ui/WeekView";
+import type { HrAccessOutletContext } from "@/lib/hrAccess";
 
 export function App() {
+  const { hrStaff, sessionLoading } = useOutletContext<HrAccessOutletContext>();
   const { currentUser, isLoading: authLoading } = useFrappeAuth();
   const [employee, setEmployee] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<Date>(() => new Date());
@@ -48,6 +51,12 @@ export function App() {
     refresh: refreshEmployees,
   } = useCalendarEmployees();
   useDefaultEmployee(employees, employee, setEmployee);
+
+  useEffect(() => {
+    if (sessionLoading || hrStaff || employees.length !== 1) return;
+    const ownEmployee = employees[0]!.id;
+    if (employee !== ownEmployee) setEmployee(ownEmployee);
+  }, [employee, employees, hrStaff, sessionLoading]);
 
   const {
     payload: apiPayload,
@@ -227,7 +236,12 @@ export function App() {
           {loadError ? (
             <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in duration-300">
               <CardContent className="py-3 text-sm text-destructive">
-                <div>Could not load attendance data. Confirm you have HR User access and try again.</div>
+                <div>
+                  Could not load attendance data.{" "}
+                  {hrStaff
+                    ? "Confirm you have HR User access and try again."
+                    : "Confirm your user is linked to an active Employee record."}
+                </div>
                 {loadErrorMessage ? (
                   <div className="mt-1 text-xs text-destructive/90">{loadErrorMessage}</div>
                 ) : null}
@@ -243,6 +257,7 @@ export function App() {
                   employees={employees}
                   employee={employee}
                   onEmployeeChange={setEmployee}
+                  hrStaff={hrStaff}
                   employeeLoading={employeeLoading && isCalendarLoading}
                   weekDates={weekDates}
                   weekStart={weekStart}
@@ -312,6 +327,7 @@ export function App() {
         syncByDate={syncByDate}
         reviewingFlag={reviewingFlag}
         onReviewingFlagChange={setReviewingFlag}
+        showDeskReview={hrStaff}
         onClose={() => {
           setInspectingDate(null);
           setReviewingFlag(null);

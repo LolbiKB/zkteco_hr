@@ -33,6 +33,7 @@ export type EmployeePickerProps = {
   showWeekScheduleHint?: boolean;
   daysByDate: Map<string, Day>;
   className?: string;
+  readOnly?: boolean;
 };
 
 export function EmployeePicker(props: EmployeePickerProps) {
@@ -46,6 +47,27 @@ export function EmployeePicker(props: EmployeePickerProps) {
 
   const name = employeeShortName(selected, props.value);
   const subtitle = employeePickerSubtitle(selected);
+
+  if (props.readOnly) {
+    return (
+      <div
+        className={cn(
+          "flex min-h-14 w-full min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-border bg-background px-3 py-2",
+          disabled && "opacity-50",
+          props.className
+        )}
+      >
+        <EmployeeAvatar employee={selected} fallbackId={props.value} className="size-10" />
+        <span className="min-w-0 flex-1 text-left leading-snug">
+          <span className="block truncate text-base font-semibold">{name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
+        </span>
+        {props.isLoading ? (
+          <Loader2Icon className="size-4 shrink-0 animate-spin opacity-60" />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -2,7 +2,7 @@ import { addDays, parseISO } from "date-fns";
 import { CheckIcon, Loader2Icon } from "lucide-react";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams, useOutletContext } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -57,8 +57,10 @@ import {
   WeeklyScheduleTemplatePickerDialog,
   type ScheduleTemplateOption,
 } from "@/ui/WeeklyScheduleTemplatePickerDialog";
+import type { HrAccessOutletContext } from "@/lib/hrAccess";
 
 export function WeeklySchedulePage() {
+  const { hrStaff, sessionLoading } = useOutletContext<HrAccessOutletContext>();
   const { currentUser, isLoading: authLoading } = useFrappeAuth();
   const [searchParams] = useSearchParams();
   const initialEmployee = searchParams.get("employee");
@@ -188,12 +190,16 @@ export function WeeklySchedulePage() {
     }
   }
 
-  if (authLoading) {
+  if (authLoading || sessionLoading) {
     return (
       <div className="flex h-full items-center justify-center overflow-hidden bg-background">
         <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (!hrStaff) {
+    return <Navigate to="/hr-attendance" replace />;
   }
 
   if (!currentUser || currentUser === "Guest") {

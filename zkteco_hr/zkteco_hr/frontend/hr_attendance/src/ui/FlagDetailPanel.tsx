@@ -23,6 +23,7 @@ export type FlagDetailPanelProps = {
   date: string;
   employeeLabel: string | null;
   employeeId: string | null;
+  showDeskReview?: boolean;
   onViewTimeline?: () => void;
 };
 
@@ -119,12 +120,14 @@ export function FlagDetailPanel(props: FlagDetailPanelProps) {
       <Separator />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button size="sm" className="gap-1.5" asChild>
-          <a href={flagDeskUrl(flag.name)} target="_blank" rel="noreferrer">
-            <ExternalLinkIcon className="size-3.5" aria-hidden="true" />
-            Review in Desk
-          </a>
-        </Button>
+        {props.showDeskReview !== false ? (
+          <Button size="sm" className="gap-1.5" asChild>
+            <a href={flagDeskUrl(flag.name)} target="_blank" rel="noreferrer">
+              <ExternalLinkIcon className="size-3.5" aria-hidden="true" />
+              Review in Desk
+            </a>
+          </Button>
+        ) : null}
         {props.onViewTimeline ? (
           <Button variant="outline" size="sm" onClick={props.onViewTimeline}>
             View punches & timeline

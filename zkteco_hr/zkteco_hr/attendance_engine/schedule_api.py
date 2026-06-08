@@ -5,6 +5,14 @@ import json
 import frappe
 from frappe.utils import add_days, getdate, nowdate
 
+def _default_effective_from() -> str:
+    """July 1st of the current year when today is before it; otherwise tomorrow."""
+    today = getdate(nowdate())
+    july_first = today.replace(month=7, day=1)
+    if today < july_first:
+        return str(july_first)
+    return str(add_days(today, 1))
+
 from zkteco_hr.attendance_engine.hr_calendar import (
     _require_hr_role,
     shift_assignment_bounds_by_employee,
@@ -246,9 +254,9 @@ def get_employee_schedule_context(employee: str):
             "frequency": "Every Week",
             "days": week_pattern_from_ssas(employee),
         },
-        "default_effective_from": str(add_days(getdate(nowdate()), 1)),
+        "default_effective_from": _default_effective_from(),
         "default_generate_through": str(
-            add_days(getdate(nowdate()), 1 + DEFAULT_SHIFT_GENERATION_DAYS)
+            add_days(getdate(_default_effective_from()), DEFAULT_SHIFT_GENERATION_DAYS)
         ),
     }
 

@@ -304,20 +304,27 @@ def list_calendar_employees(include_without_shifts=True):
     Active employees for the HR attendance calendar picker.
 
     HR staff see all active employees; other users see only their linked Employee.
+    Returns ``{"employees": [...], "current_user_employee": "EMP-001" | null}``
+    so the SPA can default HR staff to their own record.
     """
     include_all = _coerce_bool(include_without_shifts, default=True)
+    current_user_employee = _employee_linked_to_user()
+
     if _is_hr_staff():
         employee_ids = None
     else:
-        linked = _employee_linked_to_user()
-        if not linked:
+        if not current_user_employee:
             frappe.throw(
                 "No active Employee is linked to your user account.",
                 frappe.PermissionError,
             )
-        employee_ids = [linked]
+        employee_ids = [current_user_employee]
 
-    return _list_calendar_employee_rows(employee_ids, include_all=include_all)
+    employees = _list_calendar_employee_rows(employee_ids, include_all=include_all)
+    return {
+        "employees": employees,
+        "current_user_employee": current_user_employee,
+    }
 
 
 def _list_calendar_employee_rows(employee_ids: list[str] | None, *, include_all: bool):

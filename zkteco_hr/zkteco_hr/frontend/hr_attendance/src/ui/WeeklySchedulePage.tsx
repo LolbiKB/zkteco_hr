@@ -80,7 +80,9 @@ export function WeeklySchedulePage() {
   const [limitGenerateThrough, setLimitGenerateThrough] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [pendingConfirmPlan, setPendingConfirmPlan] = useState<string[]>([]);
+  const [pendingConfirmPlan, setPendingConfirmPlan] = useState<
+    Array<{ name: string; doctype: string }>
+  >([]);
   const [saveSuccessUrl, setSaveSuccessUrl] = useState<string | null>(null);
   const [templateKey, setTemplateKey] = useState<string>("manual");
   const appliedTemplateFingerprint = useRef<string | null>(null);
@@ -91,8 +93,8 @@ export function WeeklySchedulePage() {
     [shiftBlocks]
   );
 
-  const { employees, isLoading: employeesLoading } = useCalendarEmployees();
-  const { employee, selectEmployee } = useEmployeeSelection(employees);
+  const { employees, currentUserEmployee, isLoading: employeesLoading } = useCalendarEmployees();
+  const { employee, selectEmployee } = useEmployeeSelection(employees, currentUserEmployee);
 
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.id === employee) ?? null,
@@ -206,12 +208,18 @@ export function WeeklySchedulePage() {
 
     if (result.needs_confirm && result.plan) {
       const creates = (result.plan.groups ?? []).flatMap((group) => {
-        const items: string[] = [];
+        const items: Array<{ name: string; doctype: string }> = [];
         if (group.shift_type.action === "create") {
-          items.push(group.shift_type.proposed_name ?? "Shift Type");
+          items.push({
+            name: group.shift_type.proposed_name ?? "Shift Type",
+            doctype: "Shift Type",
+          });
         }
         if (group.shift_schedule.action === "create") {
-          items.push(group.shift_schedule.proposed_name ?? "Shift Schedule");
+          items.push({
+            name: group.shift_schedule.proposed_name ?? "Shift Schedule",
+            doctype: "Shift Schedule",
+          });
         }
         return items;
       });
@@ -345,7 +353,8 @@ export function WeeklySchedulePage() {
             {previewOnly ? (
               <Card className="border-amber-500/30 bg-amber-500/5">
                 <CardContent className="py-2.5 text-sm text-amber-950 dark:text-amber-100">
-                  Active SSAs exist — preview only until cleared. Use Clear schedule data (dev) or Desk.
+                  Active schedule assignments exist — read-only preview. Use{" "}
+                  <strong>Clear schedule data</strong> above or edit in Desk to make changes.
                 </CardContent>
               </Card>
             ) : null}
@@ -483,7 +492,7 @@ export function WeeklySchedulePage() {
                       />
                     ) : (
                       <p className="flex h-10 items-center text-xs text-muted-foreground">
-                        Open-ended — generates shift assignments for 90 days; HRMS extends later.
+                        Open-ended — generates 90 days of Shift Assignments from the effective date. Re-save to extend.
                       </p>
                     )}
                   </div>
@@ -544,10 +553,11 @@ export function WeeklySchedulePage() {
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-2 text-sm">
-            {pendingConfirmPlan.map((name) => (
-              <li key={name} className="flex items-center gap-2">
+            {pendingConfirmPlan.map((item) => (
+              <li key={`${item.doctype}-${item.name}`} className="flex items-center gap-2">
                 <CheckIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{name}</span>
+                <span className="truncate">{item.name}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.doctype}</span>
               </li>
             ))}
           </ul>

@@ -60,7 +60,7 @@ export function SchedulePlanPreviewDialog(props: SchedulePlanPreviewDialogProps)
             <div>
               <h3 className="text-sm font-medium">Matched patterns</h3>
               <p className="text-xs text-muted-foreground">
-                Shared Shift Schedules linked when you save.
+                Shift Types and Shift Schedules that will be linked or created when you save.
               </p>
             </div>
 
@@ -74,31 +74,49 @@ export function SchedulePlanPreviewDialog(props: SchedulePlanPreviewDialogProps)
             ) : props.plan?.groups?.length ? (
               <ul className="space-y-2">
                 {props.plan.groups.map((group, index) => {
-                  const pat =
+                  const shiftTypeName =
+                    group.shift_type.action === "use"
+                      ? group.shift_type.name
+                      : group.shift_type.proposed_name;
+                  const scheduleName =
                     group.shift_schedule.action === "use"
                       ? group.shift_schedule.name
                       : group.shift_schedule.proposed_name;
-                  const isCreate =
-                    group.shift_schedule.action === "create" ||
-                    group.shift_type.action === "create";
+                  const typeCreating = group.shift_type.action === "create";
+                  const scheduleCreating = group.shift_schedule.action === "create";
                   return (
                     <li
-                      key={`${index}-${pat}`}
-                      className="rounded-xl border border-border/60 bg-card/50 p-3"
+                      key={`${index}-${scheduleName}`}
+                      className="rounded-xl border border-border/60 bg-card/50 p-3 space-y-2"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium">{formatDayList(group.days)}</span>
-                        <Badge variant={isCreate ? "outline" : "secondary"} className="font-normal">
-                          {isCreate ? "Will create" : "Existing"}
-                        </Badge>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{pat}</p>
-                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-[6.5rem] shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Shift Type</span>
+                          <span className="truncate text-xs text-foreground">{shiftTypeName}</span>
+                          {typeCreating ? (
+                            <Badge variant="outline" className="ml-auto shrink-0 text-[10px] font-normal">New</Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-[6.5rem] shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Shift Schedule</span>
+                          <span className="truncate text-xs text-foreground">{scheduleName}</span>
+                          {scheduleCreating ? (
+                            <Badge variant="outline" className="ml-auto shrink-0 text-[10px] font-normal">New</Badge>
+                          ) : null}
+                        </div>
+                      </div>
+                      <p className="text-xs tabular-nums text-muted-foreground">
                         {formatTimeInput(group.profile.start_time)}–
                         {formatTimeInput(group.profile.end_time)}
                         {group.profile.lunch_start && group.profile.lunch_end
                           ? ` · lunch ${formatTimeInput(group.profile.lunch_start)}–${formatTimeInput(group.profile.lunch_end)}`
                           : " · no lunch"}
+                        {group.profile.grace_minutes
+                          ? ` · ${group.profile.grace_minutes}m grace`
+                          : null}
                       </p>
                     </li>
                   );
@@ -106,12 +124,16 @@ export function SchedulePlanPreviewDialog(props: SchedulePlanPreviewDialogProps)
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Configure shift blocks to see which PAT records will be used.
+                Configure shift blocks to see which records will be used.
               </p>
             )}
 
-            {props.plan?.warnings?.[0] ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">{props.plan.warnings[0]}</p>
+            {props.plan?.warnings?.length ? (
+              <ul className="space-y-1">
+                {props.plan.warnings.map((w, i) => (
+                  <li key={i} className="text-xs text-amber-700 dark:text-amber-400">{w}</li>
+                ))}
+              </ul>
             ) : null}
           </section>
         </div>

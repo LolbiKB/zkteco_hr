@@ -8,17 +8,27 @@ import type { CalendarEmployee, CalendarPayload, DeviceAlert, DeviceSyncStatus }
 const EMPLOYEES_METHOD = "zkteco_hr.attendance_engine.hr_calendar.list_calendar_employees";
 const CALENDAR_METHOD = "zkteco_hr.attendance_engine.hr_calendar.get_employee_calendar";
 
+type EmployeesResponse = {
+  employees: CalendarEmployee[];
+  current_user_employee: string | null;
+};
+
 export function useCalendarEmployees() {
-  const { data, error, isLoading, mutate } = useFrappeGetCall<CalendarEmployee[]>(
+  const { data, error, isLoading, mutate } = useFrappeGetCall<EmployeesResponse>(
     EMPLOYEES_METHOD,
     undefined,
     EMPLOYEES_METHOD
   );
 
-  const employees = useMemo<CalendarEmployee[]>(() => data?.message ?? [], [data?.message]);
+  const employees = useMemo<CalendarEmployee[]>(
+    () => data?.message?.employees ?? [],
+    [data?.message]
+  );
+  const currentUserEmployee: string | null = data?.message?.current_user_employee ?? null;
 
   return {
     employees,
+    currentUserEmployee,
     error,
     isLoading,
     refresh: mutate,
@@ -64,15 +74,23 @@ export function useEmployeeCalendar(employee: string | null, anchor: Date) {
   };
 }
 
+/**
+ * Set a default employee when none is selected.
+ * For HR staff, prefer their own linked employee (preferredId) over the first in the list.
+ */
 export function useDefaultEmployee(
   employees: CalendarEmployee[],
   employee: string | null,
-  setEmployee: (id: string) => void
+  setEmployee: (id: string) => void,
+  preferredId: string | null = null
 ) {
   useEffect(() => {
     if (employee || !employees.length) return;
-    setEmployee(employees[0]!.id);
-  }, [employee, employees, setEmployee]);
+    const preferred = preferredId
+      ? employees.find((e) => e.id === preferredId)
+      : null;
+    setEmployee(preferred ? preferred.id : employees[0]!.id);
+  }, [employee, employees, preferredId, setEmployee]);
 }
 
 /** Open device closeout alerts overlapping the visible week. */

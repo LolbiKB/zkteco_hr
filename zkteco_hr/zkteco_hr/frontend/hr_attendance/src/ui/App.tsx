@@ -45,11 +45,12 @@ export function App() {
 
   const {
     employees,
+    currentUserEmployee,
     error: employeesError,
     isLoading: employeesLoading,
     refresh: refreshEmployees,
   } = useCalendarEmployees();
-  const { employee, selectEmployee } = useEmployeeSelection(employees);
+  const { employee, selectEmployee } = useEmployeeSelection(employees, currentUserEmployee);
 
   useEffect(() => {
     if (sessionLoading || hrStaff || employees.length !== 1) return;

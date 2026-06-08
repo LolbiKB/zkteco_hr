@@ -72,8 +72,8 @@ Closeout is **idempotent for AUTO flags**: each run deletes and recreates AUTO r
 
 - **React SPA:** **`/hr-attendance`** (primary HR week view)
 - **Weekly Schedule:** **`/hr-schedule`** (same SPA bundle)
-- **Desk:** **`/desk`** — **ZKTeco HR** desktop tile (after migrate) or module workspace / sidebar shortcuts to the SPA and **Attendance Flag** list (`/app/attendance-flag`)
-- **Desktop app tile:** **ZKTeco HR** (via `add_to_apps_screen` in hooks) → `/hr-attendance`
+- **Desk:** **`/desk`** — open **ZKTeco HR** from the app switcher (`add_to_apps_screen`) or Awesomebar → `/hr-attendance`
+- **App switcher:** **ZKTeco HR** → `/hr-attendance`
 - **SPA shell:** top bar links back to **Desk**, **Flags inbox**, and tabs between Attendance / Weekly Schedule
 - **Awesomebar:** `Cmd+K` → “HR Attendance” or “Weekly Schedule”
 
@@ -86,8 +86,7 @@ Calendar filter semantics (Shift Assignment docstatus, leave, holidays, flags): 
 
 ## Weekly Schedule wizard
 
-- Route: **`/hr-schedule`** (same SPA bundle as `/hr-attendance`)
-- Link from the attendance toolbar: **Edit weekly schedule**
+- Route: **`/hr-schedule`** (same SPA bundle as `/hr-attendance`; tab in the SPA shell)
 - APIs (`System Manager` / `HR User`):
   - `zkteco_hr.attendance_engine.schedule_api.get_employee_schedule_context(employee)`
   - `zkteco_hr.attendance_engine.schedule_api.resolve_weekly_schedule_plan(employee, week_pattern, effective_from)`

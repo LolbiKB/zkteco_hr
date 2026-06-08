@@ -64,9 +64,9 @@ Implementation: `zkteco_hr/utils/sync_hr_attendance_assets.py`
 | Asset | URL | Used for |
 | --- | --- | --- |
 | `DI-logo.svg` | `/assets/zkteco_hr/images/DI-logo.svg` | Site favicon / Desk login (`app_logo_url`, `website_context`, SPA `<link rel="icon">`) |
-| `attendance-svgrepo-com.svg` | `/assets/zkteco_hr/images/attendance-svgrepo-com.svg` | ZKTeco HR app tile (`add_to_apps_screen`, Desktop Icon `logo_url`, SPA header) |
+| `attendance-svgrepo-com.svg` | `/assets/zkteco_hr/images/attendance-svgrepo-com.svg` | App switcher logo (`add_to_apps_screen`) and SPA header |
 
-Every migrate runs `sync_app_branding_assets()` (copies all of `public/images/`). Patch `v7` restores the attendance icon on the Desktop Icon after `v6` set DI site-wide.
+Every migrate runs `sync_app_branding_assets()` (copies all of `public/images/`). Desk **Workspace / Desktop Icon** for ZKTeco HR are not created — patch `remove_zkteco_hr_desk_workspace` deletes them if present.
 
 Verify both URLs return **200** SVG in the browser.
 

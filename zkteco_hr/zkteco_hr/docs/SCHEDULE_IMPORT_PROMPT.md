@@ -100,3 +100,51 @@ DI-0364,chhorm.sophal@diu.edu.kh,06:30,11:30,12:30,17:00,Saturday(am)|Sunday
 - Run the normalised CSV through the importer's preview before applying — any
   employee IDs that don't match Frappe will show as "Not found" so you can
   correct them before committing.
+- After import preview, use **Download AI feedback** to export a CSV of every
+  validation issue with machine-readable `code` and `suggestion` columns. Re-feed
+  that file (or a summary) to the Haiku agent to fix remaining rows.
+
+---
+
+## Validation issue codes (importer feedback)
+
+The importer assigns each problem a `code` you can filter on and export for the
+AI normaliser. Fix **error** rows before import; **warning** rows may still
+import if the employee matches Frappe.
+
+| Code | Severity | Meaning | AI fix hint |
+|---|---|---|---|
+| `MISSING_EMPLOYEE_ID` | error | Blank first column | Always output badge ID (e.g. `DI-0159`) |
+| `INVALID_EMPLOYEE_ID` | error | Not `XX-1234` format | Never put dates, times, or emails in employee_id |
+| `EMPLOYEE_NOT_FOUND` | error | ID not in Frappe | Verify badge against HR master |
+| `INVALID_TIME_FORMAT` | error | Not `HH:MM` 24h | Normalise `7:30am` → `07:30`; no seconds |
+| `MISSING_SHIFT_TIMES` | error | No complete AM/PM/continuous window | See shapes below |
+| `END_BEFORE_START` | error | End time ≤ start | Check am_to / pm_from / pm_to order |
+| `NO_WORKING_DAYS` | error | All weekdays in days_off | Employee would never work |
+| `GARBAGE_ROW` | error | Row looks like failed normalisation | Drop or re-normalise source row |
+| `MIDNIGHT_AS_NOON` | warning | `00:00` in am_to or pm_from | Use `12:00` for noon lunch end |
+| `INVALID_EMAIL` | warning | Malformed email column | Single address; no commas in field |
+| `INVALID_DAYS_OFF_TOKEN` | warning | Unrecognised weekday token | Full names: `Saturday`, not `Sat` |
+| `DUPLICATE_EMPLOYEE_ID` | warning | Same ID on multiple rows | One row per employee |
+| `SHORT_LUNCH_GAP` | warning | Lunch gap under 15 minutes | Check am_to vs pm_from |
+| `PM_ONLY` | info | `off,off,13:00,17:00` | Valid afternoon-only pattern |
+| `CONTINUOUS_SHIFT` | info | `06:00,off,off,18:00` | Valid long day without lunch |
+| `AM_ONLY` | info | `07:00,11:30,off,off` | Valid morning-only pattern |
+
+### Supported schedule shapes
+
+| Shape | am_from | am_to | pm_from | pm_to | Example |
+|---|---|---|---|---|---|
+| Full day + lunch | time | time | time | time | `07:00,11:00,13:00,17:00` |
+| AM only | time | time | off | off | `07:00,11:30,off,off` |
+| PM only | off | off | time | time | `off,off,14:00,17:00` |
+| Continuous (no lunch) | time | off | off | time | `06:00,off,off,18:00` |
+
+### Common AI normalisation mistakes (from real imports)
+
+1. **Empty employee_id** — email or date ends up in column 1; always copy badge ID.
+2. **`00:00` for noon** — lunch end should be `12:00`, not midnight.
+3. **Garbage trailing rows** — dates (`2017-03-03`), durations (`4h`), or times in the ID column.
+4. **Comma in email** — CSV-escape emails with commas: `"name@domain.tld"`.
+5. **PM-only staff** — set `am_from,am_to` to `off,off`, not blank.
+6. **Long shifts** — use continuous shape when there is no lunch break.

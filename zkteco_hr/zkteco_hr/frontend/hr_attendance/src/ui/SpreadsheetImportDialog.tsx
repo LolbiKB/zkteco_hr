@@ -1,13 +1,14 @@
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
+  DownloadIcon,
   FileSpreadsheetIcon,
   Loader2Icon,
   UploadIcon,
   XCircleIcon,
 } from "lucide-react";
 import { useFrappePostCall } from "frappe-react-sdk";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { WeekPattern, Weekday } from "@/types/schedule";
@@ -31,7 +31,16 @@ import { weekPatternForApi } from "@/types/schedule";
 // Types
 // ---------------------------------------------------------------------------
 
+type ImportIssue = {
+  code: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+  field?: string | null;
+  suggestion?: string | null;
+};
+
 type ParsedRow = {
+  row_number: number;
   id_card: string;
   email: string;
   employee: string | null;
@@ -43,16 +52,47 @@ type ParsedRow = {
   pm_to: string | null;
   day_off: { full_off: string[]; afternoon_off: string[] };
   week_pattern: WeekPattern | null;
+  schedule_shape: string;
+  issues: ImportIssue[];
+  importable: boolean;
   warnings: string[];
 };
 
-type ParseResult = { rows: ParsedRow[] };
+type ParseSummary = {
+  total_rows: number;
+  importable: number;
+  matched: number;
+  unmatched: number;
+  errors: number;
+  warnings: number;
+  garbage_rows: number;
+  by_code: Record<string, number>;
+};
+
+type FeedbackRow = {
+  row_number: number;
+  employee_id: string;
+  email: string;
+  field: string;
+  code: string;
+  severity: string;
+  message: string;
+  suggestion: string;
+};
+
+type ParseResult = {
+  rows: ParsedRow[];
+  summary: ParseSummary;
+  feedback_rows: FeedbackRow[];
+};
 
 type RowApplyStatus =
   | { type: "idle" }
   | { type: "applying" }
   | { type: "ok"; message?: string }
   | { type: "error"; message: string };
+
+type RowFilter = "all" | "importable" | "errors" | "warnings" | "not_found";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,6 +111,33 @@ const DAY_ABBREV: Record<string, string> = {
   Sunday: "Su",
 };
 
+const SHAPE_LABELS: Record<string, string> = {
+  full_day: "Full day",
+  am_only: "AM only",
+  pm_only: "PM only",
+  continuous: "Continuous",
+  invalid: "Invalid",
+};
+
+const ISSUE_CODE_LABELS: Record<string, string> = {
+  MISSING_EMPLOYEE_ID: "Missing ID",
+  INVALID_EMPLOYEE_ID: "Bad ID format",
+  EMPLOYEE_NOT_FOUND: "Not in Frappe",
+  INVALID_TIME_FORMAT: "Bad time",
+  MISSING_SHIFT_TIMES: "Missing times",
+  END_BEFORE_START: "Time order",
+  NO_WORKING_DAYS: "All days off",
+  GARBAGE_ROW: "Garbage row",
+  MIDNIGHT_AS_NOON: "00:00 → noon?",
+  INVALID_EMAIL: "Bad email",
+  INVALID_DAYS_OFF_TOKEN: "Bad days_off",
+  DUPLICATE_EMPLOYEE_ID: "Duplicate ID",
+  SHORT_LUNCH_GAP: "Short lunch",
+  PM_ONLY: "PM only",
+  CONTINUOUS_SHIFT: "Continuous",
+  AM_ONLY: "AM only",
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -80,9 +147,7 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip "data:...;base64," prefix
-      const b64 = result.split(",")[1];
-      resolve(b64);
+      resolve(result.split(",")[1]);
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -90,6 +155,12 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function formatShiftSummary(row: ParsedRow): string {
+  if (row.schedule_shape === "pm_only" && row.pm_from && row.pm_to) {
+    return `PM ${row.pm_from}–${row.pm_to}`;
+  }
+  if (row.schedule_shape === "continuous" && row.am_from && row.pm_to) {
+    return `${row.am_from}–${row.pm_to}`;
+  }
   if (!row.am_from || !row.am_to) return "—";
   const am = `${row.am_from}–${row.am_to}`;
   if (!row.pm_from || !row.pm_to) return am;
@@ -98,37 +169,62 @@ function formatShiftSummary(row: ParsedRow): string {
 
 function formatWorkDays(row: ParsedRow): string {
   if (!row.week_pattern) return "—";
-  const fullOff = new Set(row.day_off.full_off);
-  const amOnly = new Set(row.day_off.afternoon_off);
-  const hasPm = Boolean(row.pm_from && row.pm_to);
-
   const parts: string[] = [];
   for (const day of row.week_pattern.days) {
     if (!day.works) continue;
-    const abbrev = DAY_ABBREV[day.weekday] ?? day.weekday.slice(0, 2);
-    const suffix = (amOnly.has(day.weekday) || !hasPm) && !fullOff.has(day.weekday) ? "" : "";
-    parts.push(abbrev + suffix);
+    parts.push(DAY_ABBREV[day.weekday] ?? day.weekday.slice(0, 2));
   }
   return parts.join(" ") || "Off all week";
+}
+
+function rowMatchesFilter(row: ParsedRow, filter: RowFilter): boolean {
+  switch (filter) {
+    case "importable":
+      return row.importable;
+    case "errors":
+      return row.issues.some((i) => i.severity === "error");
+    case "warnings":
+      return row.issues.some((i) => i.severity === "warning");
+    case "not_found":
+      return Boolean(row.id_card) && !row.matched;
+    default:
+      return true;
+  }
+}
+
+function downloadFeedbackCsv(feedback: FeedbackRow[], filename: string) {
+  const header = "row_number,employee_id,email,field,code,severity,message,suggestion";
+  const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = feedback.map((r) =>
+    [
+      r.row_number,
+      r.employee_id,
+      r.email,
+      r.field,
+      r.code,
+      r.severity,
+      r.message,
+      r.suggestion,
+    ]
+      .map(escape)
+      .join(",")
+  );
+  const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function DropZone(props: {
-  onFile: (file: File) => void;
-  disabled?: boolean;
-}) {
+function DropZone(props: { onFile: (file: File) => void; disabled?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) props.onFile(file);
-  }
 
   return (
     <div
@@ -145,14 +241,21 @@ function DropZone(props: {
         setDragging(true);
       }}
       onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file) props.onFile(file);
+      }}
     >
       <div className="flex size-10 items-center justify-center rounded-xl bg-muted/60">
         <FileSpreadsheetIcon className="size-5 text-muted-foreground" />
       </div>
       <div>
-        <p className="text-sm font-medium">Drop your schedule spreadsheet here</p>
-        <p className="text-xs text-muted-foreground">or click to browse — .xlsx or .csv</p>
+        <p className="text-sm font-medium">Drop normalised schedule CSV here</p>
+        <p className="text-xs text-muted-foreground">
+          Canonical 7-column format — use Haiku prompt first, then import
+        </p>
       </div>
       <input
         ref={inputRef}
@@ -169,6 +272,25 @@ function DropZone(props: {
   );
 }
 
+function IssueBadge(props: { issue: ImportIssue }) {
+  const { issue } = props;
+  const label = ISSUE_CODE_LABELS[issue.code] ?? issue.code;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-[10px] font-normal",
+        issue.severity === "error" && "border-destructive/40 text-destructive",
+        issue.severity === "warning" && "border-amber-500/40 text-amber-800 dark:text-amber-200",
+        issue.severity === "info" && "border-border text-muted-foreground"
+      )}
+      title={issue.suggestion ?? issue.message}
+    >
+      {label}
+    </Badge>
+  );
+}
+
 function RowStatusIcon(props: { row: ParsedRow; applyStatus?: RowApplyStatus }) {
   const { row, applyStatus } = props;
   if (applyStatus?.type === "applying") {
@@ -180,10 +302,10 @@ function RowStatusIcon(props: { row: ParsedRow; applyStatus?: RowApplyStatus }) 
   if (applyStatus?.type === "error") {
     return <XCircleIcon className="size-4 shrink-0 text-destructive" />;
   }
-  if (!row.matched) {
-    return <XCircleIcon className="size-4 shrink-0 text-destructive" />;
-  }
-  if (row.warnings.length > 0) {
+  if (!row.importable) {
+    if (row.issues.some((i) => i.severity === "error")) {
+      return <XCircleIcon className="size-4 shrink-0 text-destructive" />;
+    }
     return <AlertCircleIcon className="size-4 shrink-0 text-amber-500" />;
   }
   return <CheckCircle2Icon className="size-4 shrink-0 text-emerald-500" />;
@@ -196,9 +318,11 @@ function PreviewRow(props: {
   applyStatus?: RowApplyStatus;
 }) {
   const { row, selected, onToggle, applyStatus } = props;
-  const canSelect = row.matched && Boolean(row.week_pattern);
+  const canSelect = row.importable;
   const applied = applyStatus?.type === "ok";
   const failed = applyStatus?.type === "error";
+  const errors = row.issues.filter((i) => i.severity === "error");
+  const warnings = row.issues.filter((i) => i.severity === "warning");
 
   return (
     <div
@@ -218,45 +342,51 @@ function PreviewRow(props: {
           checked={canSelect && selected}
           disabled={!canSelect || applied || applyStatus?.type === "applying"}
           onCheckedChange={onToggle}
-          aria-label={`Include ${row.id_card}`}
+          aria-label={`Include row ${row.row_number}`}
         />
       </div>
 
       <RowStatusIcon row={row} applyStatus={applyStatus} />
 
-      <div className="min-w-0 flex-1 space-y-0.5">
+      <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="font-medium">{row.employee_name ?? row.id_card}</span>
-          <span className="text-xs text-muted-foreground">{row.id_card}</span>
-          {!row.matched ? (
-            <Badge variant="destructive" className="text-[10px]">
-              Not found
+          <span className="text-[10px] tabular-nums text-muted-foreground">#{row.row_number}</span>
+          <span className="font-medium">{row.employee_name ?? row.id_card ?? "—"}</span>
+          {row.id_card ? (
+            <span className="text-xs text-muted-foreground">{row.id_card}</span>
+          ) : null}
+          {row.schedule_shape !== "invalid" ? (
+            <Badge variant="secondary" className="text-[10px] font-normal">
+              {SHAPE_LABELS[row.schedule_shape] ?? row.schedule_shape}
             </Badge>
           ) : null}
         </div>
 
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          <span>
-            <span className="font-medium text-foreground">{formatWorkDays(row)}</span>
-          </span>
+          <span className="font-medium text-foreground">{formatWorkDays(row)}</span>
           <span>{formatShiftSummary(row)}</span>
-          {row.pm_from && row.pm_to ? (
+          {row.schedule_shape === "full_day" && row.pm_from && row.pm_to ? (
             <span className="text-muted-foreground/70">
               lunch {row.am_to}–{row.pm_from}
             </span>
           ) : null}
         </div>
 
-        {row.warnings.filter((w) => !w.startsWith("No active employee")).length > 0 ? (
-          <ul className="mt-0.5 space-y-0">
-            {row.warnings
-              .filter((w) => !w.startsWith("No active employee"))
-              .map((w, i) => (
-                <li key={i} className="text-[11px] text-amber-700 dark:text-amber-400">
-                  ⚠ {w}
-                </li>
-              ))}
-          </ul>
+        {errors.length > 0 || warnings.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {errors.map((i) => (
+              <IssueBadge key={`e-${i.code}-${i.field}`} issue={i} />
+            ))}
+            {warnings.map((i) => (
+              <IssueBadge key={`w-${i.code}-${i.field}`} issue={i} />
+            ))}
+          </div>
+        ) : null}
+
+        {(errors[0]?.suggestion ?? warnings[0]?.suggestion) ? (
+          <p className="text-[11px] text-muted-foreground">
+            💡 {errors[0]?.suggestion ?? warnings[0]?.suggestion}
+          </p>
         ) : null}
 
         {applyStatus?.type === "error" ? (
@@ -266,7 +396,6 @@ function PreviewRow(props: {
         ) : null}
       </div>
 
-      {/* Day-off chips */}
       {row.day_off.full_off.length > 0 ? (
         <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
           {row.day_off.full_off.map((d) => (
@@ -274,6 +403,74 @@ function PreviewRow(props: {
               {d.slice(0, 3)} off
             </Badge>
           ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryBar(props: {
+  summary: ParseSummary;
+  filter: RowFilter;
+  onFilterChange: (f: RowFilter) => void;
+  visibleCount: number;
+}) {
+  const { summary, filter, onFilterChange, visibleCount } = props;
+
+  const chips: { key: RowFilter; label: string; count: number; tone?: string }[] = [
+    { key: "all", label: "All", count: summary.total_rows },
+    { key: "importable", label: "Ready", count: summary.importable },
+    { key: "errors", label: "Errors", count: summary.errors, tone: "text-destructive" },
+    { key: "warnings", label: "Warnings", count: summary.warnings, tone: "text-amber-700 dark:text-amber-300" },
+    { key: "not_found", label: "Not found", count: summary.unmatched, tone: "text-destructive" },
+  ];
+
+  return (
+    <div className="border-b border-border/60 bg-muted/20 px-5 py-2.5 space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          <strong className="text-foreground">{summary.importable}</strong> ready to import
+        </span>
+        <span>
+          <strong className="text-foreground">{summary.matched}</strong> matched in Frappe
+        </span>
+        {summary.garbage_rows > 0 ? (
+          <span className="text-destructive">{summary.garbage_rows} garbage rows</span>
+        ) : null}
+        <span className="ml-auto text-muted-foreground/80">
+          Showing {visibleCount} of {summary.total_rows}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => onFilterChange(chip.key)}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+              filter === chip.key
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-border/60 bg-background/60 text-muted-foreground hover:border-primary/30"
+            )}
+          >
+            <span className={chip.tone}>{chip.label}</span>
+            <span className="ml-1 tabular-nums opacity-80">{chip.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {Object.keys(summary.by_code).length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {Object.entries(summary.by_code)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([code, count]) => (
+              <Badge key={code} variant="outline" className="text-[10px] font-normal">
+                {ISSUE_CODE_LABELS[code] ?? code} ×{count}
+              </Badge>
+            ))}
         </div>
       ) : null}
     </div>
@@ -297,7 +494,10 @@ export function SpreadsheetImportDialog(props: {
   const [step, setStep] = useState<Step>("idle");
   const [parseError, setParseError] = useState<string | null>(null);
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [summary, setSummary] = useState<ParseSummary | null>(null);
+  const [feedbackRows, setFeedbackRows] = useState<FeedbackRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const [effectiveFrom, setEffectiveFrom] = useState(defaultEffectiveFrom);
   const [applyStatuses, setApplyStatuses] = useState<Record<number, RowApplyStatus>>({});
   const [currentFile, setCurrentFile] = useState<File | null>(null);
@@ -305,18 +505,29 @@ export function SpreadsheetImportDialog(props: {
   const { call: callParse } = useFrappePostCall<{ message: ParseResult }>(PARSE_METHOD);
   const { call: callApply } = useFrappePostCall<{ message: unknown }>(APPLY_METHOD);
 
+  const visibleRows = useMemo(
+    () =>
+      rows
+        .map((row, index) => ({ row, index }))
+        .filter(({ row }) => rowMatchesFilter(row, rowFilter)),
+    [rows, rowFilter]
+  );
+
   function reset() {
     setStep("idle");
     setParseError(null);
     setRows([]);
+    setSummary(null);
+    setFeedbackRows([]);
     setSelected(new Set());
+    setRowFilter("all");
     setApplyStatuses({});
     setCurrentFile(null);
   }
 
-  function handleOpenChange(open: boolean) {
-    if (!open) reset();
-    onOpenChange(open);
+  function handleOpenChange(next: boolean) {
+    if (!next) reset();
+    onOpenChange(next);
   }
 
   const handleFile = useCallback(
@@ -331,14 +542,14 @@ export function SpreadsheetImportDialog(props: {
         const parsed: ParseResult = result?.message ?? (result as unknown as ParseResult);
 
         setRows(parsed.rows);
+        setSummary(parsed.summary);
+        setFeedbackRows(parsed.feedback_rows ?? []);
 
-        // Pre-select all matched rows with a valid week_pattern
         const preSelected = new Set(
-          parsed.rows
-            .map((r, i) => (r.matched && r.week_pattern ? i : -1))
-            .filter((i) => i >= 0)
+          parsed.rows.map((r, i) => (r.importable ? i : -1)).filter((i) => i >= 0)
         );
         setSelected(preSelected);
+        setRowFilter(parsed.summary.importable < parsed.summary.total_rows ? "importable" : "all");
         setStep("preview");
       } catch (err: unknown) {
         const msg =
@@ -361,24 +572,28 @@ export function SpreadsheetImportDialog(props: {
     });
   }
 
-  function toggleAll() {
-    const eligible = rows
-      .map((r, i) => (r.matched && r.week_pattern ? i : -1))
-      .filter((i) => i >= 0);
+  function toggleAllVisible() {
+    const eligible = visibleRows
+      .filter(({ row }) => row.importable)
+      .map(({ index }) => index);
     const allSelected = eligible.every((i) => selected.has(i));
-    setSelected(new Set(allSelected ? [] : eligible));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const i of eligible) next.delete(i);
+      } else {
+        for (const i of eligible) next.add(i);
+      }
+      return next;
+    });
   }
 
   async function handleApply() {
     if (!effectiveFrom) return;
-    const toApply = [...selected].filter((i) => {
-      const r = rows[i];
-      return r.matched && r.week_pattern;
-    });
+    const toApply = [...selected].filter((i) => rows[i]?.importable);
     if (!toApply.length) return;
 
     setStep("applying");
-
     let anyOk = false;
 
     for (const idx of toApply) {
@@ -409,10 +624,7 @@ export function SpreadsheetImportDialog(props: {
     if (anyOk) onSuccess?.();
   }
 
-  // Derived state
-  const eligibleCount = rows.filter((r, i) => r.matched && r.week_pattern && selected.has(i)).length;
-  const matchedCount = rows.filter((r) => r.matched && r.week_pattern).length;
-  const unmatchedCount = rows.filter((r) => !r.matched).length;
+  const eligibleCount = rows.filter((r, i) => r.importable && selected.has(i)).length;
   const doneCount = Object.values(applyStatuses).filter((s) => s.type === "ok").length;
   const failCount = Object.values(applyStatuses).filter((s) => s.type === "error").length;
   const isApplying = step === "applying";
@@ -429,16 +641,16 @@ export function SpreadsheetImportDialog(props: {
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-base">Import from spreadsheet</DialogTitle>
               <DialogDescription className="text-xs">
-                Upload the normalised CSV (use the Haiku prompt to convert raw spreadsheets first)
+                Validates AI-normalised CSV, flags rows to fix, and exports feedback for the
+                normaliser
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="max-h-[min(70dvh,36rem)] overflow-y-auto">
-          {/* ── Step: idle / parsing ── */}
           {(step === "idle" || step === "parsing") && (
-            <div className="px-5 py-5 space-y-4">
+            <div className="space-y-4 px-5 py-5">
               {parseError ? (
                 <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                   {parseError}
@@ -448,72 +660,62 @@ export function SpreadsheetImportDialog(props: {
               {step === "parsing" ? (
                 <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Loader2Icon className="size-4 animate-spin" />
-                  Reading {currentFile?.name ?? "file"}…
+                  Validating {currentFile?.name ?? "file"}…
                 </p>
               ) : null}
             </div>
           )}
 
-          {/* ── Step: preview / applying / done ── */}
-          {(step === "preview" || step === "applying" || step === "done") && (
+          {(step === "preview" || step === "applying" || step === "done") && summary ? (
             <>
-              {/* Summary bar */}
-              <div className="border-b border-border/60 bg-muted/20 px-5 py-2.5">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>
-                    <strong className="text-foreground">{rows.length}</strong> rows parsed
-                  </span>
-                  <span>
-                    <strong className="text-foreground">{matchedCount}</strong> employees matched
-                  </span>
-                  {unmatchedCount > 0 ? (
-                    <span className="text-destructive">
-                      {unmatchedCount} not found
-                    </span>
-                  ) : null}
-                  {isDone ? (
-                    <>
-                      {doneCount > 0 ? (
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          ✓ {doneCount} saved
-                        </span>
-                      ) : null}
-                      {failCount > 0 ? (
-                        <span className="text-destructive">✗ {failCount} failed</span>
-                      ) : null}
-                    </>
-                  ) : null}
+              <SummaryBar
+                summary={summary}
+                filter={rowFilter}
+                onFilterChange={setRowFilter}
+                visibleCount={visibleRows.length}
+              />
 
-                  {!isDone && matchedCount > 0 ? (
-                    <button
-                      type="button"
-                      className="ml-auto text-xs text-primary underline-offset-2 hover:underline"
-                      onClick={toggleAll}
-                      disabled={isApplying}
-                    >
-                      {selected.size === matchedCount ? "Deselect all" : "Select all"}
-                    </button>
-                  ) : null}
+              {feedbackRows.length > 0 && !isDone ? (
+                <div className="flex items-center justify-end gap-2 border-b border-border/40 px-5 py-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() =>
+                      downloadFeedbackCsv(
+                        feedbackRows,
+                        `schedule-import-feedback-${currentFile?.name?.replace(/\.[^.]+$/, "") ?? "upload"}.csv`
+                      )
+                    }
+                  >
+                    <DownloadIcon className="size-3.5" />
+                    Download AI feedback ({feedbackRows.length})
+                  </Button>
                 </div>
-              </div>
+              ) : null}
 
-              {/* Row list */}
-              <div className="px-5 py-3 space-y-2">
-                {rows.map((row, i) => (
-                  <PreviewRow
-                    key={i}
-                    row={row}
-                    selected={selected.has(i)}
-                    onToggle={() => toggleRow(i)}
-                    applyStatus={applyStatuses[i]}
-                  />
-                ))}
+              <div className="space-y-2 px-5 py-3">
+                {visibleRows.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No rows match this filter.
+                  </p>
+                ) : (
+                  visibleRows.map(({ row, index }) => (
+                    <PreviewRow
+                      key={`${row.row_number}-${index}`}
+                      row={row}
+                      selected={selected.has(index)}
+                      onToggle={() => toggleRow(index)}
+                      applyStatus={applyStatuses[index]}
+                    />
+                  ))
+                )}
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
-        {/* Footer */}
         {(step === "preview" || step === "applying" || step === "done") && (
           <>
             <Separator />
@@ -526,30 +728,43 @@ export function SpreadsheetImportDialog(props: {
                   onChange={setEffectiveFrom}
                   disabled={isApplying || isDone}
                 />
-                {isDone ? (
+                {!isDone && visibleRows.some(({ row }) => row.importable) ? (
                   <Button
                     type="button"
-                    variant="outline"
-                    size="default"
-                    className="h-9 shrink-0"
-                    onClick={reset}
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={toggleAllVisible}
+                    disabled={isApplying}
                   >
+                    Toggle visible
+                  </Button>
+                ) : null}
+                {isDone ? (
+                  <Button type="button" variant="outline" size="default" className="h-9" onClick={reset}>
                     Import another
                   </Button>
                 ) : null}
               </div>
 
               <div className="flex items-center gap-2 sm:justify-end">
-                {!isDone ? (
+                {isDone ? (
                   <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="default"
-                      className="h-9"
-                      onClick={reset}
-                      disabled={isApplying}
-                    >
+                    {doneCount > 0 ? (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        ✓ {doneCount} saved
+                      </span>
+                    ) : null}
+                    {failCount > 0 ? (
+                      <span className="text-xs text-destructive">✗ {failCount} failed</span>
+                    ) : null}
+                    <Button type="button" size="default" className="h-9" onClick={() => handleOpenChange(false)}>
+                      Done
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="ghost" size="default" className="h-9" onClick={reset} disabled={isApplying}>
                       Back
                     </Button>
                     <Button
@@ -569,15 +784,6 @@ export function SpreadsheetImportDialog(props: {
                       )}
                     </Button>
                   </>
-                ) : (
-                  <Button
-                    type="button"
-                    size="default"
-                    className="h-9"
-                    onClick={() => handleOpenChange(false)}
-                  >
-                    Done
-                  </Button>
                 )}
               </div>
             </DialogFooter>
@@ -587,10 +793,6 @@ export function SpreadsheetImportDialog(props: {
     </Dialog>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Trigger button (export for use in WeeklySchedulePage)
-// ---------------------------------------------------------------------------
 
 export function SpreadsheetImportTrigger(props: {
   onClick: () => void;

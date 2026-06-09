@@ -1,14 +1,17 @@
 """
 Spreadsheet-based bulk schedule import.
 
-Supports xlsx (and csv) files with the format:
-  Col 0: Employee ID card (e.g. DI-0159)
-  Col 1: Email
-  Col 2: AM From  (e.g. 7:30am)
-  Col 3: AM To    (e.g. 12:00pm)
-  Col 4: PM From  (e.g. 1:00pm, or "off")
-  Col 5: PM To    (e.g. 5:00pm)
-  Col 6: Day off  (e.g. "Saturday & Sunday", "Sat(Afternoon) and Sunday")
+Normalisation strategy (in order):
+  1. AI model (Claude / OpenAI / any OpenAI-compatible) — handles any column
+     order, time format, or day-off description style.
+  2. Rule-based fallback — used when no API key is configured or the AI call
+     fails.
+
+Site-config keys (frappe bench set-config):
+  anthropic_api_key          Anthropic API key  (primary if model is claude-*)
+  openai_api_key             OpenAI API key (used when model is gpt-* / o1*)
+  schedule_import_model      model name, default "claude-3-5-haiku-20241022"
+  schedule_import_base_url   base URL for OpenAI-compatible providers (optional)
 
 Exposed API: parse_schedule_upload(file_b64, filename)
 """
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 
 import frappe
@@ -27,32 +31,210 @@ import frappe
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 _WEEKDAY_IDX: dict[str, int] = {d: i for i, d in enumerate(WEEKDAYS)}
+_WEEKDAY_SET = set(WEEKDAYS)
 
 _DAY_ALIASES: dict[str, str] = {
-    "mon": "Monday",
-    "monday": "Monday",
-    "tue": "Tuesday",
-    "tues": "Tuesday",
-    "tuesday": "Tuesday",
-    "wed": "Wednesday",
-    "wednesday": "Wednesday",
-    "thu": "Thursday",
-    "thur": "Thursday",
-    "thurs": "Thursday",
-    "thursday": "Thursday",
-    "fri": "Friday",
-    "friday": "Friday",
-    "sat": "Saturday",
-    "saturday": "Saturday",
-    "sun": "Sunday",
-    "sunday": "Sunday",
+    "mon": "Monday", "monday": "Monday",
+    "tue": "Tuesday", "tues": "Tuesday", "tuesday": "Tuesday",
+    "wed": "Wednesday", "wednesday": "Wednesday",
+    "thu": "Thursday", "thur": "Thursday", "thurs": "Thursday", "thursday": "Thursday",
+    "fri": "Friday", "friday": "Friday",
+    "sat": "Saturday", "saturday": "Saturday",
+    "sun": "Sunday", "sunday": "Sunday",
 }
 
 _TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*(am|pm)?$", re.IGNORECASE)
 _ID_PATTERN = re.compile(r"^[A-Za-z]{1,4}-\d{2,}", re.IGNORECASE)
 
+_DEFAULT_MODEL = "claude-3-5-haiku-20241022"
+
 # ---------------------------------------------------------------------------
-# Day-range helpers
+# AI normalisation
+# ---------------------------------------------------------------------------
+
+_SYSTEM_PROMPT = """\
+You parse employee schedule spreadsheets and return structured JSON.
+Respond with ONLY a raw JSON array — no markdown, no explanation.
+"""
+
+_USER_PROMPT_TMPL = """\
+Here is a raw employee schedule spreadsheet (rows tab-separated, including any header rows):
+
+{tsv}
+
+Return a JSON array with one object per data row (skip header/blank rows):
+[
+  {{
+    "employee_id": "badge or card number e.g. DI-0159",
+    "email": "email or null",
+    "am_from": "morning start as HH:MM 24h e.g. 07:30, or null",
+    "am_to":   "morning end   as HH:MM 24h e.g. 12:00, or null",
+    "pm_from": "afternoon start as HH:MM 24h e.g. 13:00, or null if no afternoon",
+    "pm_to":   "afternoon end   as HH:MM 24h e.g. 17:00, or null if no afternoon",
+    "days_off":    ["fully off day names from: Monday Tuesday Wednesday Thursday Friday Saturday Sunday"],
+    "days_am_only": ["days where employee works mornings only even if they normally have an afternoon shift"]
+  }}
+]
+
+Rules:
+- Normalise any time format (7:30am, 730, 07:30, 7h30, etc.) to HH:MM 24h.
+- If PM column says "off", "-", blank, or similar → pm_from and pm_to are null.
+- "Day off" column describes which days/half-days the employee does NOT work.
+  Parse it to populate days_off (fully absent) and days_am_only (present AM only).
+- Return ONLY the JSON array.
+"""
+
+
+def _rows_to_tsv(rows: list[list]) -> str:
+    lines = []
+    for row in rows:
+        cells = [str(v) if v is not None else "" for v in row]
+        lines.append("\t".join(cells))
+    return "\n".join(lines)
+
+
+def _get_ai_config() -> dict | None:
+    """Return {model, provider, api_key, base_url} or None if no key is configured."""
+    model = frappe.conf.get("schedule_import_model") or _DEFAULT_MODEL
+    base_url = frappe.conf.get("schedule_import_base_url") or ""
+
+    # Determine provider from model name
+    if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
+        provider = "openai"
+    else:
+        provider = "anthropic"
+
+    if provider == "openai":
+        api_key = frappe.conf.get("openai_api_key") or ""
+        if not api_key:
+            # Fallback: maybe anthropic key is set with an OpenAI-compatible base_url
+            api_key = frappe.conf.get("anthropic_api_key") or ""
+    else:
+        api_key = frappe.conf.get("anthropic_api_key") or ""
+        if not api_key:
+            api_key = frappe.conf.get("openai_api_key") or ""
+            if api_key:
+                provider = "openai"
+
+    if not api_key:
+        return None
+
+    return {"model": model, "provider": provider, "api_key": api_key, "base_url": base_url}
+
+
+def _call_anthropic(cfg: dict, prompt: str) -> str:
+    import requests  # noqa: PLC0415
+
+    resp = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": cfg["api_key"],
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": cfg["model"],
+            "max_tokens": 4096,
+            "system": _SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"]
+
+
+def _call_openai(cfg: dict, prompt: str) -> str:
+    import requests  # noqa: PLC0415
+
+    base = (cfg.get("base_url") or "https://api.openai.com").rstrip("/")
+    resp = requests.post(
+        f"{base}/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {cfg['api_key']}",
+            "content-type": "application/json",
+        },
+        json={
+            "model": cfg["model"],
+            "messages": [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 4096,
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def _clean_weekday_list(raw: list | None) -> list[str]:
+    if not raw:
+        return []
+    out = []
+    for item in raw:
+        d = _DAY_ALIASES.get(str(item).strip().lower())
+        if d:
+            out.append(d)
+        elif str(item).strip() in _WEEKDAY_SET:
+            out.append(str(item).strip())
+    return sorted(set(out), key=lambda d: _WEEKDAY_IDX[d])
+
+
+def _ai_normalize_rows(raw_rows: list[list]) -> list[dict]:
+    """
+    Call the configured AI model and return per-row dicts:
+      {employee_id, email, am_from, am_to, pm_from, pm_to, days_off, days_am_only}
+
+    Raises on failure (caller falls back to rule-based).
+    """
+    cfg = _get_ai_config()
+    if not cfg:
+        raise RuntimeError("No AI API key configured")
+
+    tsv = _rows_to_tsv(raw_rows)
+    prompt = _USER_PROMPT_TMPL.format(tsv=tsv)
+
+    if cfg["provider"] == "anthropic":
+        raw_text = _call_anthropic(cfg, prompt)
+    else:
+        raw_text = _call_openai(cfg, prompt)
+
+    # Strip possible markdown fences the model might add despite instructions
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned.strip())
+
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, list):
+        raise ValueError("AI returned non-list JSON")
+
+    result = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        employee_id = str(item.get("employee_id") or "").strip()
+        if not employee_id:
+            continue
+        result.append(
+            {
+                "employee_id": employee_id,
+                "email": str(item.get("email") or "").strip(),
+                "am_from": item.get("am_from") or None,
+                "am_to": item.get("am_to") or None,
+                "pm_from": item.get("pm_from") or None,
+                "pm_to": item.get("pm_to") or None,
+                "days_off": _clean_weekday_list(item.get("days_off")),
+                "days_am_only": _clean_weekday_list(item.get("days_am_only")),
+                "_source": "ai",
+            }
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Rule-based fallback normalisation
 # ---------------------------------------------------------------------------
 
 
@@ -70,24 +252,13 @@ def _expand_day_range(start: str, end: str) -> list[str]:
 
 
 def _parse_day_off_text(text) -> dict:
-    """
-    Parse day-off description into structured off-day sets.
-
-    Returns {"full_off": list[str], "afternoon_off": list[str]}
-
-    Handles patterns like:
-    - "Saturday & Sunday"                          → full_off: [Sat, Sun]
-    - "Sat(Afternoon) and Sunday"                  → full_off: [Sun], afternoon_off: [Sat]
-    - "Mon-Fri(Afternoon)Saturday & Sunday"        → full_off: [Sat, Sun], afternoon_off: [Mon..Fri]
-    """
     if not text or str(text).strip().lower() in ("nan", "none", ""):
-        return {"full_off": [], "afternoon_off": []}
+        return {"days_off": [], "days_am_only": []}
 
     text = str(text).strip()
     full_off: set[str] = set()
     afternoon_off: set[str] = set()
 
-    # Extract "Day(Afternoon)" and "DayRange(Afternoon)" patterns first
     pm_re = re.compile(r"([A-Za-z]+-[A-Za-z]+|[A-Za-z]+)\s*\(Afternoon\)", re.IGNORECASE)
     remaining = text
     for m in pm_re.finditer(text):
@@ -101,7 +272,6 @@ def _parse_day_off_text(text) -> dict:
             if d:
                 afternoon_off.add(d)
 
-    # Remaining text → full off days
     for token in re.split(r"[&,+]|\band\b", remaining, flags=re.IGNORECASE):
         token = token.strip()
         if not token:
@@ -116,20 +286,15 @@ def _parse_day_off_text(text) -> dict:
                 full_off.add(d)
 
     return {
-        "full_off": sorted(full_off, key=lambda d: _WEEKDAY_IDX[d]),
-        "afternoon_off": sorted(afternoon_off, key=lambda d: _WEEKDAY_IDX[d]),
+        "days_off": sorted(full_off, key=lambda d: _WEEKDAY_IDX[d]),
+        "days_am_only": sorted(afternoon_off, key=lambda d: _WEEKDAY_IDX[d]),
     }
-
-
-# ---------------------------------------------------------------------------
-# Time parsing
-# ---------------------------------------------------------------------------
 
 
 def _is_off(value) -> bool:
     if value is None:
         return True
-    return str(value).strip().lower() in ("nan", "none", "", "off")
+    return str(value).strip().lower() in ("nan", "none", "", "off", "-", "n/a")
 
 
 def _parse_time(value) -> str | None:
@@ -154,13 +319,41 @@ def _cell_str(value) -> str:
     return "" if s.lower() in ("nan", "none") else s
 
 
+def _rule_normalize_rows(raw_rows: list[list], data_start: int) -> list[dict]:
+    """Fallback: column-position-based parsing for the known format."""
+    result = []
+    for raw in raw_rows[data_start:]:
+        while len(raw) < 7:
+            raw.append(None)
+
+        employee_id = _cell_str(raw[0])
+        if not employee_id:
+            continue
+
+        day_off_data = _parse_day_off_text(raw[6])
+        result.append(
+            {
+                "employee_id": employee_id,
+                "email": _cell_str(raw[1]),
+                "am_from": _parse_time(raw[2]),
+                "am_to": _parse_time(raw[3]),
+                "pm_from": _parse_time(raw[4]) if not _is_off(raw[4]) else None,
+                "pm_to": _parse_time(raw[5]) if not _is_off(raw[5]) else None,
+                "days_off": day_off_data["days_off"],
+                "days_am_only": day_off_data["days_am_only"],
+                "_source": "rules",
+            }
+        )
+    return result
+
+
 # ---------------------------------------------------------------------------
-# File parsing
+# File reading
 # ---------------------------------------------------------------------------
 
 
 def _parse_xlsx_bytes(file_bytes: bytes) -> list[list]:
-    from openpyxl import load_workbook
+    from openpyxl import load_workbook  # noqa: PLC0415
 
     wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
     ws = wb.active
@@ -168,14 +361,13 @@ def _parse_xlsx_bytes(file_bytes: bytes) -> list[list]:
 
 
 def _parse_csv_bytes(file_bytes: bytes) -> list[list]:
-    import csv
+    import csv  # noqa: PLC0415
 
     text = file_bytes.decode("utf-8-sig", errors="replace")
     return list(csv.reader(io.StringIO(text)))
 
 
 def _find_data_start(rows: list[list]) -> int:
-    """Return the index of the first row that looks like an employee data row."""
     for i, row in enumerate(rows):
         if row and row[0] is not None and _ID_PATTERN.match(str(row[0]).strip()):
             return i
@@ -188,7 +380,6 @@ def _find_data_start(rows: list[list]) -> int:
 
 
 def _lookup_employee(id_card: str, email: str = "") -> tuple[str | None, str | None]:
-    """Return (employee_name, display_name) or (None, None)."""
     for field in ("employee_number", "attendance_device_id"):
         result = frappe.db.get_value(
             "Employee",
@@ -214,27 +405,23 @@ def _lookup_employee(id_card: str, email: str = "") -> tuple[str | None, str | N
 
 
 # ---------------------------------------------------------------------------
-# WeekPattern builder
+# WeekPattern builder (shared by both paths)
 # ---------------------------------------------------------------------------
 
 
-def _build_week_pattern(
-    am_from: str | None,
-    am_to: str | None,
-    pm_from: str | None,
-    pm_to: str | None,
-    day_off: dict,
-) -> dict:
+def _build_week_pattern(normalized: dict) -> dict:
     """
-    Build a WeekPattern dict suitable for apply_weekly_schedule.
+    Build a WeekPattern dict from a normalized row dict.
 
-    Logic:
-    - full_off days → works: False
-    - afternoon_off days OR pm=off → works AM times only (no lunch block)
-    - Otherwise → works full day: start=am_from, end=pm_to, lunch=am_to→pm_from
+    normalized keys used:
+      am_from, am_to, pm_from, pm_to, days_off, days_am_only
     """
-    full_off = set(day_off.get("full_off") or [])
-    afternoon_off = set(day_off.get("afternoon_off") or [])
+    am_from = normalized.get("am_from")
+    am_to = normalized.get("am_to")
+    pm_from = normalized.get("pm_from")
+    pm_to = normalized.get("pm_to")
+    full_off = set(normalized.get("days_off") or [])
+    afternoon_off = set(normalized.get("days_am_only") or [])
     has_pm = bool(pm_from and pm_to)
 
     days = []
@@ -281,9 +468,11 @@ def parse_schedule_upload(file_b64: str, filename: str = "upload.xlsx") -> dict:
     """
     Parse a base64-encoded xlsx/csv schedule file and return a structured preview.
 
-    Each row in the result contains:
-      id_card, email, employee (Frappe name), employee_name, matched (bool),
-      am_from, am_to, pm_from, pm_to, day_off, week_pattern, warnings
+    Tries AI normalisation first (reads schedule_import_model + anthropic_api_key /
+    openai_api_key from site_config).  Falls back to column-position rules if no
+    key is configured or the AI call fails.
+
+    Returns {"rows": [...], "normalized_by": "ai" | "rules"}
     """
     try:
         file_bytes = base64.b64decode(file_b64)
@@ -303,28 +492,29 @@ def parse_schedule_upload(file_b64: str, filename: str = "upload.xlsx") -> dict:
             "Expected rows where the first column is an employee ID (e.g. DI-0159)."
         )
 
+    # Attempt AI normalisation (send all rows including headers for context)
+    normalized_by = "ai"
+    ai_error = None
+    try:
+        normalized_rows = _ai_normalize_rows(raw_rows)
+    except Exception as exc:
+        ai_error = str(exc)
+        normalized_by = "rules"
+        normalized_rows = _rule_normalize_rows(raw_rows, data_start)
+
+    # Build result rows (employee lookup + WeekPattern)
     result_rows = []
-    for raw in raw_rows[data_start:]:
-        # Pad to at least 7 columns
-        while len(raw) < 7:
-            raw.append(None)
-
-        id_card = _cell_str(raw[0])
-        if not id_card:
-            continue
-
-        email = _cell_str(raw[1])
-        am_from = _parse_time(raw[2])
-        am_to = _parse_time(raw[3])
-        pm_from = _parse_time(raw[4]) if not _is_off(raw[4]) else None
-        pm_to = _parse_time(raw[5]) if not _is_off(raw[5]) else None
-        day_off = _parse_day_off_text(raw[6])
+    for norm in normalized_rows:
+        id_card = norm.get("employee_id") or ""
+        email = norm.get("email") or ""
+        am_from = norm.get("am_from")
+        am_to = norm.get("am_to")
+        pm_from = norm.get("pm_from")
+        pm_to = norm.get("pm_to")
 
         warnings: list[str] = []
         if not am_from or not am_to:
             warnings.append("AM shift times missing or unparseable")
-        if not _is_off(raw[4]) and (pm_from is None or pm_to is None):
-            warnings.append(f"PM time unparseable: {_cell_str(raw[4])!r} – {_cell_str(raw[5])!r}")
 
         employee, employee_name = _lookup_employee(id_card, email)
         if not employee:
@@ -332,7 +522,7 @@ def parse_schedule_upload(file_b64: str, filename: str = "upload.xlsx") -> dict:
 
         week_pattern = None
         if am_from and am_to:
-            week_pattern = _build_week_pattern(am_from, am_to, pm_from, pm_to, day_off)
+            week_pattern = _build_week_pattern(norm)
 
         result_rows.append(
             {
@@ -345,10 +535,17 @@ def parse_schedule_upload(file_b64: str, filename: str = "upload.xlsx") -> dict:
                 "am_to": am_to,
                 "pm_from": pm_from,
                 "pm_to": pm_to,
-                "day_off": day_off,
+                "day_off": {
+                    "full_off": norm.get("days_off") or [],
+                    "afternoon_off": norm.get("days_am_only") or [],
+                },
                 "week_pattern": week_pattern,
                 "warnings": warnings,
+                "_normalized_by": norm.get("_source", normalized_by),
             }
         )
 
-    return {"rows": result_rows}
+    out: dict = {"rows": result_rows, "normalized_by": normalized_by}
+    if ai_error:
+        out["ai_error"] = ai_error
+    return out

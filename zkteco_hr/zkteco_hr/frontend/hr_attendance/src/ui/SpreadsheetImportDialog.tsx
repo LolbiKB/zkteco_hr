@@ -46,11 +46,7 @@ type ParsedRow = {
   warnings: string[];
 };
 
-type ParseResult = {
-  rows: ParsedRow[];
-  normalized_by?: "ai" | "rules";
-  ai_error?: string;
-};
+type ParseResult = { rows: ParsedRow[] };
 
 type RowApplyStatus =
   | { type: "idle" }
@@ -305,8 +301,6 @@ export function SpreadsheetImportDialog(props: {
   const [effectiveFrom, setEffectiveFrom] = useState(defaultEffectiveFrom);
   const [applyStatuses, setApplyStatuses] = useState<Record<number, RowApplyStatus>>({});
   const [currentFile, setCurrentFile] = useState<File | null>(null);
-  const [normalizedBy, setNormalizedBy] = useState<"ai" | "rules" | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
 
   const { call: callParse } = useFrappePostCall<{ message: ParseResult }>(PARSE_METHOD);
   const { call: callApply } = useFrappePostCall<{ message: unknown }>(APPLY_METHOD);
@@ -318,8 +312,6 @@ export function SpreadsheetImportDialog(props: {
     setSelected(new Set());
     setApplyStatuses({});
     setCurrentFile(null);
-    setNormalizedBy(null);
-    setAiError(null);
   }
 
   function handleOpenChange(open: boolean) {
@@ -339,8 +331,6 @@ export function SpreadsheetImportDialog(props: {
         const parsed: ParseResult = result?.message ?? (result as unknown as ParseResult);
 
         setRows(parsed.rows);
-        setNormalizedBy(parsed.normalized_by ?? null);
-        setAiError(parsed.ai_error ?? null);
 
         // Pre-select all matched rows with a valid week_pattern
         const preSelected = new Set(
@@ -439,7 +429,7 @@ export function SpreadsheetImportDialog(props: {
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-base">Import from spreadsheet</DialogTitle>
               <DialogDescription className="text-xs">
-                Upload an xlsx with columns: ID Card, Email, AM From/To, PM From/To, Day off
+                Upload the normalised CSV (use the Haiku prompt to convert raw spreadsheets first)
               </DialogDescription>
             </div>
           </div>
@@ -479,16 +469,6 @@ export function SpreadsheetImportDialog(props: {
                   {unmatchedCount > 0 ? (
                     <span className="text-destructive">
                       {unmatchedCount} not found
-                    </span>
-                  ) : null}
-                  {normalizedBy === "ai" ? (
-                    <span className="text-primary/70">✦ AI normalized</span>
-                  ) : normalizedBy === "rules" ? (
-                    <span
-                      className="text-muted-foreground"
-                      title={aiError ?? "No AI key configured — used column-position rules"}
-                    >
-                      rule-based{aiError ? " (AI failed)" : ""}
                     </span>
                   ) : null}
                   {isDone ? (

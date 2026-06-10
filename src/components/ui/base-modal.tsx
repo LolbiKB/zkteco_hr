@@ -5,6 +5,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  type DialogSize,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
@@ -22,6 +23,8 @@ interface BaseModalProps {
   children: React.ReactNode
   /** Optional footer content (buttons, actions) */
   footer?: React.ReactNode
+  /** Width preset — defaults to lg (672px), roomier for forms/content. */
+  size?: DialogSize
 }
 
 export function BaseModal({
@@ -30,11 +33,12 @@ export function BaseModal({
   title,
   description,
   children,
-  footer
+  footer,
+  size = "lg"
 }: BaseModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0">
+      <DialogContent size={size} className="flex max-h-[90vh] flex-col gap-0 p-0">
         <DialogHeader className="contents space-y-0 text-left">
           {/* Sticky Header with Title and Description */}
           <div className="border-b">

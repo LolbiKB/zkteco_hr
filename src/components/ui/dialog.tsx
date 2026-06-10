@@ -11,4 +11,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  type DialogSize,
 } from "@lolbikb/dewey-ui"

@@ -10,21 +10,17 @@ import { LoginPage } from './pages/Login'
 import { AuthProvider, useAuth } from '@/contexts/auth-context'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { Loader2, LogOut } from 'lucide-react'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
+import { Loader2, LogOut, CalendarCheck, Users as UsersIcon, Fingerprint } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/animate-ui/components/radix/sidebar'
-import { AppSidebar } from '@/components/app-sidebar'
+import { AppShell, type ShellNavMode } from '@lolbikb/dewey-ui'
 import { HeaderConnection } from '@/components/header-connection'
 import { HeaderDeviceStatus } from '@/components/header-device-status'
 import { useRealtimeDevices } from '@/hooks/use-core-data'
+
+// AppShell is router-agnostic; adapt react-router's Link to its href contract.
+const RouterLink = ({ href, ...props }: React.ComponentProps<'a'> & { href: string }) => (
+  <Link to={href} {...props} />
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -102,55 +98,66 @@ function AppContent() {
     )
   }
 
+  const navMode: ShellNavMode = {
+    type: 'sidebar',
+    label: 'Platform',
+    groups: [
+      {
+        title: 'Management',
+        icon: UsersIcon,
+        items: [
+          { title: 'User Management', href: '/users', active: location.pathname === '/users' },
+          { title: 'Device Management', href: '/devices', active: location.pathname === '/devices' },
+        ],
+      },
+      {
+        title: 'Attendance',
+        icon: CalendarCheck,
+        items: [
+          {
+            title: 'Attendance Logs',
+            href: '/attendance-logs',
+            active: location.pathname === '/attendance-logs',
+          },
+        ],
+      },
+    ],
+    footer: (
+      <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+        <span className="group-data-[collapsible=icon]:hidden">v1.0.0</span>
+      </div>
+    ),
+  }
+
   return (
     <div className="h-full">
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="flex flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center justify-between gap-2 px-4 w-full">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger className="-ml-1" />
-                <Separator
-                  orientation="vertical"
-                  className="mr-2 data-[orientation=vertical]:h-4"
-                />
-                <Breadcrumb>
-                  <BreadcrumbList>
-                    {!isUsersHome && (
-                      <>
-                        <BreadcrumbItem className="hidden md:block">
-                          <BreadcrumbLink asChild>
-                            <Link to="/users">Users</Link>
-                          </BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="hidden md:block" />
-                      </>
-                    )}
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </BreadcrumbList>
-                </Breadcrumb>
-              </div>
-              <div className="flex items-center gap-2">
-                <HeaderDeviceStatus />
-                <Separator orientation="vertical" className="h-4" />
-                <HeaderConnection userEmail={user?.email} onSignOut={signOut} />
-              </div>
-            </div>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0 min-w-0 overflow-hidden">
-            <Routes>
-              <Route path="/" element={<Navigate to="/users" replace />} />
-              <Route path="/dashboard" element={<Navigate to="/users" replace />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/attendance-logs" element={<AttendanceLogs />} />
-              <Route path="/devices" element={<Devices />} />
-            </Routes>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+      <AppShell
+        navMode={navMode}
+        logo={<Fingerprint className="size-4" />}
+        title="ZKTeco ADMS"
+        subtitle="Bridge System"
+        homeHref="/users"
+        linkComponent={RouterLink}
+        breadcrumbs={[
+          ...(!isUsersHome ? [{ label: 'Users', href: '/users' }] : []),
+          { label: pageTitle },
+        ]}
+        headerEnd={
+          <>
+            <HeaderDeviceStatus />
+            <Separator orientation="vertical" className="h-4" />
+            <HeaderConnection userEmail={user?.email} onSignOut={signOut} />
+          </>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<Navigate to="/users" replace />} />
+          <Route path="/dashboard" element={<Navigate to="/users" replace />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/attendance-logs" element={<AttendanceLogs />} />
+          <Route path="/devices" element={<Devices />} />
+        </Routes>
+      </AppShell>
     </div>
   )
 }

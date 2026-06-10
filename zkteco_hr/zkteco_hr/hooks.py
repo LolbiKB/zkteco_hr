@@ -37,7 +37,10 @@ website_route_rules = [
 ]
 
 # Keep SPA assets available under sites/assets after every migrate.
-after_migrate = ["zkteco_hr.utils.sync_hr_attendance_assets.sync_hr_attendance_assets"]
+after_migrate = [
+    "zkteco_hr.utils.sync_hr_attendance_assets.sync_hr_attendance_assets",
+    "zkteco_hr.utils.sync_adms_assets.sync_adms_assets",
+]
 
 # Scheduled job: company fallback UNNOTIFIED_ABSENCE (~03:00 per company timezone)
 scheduler_events = {

@@ -3,7 +3,16 @@ Spreadsheet-based bulk schedule import.
 
 Accepts a CSV (or xlsx) in the canonical import format:
 
-  employee_id  | email | am_from | am_to | pm_from | pm_to | days_off
+  employee_id | email | am_from | am_to | pm_from | pm_to | days_off
+
+Optional extended columns (8+):
+
+  employee_name | monday | tuesday | ... | sunday
+
+- employee_name enables name-based matching when id/email are missing.
+- Per-day columns hold "HH:MM-HH:MM", "HH:MM-HH:MM+HH:MM-HH:MM" (AM+PM with
+  lunch between), or "off". If any per-day column is non-empty the row is
+  per-day mode: day columns are authoritative and am/pm/days_off are ignored.
 
 Use the Haiku prompt in docs/SCHEDULE_IMPORT_PROMPT.md to normalise any raw
 spreadsheet into this format before importing.
@@ -52,7 +61,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _DATE_LIKE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _DURATION_RE = re.compile(r"^\d+h$", re.IGNORECASE)
 
-ScheduleShape = Literal["full_day", "am_only", "pm_only", "continuous", "invalid"]
+ScheduleShape = Literal["full_day", "am_only", "pm_only", "continuous", "per_day", "invalid"]
 IssueSeverity = Literal["error", "warning", "info"]
 
 # Machine-readable codes — surfaced in UI + feedback export for the AI normaliser.
@@ -73,6 +82,10 @@ ISSUE_CODES = {
     "PM_ONLY": "info",
     "CONTINUOUS_SHIFT": "info",
     "AM_ONLY": "info",
+    "PER_DAY": "info",
+    "MATCHED_BY_NAME": "warning",
+    "NAME_AMBIGUOUS": "error",
+    "INVALID_DAY_SPEC": "error",
     "INELIGIBLE_EMPLOYMENT_TYPE": "error",
     "ACTIVE_SSA_EXISTS": "error",
     "INVALID_WEEK_PATTERN": "error",
@@ -95,6 +108,18 @@ AI_SUGGESTIONS: dict[str, str] = {
     "PM_ONLY": "Afternoon-only employee — am_from/am_to should both be off.",
     "CONTINUOUS_SHIFT": "Long span without lunch — am_to/pm_from are off; using am_from→pm_to.",
     "AM_ONLY": "Morning-only employee — pm_from/pm_to should both be off.",
+    "PER_DAY": "Row uses per-day columns (monday..sunday) — am/pm/days_off ignored.",
+    "MATCHED_BY_NAME": (
+        "Matched by employee_name only — add the badge employee_id to the CSV "
+        "so future imports are unambiguous."
+    ),
+    "NAME_AMBIGUOUS": (
+        "employee_name matches more than one active employee — "
+        "add employee_id or email to disambiguate."
+    ),
+    "INVALID_DAY_SPEC": (
+        'Per-day cells must be "HH:MM-HH:MM", "HH:MM-HH:MM+HH:MM-HH:MM", or "off".'
+    ),
     "INELIGIBLE_EMPLOYMENT_TYPE": (
         "Employment type must be Full-time, Part-time Fixed, Probation, or Intern — "
         "same as Weekly Schedule wizard."
@@ -496,6 +521,45 @@ def _lookup_employee(id_card: str, email: str = "") -> tuple[str | None, str | N
     return None, None, None
 
 
+def _normalize_name(name: str) -> str:
+    return " ".join((name or "").lower().split())
+
+
+def _active_employee_name_index() -> dict[str, list[dict]]:
+    """Normalised employee_name -> list of active Employee rows (cached per request)."""
+    cache_key = "_zkteco_hr_name_index"
+    cached = getattr(frappe.local, cache_key, None)
+    if cached is not None:
+        return cached
+    index: dict[str, list[dict]] = {}
+    fields = _employee_lookup_fields()
+    for emp in frappe.get_all("Employee", filters={"status": "Active"}, fields=fields):
+        key = _normalize_name(emp.get("employee_name", ""))
+        if key:
+            index.setdefault(key, []).append(emp)
+        # also index with words sorted so "Mary Moeun" matches "Moeun Mary"
+        sorted_key = " ".join(sorted(key.split()))
+        if sorted_key != key:
+            index.setdefault(sorted_key, []).append(emp)
+    setattr(frappe.local, cache_key, index)
+    return index
+
+
+def _lookup_employee_by_name(raw_name: str) -> tuple[list[dict], str]:
+    """Returns (candidates, matched_key). Tries exact normalised order first,
+    then word-order-insensitive."""
+    key = _normalize_name(raw_name)
+    if not key:
+        return [], ""
+    index = _active_employee_name_index()
+    if key in index:
+        return index[key], key
+    sorted_key = " ".join(sorted(key.split()))
+    if sorted_key in index:
+        return index[sorted_key], sorted_key
+    return [], key
+
+
 def _allowed_employment_types_label() -> str:
     return ", ".join(WEEKLY_SCHEDULE_EMPLOYMENT_TYPES)
 
@@ -624,18 +688,100 @@ def _build_week_pattern(
     return {"frequency": "Every Week", "days": days}
 
 
+_DAY_SEG_RE = re.compile(r"^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$")
+
+
+def _parse_perday_cell(
+    text: str, weekday: str, issues: list[ImportIssue]
+) -> list[tuple[str, str]] | None:
+    """'07:00-11:00+13:00-17:00' -> [(07:00,11:00),(13:00,17:00)].
+    'off'/'' -> []. Invalid -> None (INVALID_DAY_SPEC issue raised)."""
+    cleaned = _cell(text)
+    if _is_blank(cleaned):
+        return []
+    segs: list[tuple[str, str]] = []
+    for part in cleaned.split("+"):
+        m = _DAY_SEG_RE.match(part.strip())
+        if not m:
+            issues.append(ImportIssue(
+                code="INVALID_DAY_SPEC",
+                severity="error",
+                message=f"{weekday}: invalid day spec {part.strip()!r}.",
+                field=weekday.lower(),
+            ))
+            return None
+        start, end = m.group(1), m.group(2)
+        start = f"{int(start.split(':')[0]):02d}:{start.split(':')[1]}"
+        end = f"{int(end.split(':')[0]):02d}:{end.split(':')[1]}"
+        if (_time_to_minutes(end) or 0) <= (_time_to_minutes(start) or 0):
+            issues.append(ImportIssue(
+                code="END_BEFORE_START",
+                severity="error",
+                message=f"{weekday}: segment end {end} is not after start {start}.",
+                field=weekday.lower(),
+            ))
+            return None
+        segs.append((start, end))
+    if len(segs) > 2:
+        issues.append(ImportIssue(
+            code="INVALID_DAY_SPEC",
+            severity="error",
+            message=f"{weekday}: more than 2 segments — only AM+PM supported.",
+            field=weekday.lower(),
+        ))
+        return None
+    if len(segs) == 2 and (_time_to_minutes(segs[1][0]) or 0) <= (_time_to_minutes(segs[0][1]) or 0):
+        issues.append(ImportIssue(
+            code="END_BEFORE_START",
+            severity="error",
+            message=f"{weekday}: second segment must start after the first ends.",
+            field=weekday.lower(),
+        ))
+        return None
+    return segs
+
+
+def _build_week_pattern_perday(day_segs: dict[str, list[tuple[str, str]]]) -> dict | None:
+    days = []
+    working = 0
+    for weekday in WEEKDAYS:
+        segs = day_segs.get(weekday) or []
+        if not segs:
+            days.append({"weekday": weekday, "works": False})
+            continue
+        working += 1
+        if len(segs) == 1:
+            days.append({
+                "weekday": weekday, "works": True,
+                "start_time": segs[0][0], "end_time": segs[0][1],
+                "lunch_start": None, "lunch_end": None,
+                "grace_minutes": 10,
+            })
+        else:
+            days.append({
+                "weekday": weekday, "works": True,
+                "start_time": segs[0][0], "end_time": segs[1][1],
+                "lunch_start": segs[0][1], "lunch_end": segs[1][0],
+                "grace_minutes": 10,
+            })
+    if working == 0:
+        return None
+    return {"frequency": "Every Week", "days": days}
+
+
 def _parse_row(raw: list, row_number: int) -> ParsedScheduleRow:
-    while len(raw) < 7:
+    while len(raw) < 15:
         raw.append("")
 
     id_card = _cell(raw[0])
     email = _cell(raw[1]).strip('"')
+    csv_name = _cell(raw[7])
     issues: list[ImportIssue] = []
 
     row = ParsedScheduleRow(row_number=row_number, id_card=id_card, email=email, issues=issues)
 
     # Skip completely empty rows
-    if not any(_cell(c) for c in raw[:7]):
+    if not any(_cell(c) for c in raw[:15]):
         return row
 
     if _looks_like_garbage_id(id_card, email):
@@ -658,26 +804,58 @@ def _parse_row(raw: list, row_number: int) -> ParsedScheduleRow:
 
     _validate_email(email, issues)
 
-    am_from = _parse_time(raw[2], field="am_from", issues=issues)
-    am_to = _parse_time(raw[3], field="am_to", issues=issues)
-    pm_from = _parse_time(raw[4], field="pm_from", issues=issues) if not _is_blank(raw[4]) else None
-    pm_to = _parse_time(raw[5], field="pm_to", issues=issues) if not _is_blank(raw[5]) else None
+    # Per-day mode: any monday..sunday column (8..14) non-empty
+    perday_cells = raw[8:15]
+    is_perday = any(not _is_blank(_cell(c)) for c in perday_cells)
 
-    full_off, am_only, _invalid = _parse_days_off(_cell(raw[6]), issues)
+    if is_perday:
+        day_segs: dict[str, list[tuple[str, str]]] = {}
+        spec_failed = False
+        for weekday, cell_value in zip(WEEKDAYS, perday_cells):
+            segs = _parse_perday_cell(cell_value, weekday, issues)
+            if segs is None:
+                spec_failed = True
+                continue
+            if segs:
+                day_segs[weekday] = segs
+        row.schedule_shape = "per_day"
+        issues.append(ImportIssue(
+            code="PER_DAY",
+            severity="info",
+            message=f"Per-day schedule on {len(day_segs)} weekday(s).",
+        ))
+        week_pattern = None if spec_failed else _build_week_pattern_perday(day_segs)
+        if week_pattern is None and not spec_failed:
+            issues.append(ImportIssue(
+                code="NO_WORKING_DAYS",
+                severity="error",
+                message="All per-day columns are off — no shift to import.",
+            ))
+        row.day_off = {
+            "full_off": [d for d in WEEKDAYS if d not in day_segs],
+            "afternoon_off": [],
+        }
+    else:
+        am_from = _parse_time(raw[2], field="am_from", issues=issues)
+        am_to = _parse_time(raw[3], field="am_to", issues=issues)
+        pm_from = _parse_time(raw[4], field="pm_from", issues=issues) if not _is_blank(raw[4]) else None
+        pm_to = _parse_time(raw[5], field="pm_to", issues=issues) if not _is_blank(raw[5]) else None
 
-    shape, am_from, am_to, pm_from, pm_to = _detect_schedule_shape(
-        am_from, am_to, pm_from, pm_to, issues
-    )
-    _validate_time_order(shape, am_from, am_to, pm_from, pm_to, issues)
+        full_off, am_only, _invalid = _parse_days_off(_cell(raw[6]), issues)
 
-    row.am_from = am_from
-    row.am_to = am_to
-    row.pm_from = pm_from
-    row.pm_to = pm_to
-    row.schedule_shape = shape
-    row.day_off = {"full_off": full_off, "afternoon_off": am_only}
+        shape, am_from, am_to, pm_from, pm_to = _detect_schedule_shape(
+            am_from, am_to, pm_from, pm_to, issues
+        )
+        _validate_time_order(shape, am_from, am_to, pm_from, pm_to, issues)
 
-    week_pattern = _build_week_pattern(shape, am_from, am_to, pm_from, pm_to, full_off, am_only)
+        row.am_from = am_from
+        row.am_to = am_to
+        row.pm_from = pm_from
+        row.pm_to = pm_to
+        row.schedule_shape = shape
+        row.day_off = {"full_off": full_off, "afternoon_off": am_only}
+
+        week_pattern = _build_week_pattern(shape, am_from, am_to, pm_from, pm_to, full_off, am_only)
     if week_pattern:
         working = sum(1 for d in week_pattern["days"] if d.get("works"))
         if working == 0:
@@ -697,12 +875,41 @@ def _parse_row(raw: list, row_number: int) -> ParsedScheduleRow:
     elif email and "@" in email:
         employee, employee_name, employment_type = _lookup_employee("", email)
 
+    # Name fallback — only when no id was given (a wrong id must not be
+    # silently overridden by a name match).
+    if not employee and not id_card and csv_name:
+        candidates, _key = _lookup_employee_by_name(csv_name)
+        if len(candidates) == 1:
+            emp = candidates[0]
+            employee = emp["name"]
+            employee_name = emp["employee_name"]
+            employment_type = emp.get("employment_type")
+            issues.append(ImportIssue(
+                code="MATCHED_BY_NAME",
+                severity="warning",
+                message=(
+                    f"Matched by name {csv_name!r} → {employee_name!r} ({employee}). "
+                    "Add employee_id to make this unambiguous."
+                ),
+                field="employee_name",
+            ))
+        elif len(candidates) > 1:
+            issues.append(ImportIssue(
+                code="NAME_AMBIGUOUS",
+                severity="error",
+                message=(
+                    f"employee_name {csv_name!r} matches {len(candidates)} active "
+                    "employees — add employee_id or email."
+                ),
+                field="employee_name",
+            ))
+
     if not id_card:
         if employee:
             issues.append(ImportIssue(
                 code="MISSING_EMPLOYEE_ID",
                 severity="warning",
-                message=f"Row {row_number} matched by email only — add employee_id to CSV.",
+                message=f"Row {row_number} matched without employee_id — add it to the CSV.",
                 field="employee_id",
             ))
         else:
@@ -721,18 +928,29 @@ def _parse_row(raw: list, row_number: int) -> ParsedScheduleRow:
     _apply_employee_schedule_gates(row, employment_type, issues)
 
     if id_card and not employee:
+        hint = ""
+        if csv_name:
+            candidates, _key = _lookup_employee_by_name(csv_name)
+            if len(candidates) == 1:
+                hint = (
+                    f" Name {csv_name!r} matches {candidates[0]['name']} — "
+                    "the id is probably wrong; fix it rather than relying on the name."
+                )
         issues.append(ImportIssue(
             code="EMPLOYEE_NOT_FOUND",
             severity="error",
-            message=f"No active employee found for {id_card!r}.",
+            message=f"No active employee found for {id_card!r}.{hint}",
             field="employee_id",
         ))
-    elif not id_card and not employee and email:
+    elif not id_card and not employee and (email or csv_name):
         issues.append(ImportIssue(
             code="EMPLOYEE_NOT_FOUND",
             severity="error",
-            message=f"No active employee found for email {email!r}.",
-            field="email",
+            message=(
+                f"No active employee found for email {email!r}." if email
+                else f"No active employee found for name {csv_name!r}."
+            ),
+            field="email" if email else "employee_name",
         ))
 
     has_error = any(i.severity == "error" for i in issues)

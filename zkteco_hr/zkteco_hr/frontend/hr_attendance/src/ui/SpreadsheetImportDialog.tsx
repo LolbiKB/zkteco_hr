@@ -122,6 +122,7 @@ const SHAPE_LABELS: Record<string, string> = {
   am_only: "AM only",
   pm_only: "PM only",
   continuous: "Continuous",
+  per_day: "Per-day",
   invalid: "Invalid",
 };
 
@@ -145,6 +146,10 @@ const ISSUE_CODE_LABELS: Record<string, string> = {
   INELIGIBLE_EMPLOYMENT_TYPE: "Employment type",
   ACTIVE_SSA_EXISTS: "Active SSA",
   INVALID_WEEK_PATTERN: "Pattern invalid",
+  PER_DAY: "Per-day",
+  MATCHED_BY_NAME: "Name match",
+  NAME_AMBIGUOUS: "Name ambiguous",
+  INVALID_DAY_SPEC: "Bad day spec",
 };
 
 // ---------------------------------------------------------------------------
@@ -164,6 +169,12 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function formatShiftSummary(row: ParsedRow): string {
+  if (row.schedule_shape === "per_day" && row.week_pattern) {
+    const working = row.week_pattern.days.filter((d) => d.works);
+    if (!working.length) return "—";
+    const spans = new Set(working.map((d) => `${d.start_time}–${d.end_time}`));
+    return spans.size === 1 ? `Varies: ${[...spans][0]}` : "Varies by day";
+  }
   if (row.schedule_shape === "pm_only" && row.pm_from && row.pm_to) {
     return `PM ${row.pm_from}–${row.pm_to}`;
   }

@@ -78,6 +78,30 @@ DI-0364,chhorm.sophal@diu.edu.kh,06:30,11:30,12:30,17:00,Saturday(am)|Sunday
 | `pm_from` | ✓ | Afternoon start — `HH:MM` 24h, or `off` |
 | `pm_to` | ✓ | Afternoon end — `HH:MM` 24h, or `off` |
 | `days_off` | ✓ | Pipe-separated weekday names; append `(am)` for morning-only days |
+| `employee_name` | optional | Column 8 — enables name matching when ID and email are missing |
+| `monday`…`sunday` | optional | Columns 9–15 — per-day schedule (see below) |
+
+### Per-day columns (teachers with different hours each day)
+
+If **any** of `monday`…`sunday` is non-empty, the row switches to per-day
+mode: the day columns are authoritative and `am_*`/`pm_*`/`days_off` are
+ignored.
+
+| Cell value | Meaning |
+|---|---|
+| `07:00-11:00` | Single block (no lunch) |
+| `07:00-11:00+13:00-17:00` | AM + PM blocks; the gap between them is lunch |
+| `off` or empty | Not working that day |
+
+Maximum 2 blocks per day. Times `HH:MM` 24-hour.
+
+### Name matching
+
+When `employee_id` and `email` are both blank but `employee_name` is filled,
+the importer matches the name against active Frappe employees (case and
+word-order insensitive). A unique match imports with a `MATCHED_BY_NAME`
+warning; multiple matches give `NAME_AMBIGUOUS`. A wrong `employee_id` is
+never silently overridden by a name match.
 
 ### days_off quick reference
 
@@ -130,9 +154,13 @@ import if the employee matches Frappe.
 | `INVALID_DAYS_OFF_TOKEN` | warning | Unrecognised weekday token | Full names: `Saturday`, not `Sat` |
 | `DUPLICATE_EMPLOYEE_ID` | warning | Same ID on multiple rows | One row per employee |
 | `SHORT_LUNCH_GAP` | warning | Lunch gap under 15 minutes | Check am_to vs pm_from |
+| `MATCHED_BY_NAME` | warning | Matched via employee_name only | Add employee_id for future imports |
+| `NAME_AMBIGUOUS` | error | Name matches several employees | Add employee_id or email |
+| `INVALID_DAY_SPEC` | error | Bad per-day cell format | Use `HH:MM-HH:MM[+HH:MM-HH:MM]` or `off` |
 | `PM_ONLY` | info | `off,off,13:00,17:00` | Valid afternoon-only pattern |
 | `CONTINUOUS_SHIFT` | info | `06:00,off,off,18:00` | Valid long day without lunch |
 | `AM_ONLY` | info | `07:00,11:30,off,off` | Valid morning-only pattern |
+| `PER_DAY` | info | Row uses per-day columns | Valid per-weekday pattern |
 
 ### Supported schedule shapes
 

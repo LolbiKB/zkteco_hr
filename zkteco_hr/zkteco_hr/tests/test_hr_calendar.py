@@ -147,6 +147,9 @@ class TestCalendarAccess(unittest.TestCase):
         list_rows.return_value = [{"id": "EMP-001"}]
         out = list_calendar_employees()
         list_rows.assert_called_once_with(["EMP-001"], include_all=True)
-        self.assertEqual(out, [{"id": "EMP-001"}])
+        self.assertEqual(
+            out,
+            {"employees": [{"id": "EMP-001"}], "current_user_employee": "EMP-001"},
+        )
 if __name__ == "__main__":
     unittest.main()

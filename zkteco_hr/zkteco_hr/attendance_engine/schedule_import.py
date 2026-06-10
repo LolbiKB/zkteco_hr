@@ -31,6 +31,7 @@ from typing import Literal
 
 import frappe
 
+from zkteco_hr.attendance_engine.hr_calendar import _require_hr_role
 from zkteco_hr.attendance_engine.schedule_resolver import (
     WEEKLY_SCHEDULE_EMPLOYMENT_TYPES,
     employee_has_enabled_ssas,
@@ -1008,6 +1009,7 @@ def _build_feedback_rows(rows: list[ParsedScheduleRow]) -> list[dict]:
                 "row_number": row.row_number,
                 "employee_id": row.id_card,
                 "email": row.email,
+                "employee_name": row.employee_name or "",
                 "field": issue.field or "",
                 "code": issue.code,
                 "severity": issue.severity,
@@ -1030,6 +1032,8 @@ def parse_schedule_upload(file_b64: str, filename: str = "upload.csv") -> dict:
     Expected columns (header row optional):
       employee_id, email, am_from, am_to, pm_from, pm_to, days_off
     """
+    _require_hr_role()
+
     try:
         file_bytes = base64.b64decode(file_b64)
     except Exception as exc:

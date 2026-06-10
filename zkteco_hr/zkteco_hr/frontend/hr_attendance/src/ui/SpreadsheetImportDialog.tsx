@@ -79,6 +79,7 @@ type FeedbackRow = {
   row_number: number;
   employee_id: string;
   email: string;
+  employee_name?: string;
   field: string;
   code: string;
   severity: string;
@@ -213,13 +214,14 @@ function rowMatchesFilter(row: ParsedRow, filter: RowFilter): boolean {
 }
 
 function downloadFeedbackCsv(feedback: FeedbackRow[], filename: string) {
-  const header = "row_number,employee_id,email,field,code,severity,message,suggestion";
+  const header = "row_number,employee_id,email,employee_name,field,code,severity,message,suggestion";
   const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
   const lines = feedback.map((r) =>
     [
       r.row_number,
       r.employee_id,
       r.email,
+      r.employee_name ?? "",
       r.field,
       r.code,
       r.severity,

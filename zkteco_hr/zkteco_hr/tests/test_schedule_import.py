@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from zkteco_hr.tests.test_closeout import _install_frappe_mock
@@ -23,27 +24,31 @@ def _parse(
     match_employee: str | None = None,
     employment_type: str = "Full-time",
     has_ssa: bool = False,
+    name_directory: list[dict] | None = None,
 ) -> dict:
-    with patch.object(mod, "employee_has_enabled_ssas", return_value=has_ssa):
-        with patch.object(mod.frappe, "db") as mock_db:
-            mock_db.has_column.return_value = True
+    with patch.object(mod, "_require_hr_role"):
+        with patch.object(mod, "employee_has_enabled_ssas", return_value=has_ssa):
+            with patch.object(mod.frappe, "db") as mock_db:
+                mock_db.has_column.return_value = True
 
-            def get_value(doctype, filters, fields, as_dict=False):
-                if doctype != "Employee" or not match_employee:
+                def get_value(doctype, filters, fields, as_dict=False):
+                    if doctype != "Employee" or not match_employee:
+                        return None
+                    if isinstance(filters, dict) and filters.get("status") == "Active":
+                        badge = filters.get("employee_number") or filters.get("attendance_device_id")
+                        email = filters.get("company_email") or filters.get("personal_email")
+                        if badge or email:
+                            return {
+                                "name": match_employee,
+                                "employee_name": "Test User",
+                                "employment_type": employment_type,
+                            }
                     return None
-                if isinstance(filters, dict) and filters.get("status") == "Active":
-                    badge = filters.get("employee_number") or filters.get("attendance_device_id")
-                    email = filters.get("company_email") or filters.get("personal_email")
-                    if badge or email:
-                        return {
-                            "name": match_employee,
-                            "employee_name": "Test User",
-                            "employment_type": employment_type,
-                        }
-                return None
 
-            mock_db.get_value.side_effect = get_value
-            return mod.parse_schedule_upload(_csv_b64(content), "test.csv")
+                mock_db.get_value.side_effect = get_value
+                with patch.object(mod.frappe, "get_all", return_value=name_directory or []):
+                    with patch.object(mod.frappe, "local", SimpleNamespace()):
+                        return mod.parse_schedule_upload(_csv_b64(content), "test.csv")
 
 
 HEADER = "employee_id,email,am_from,am_to,pm_from,pm_to,days_off\n"
@@ -166,6 +171,111 @@ class TestScheduleImportValidation(unittest.TestCase):
         )
         row = result["rows"][0]
         self.assertTrue(row["importable"])
+
+
+EXT_HEADER = (
+    "employee_id,email,am_from,am_to,pm_from,pm_to,days_off,"
+    "employee_name,monday,tuesday,wednesday,thursday,friday,saturday,sunday\n"
+)
+
+NAME_DIR = [
+    {"name": "EMP-N1", "employee_name": "Moeun Mary", "employment_type": "Full-time"},
+    {"name": "EMP-N2", "employee_name": "Sok San", "employment_type": "Full-time"},
+    {"name": "EMP-N3", "employee_name": "Sok San", "employment_type": "Full-time"},
+]
+
+
+class TestScheduleImportExtendedFormat(unittest.TestCase):
+    def test_name_match_unique(self):
+        result = _parse(
+            EXT_HEADER + ",,07:00,11:00,off,off,Saturday|Sunday,Moeun Mary,,,,,,,\n",
+            name_directory=NAME_DIR,
+        )
+        row = result["rows"][0]
+        self.assertTrue(row["matched"])
+        self.assertEqual(row["employee"], "EMP-N1")
+        codes = [i["code"] for i in row["issues"]]
+        self.assertIn("MATCHED_BY_NAME", codes)
+
+    def test_name_match_word_order_insensitive(self):
+        result = _parse(
+            EXT_HEADER + ",,07:00,11:00,off,off,Saturday|Sunday,mary  MOEUN,,,,,,,\n",
+            name_directory=NAME_DIR,
+        )
+        self.assertTrue(result["rows"][0]["matched"])
+
+    def test_name_ambiguous_blocks(self):
+        result = _parse(
+            EXT_HEADER + ",,07:00,11:00,off,off,Saturday|Sunday,Sok San,,,,,,,\n",
+            name_directory=NAME_DIR,
+        )
+        row = result["rows"][0]
+        self.assertFalse(row["matched"])
+        self.assertTrue(any(i["code"] == "NAME_AMBIGUOUS" for i in row["issues"]))
+
+    def test_wrong_id_not_overridden_by_name(self):
+        result = _parse(
+            EXT_HEADER + "DI-9999,,07:00,11:00,off,off,Saturday|Sunday,Moeun Mary,,,,,,,\n",
+            name_directory=NAME_DIR,
+        )
+        row = result["rows"][0]
+        self.assertFalse(row["matched"])
+        self.assertTrue(any(i["code"] == "EMPLOYEE_NOT_FOUND" for i in row["issues"]))
+
+    def test_perday_single_block(self):
+        result = _parse(
+            EXT_HEADER
+            + "DI-0159,a@b.kh,,,,,,Test User,14:00-17:00,off,off,off,14:00-17:00,off,off\n",
+            match_employee="EMP-1",
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["schedule_shape"], "per_day")
+        self.assertTrue(row["importable"])
+        days = {d["weekday"]: d for d in row["week_pattern"]["days"]}
+        self.assertTrue(days["Monday"]["works"])
+        self.assertEqual(days["Monday"]["start_time"], "14:00")
+        self.assertFalse(days["Tuesday"]["works"])
+
+    def test_perday_lunch_split(self):
+        result = _parse(
+            EXT_HEADER
+            + "DI-0159,a@b.kh,,,,,,Test User,07:00-11:00+13:00-17:00,off,off,off,off,off,off\n",
+            match_employee="EMP-1",
+        )
+        day = {d["weekday"]: d for d in result["rows"][0]["week_pattern"]["days"]}["Monday"]
+        self.assertEqual(day["lunch_start"], "11:00")
+        self.assertEqual(day["lunch_end"], "13:00")
+        self.assertEqual(day["end_time"], "17:00")
+
+    def test_perday_invalid_spec(self):
+        result = _parse(
+            EXT_HEADER + "DI-0159,a@b.kh,,,,,,Test User,7am-9am,off,off,off,off,off,off\n",
+            match_employee="EMP-1",
+        )
+        row = result["rows"][0]
+        self.assertFalse(row["importable"])
+        self.assertTrue(any(i["code"] == "INVALID_DAY_SPEC" for i in row["issues"]))
+
+    def test_perday_ignores_base_columns(self):
+        result = _parse(
+            EXT_HEADER
+            + "DI-0159,a@b.kh,07:00,11:00,13:00,17:00,Sunday,Test User,09:00-12:00,off,off,off,off,off,off\n",
+            match_employee="EMP-1",
+        )
+        row = result["rows"][0]
+        self.assertEqual(row["schedule_shape"], "per_day")
+        days = {d["weekday"]: d for d in row["week_pattern"]["days"]}
+        self.assertEqual(days["Monday"]["start_time"], "09:00")
+        self.assertFalse(days["Sunday"]["works"])
+
+    def test_legacy_seven_columns_unaffected(self):
+        result = _parse(
+            HEADER + "DI-0159,boeurnraksmey@diu.edu.kh,07:30,12:00,13:00,17:00,Sunday\n",
+            match_employee="EMP-1",
+        )
+        row = result["rows"][0]
+        self.assertTrue(row["importable"])
+        self.assertEqual(row["schedule_shape"], "full_day")
 
 
 if __name__ == "__main__":

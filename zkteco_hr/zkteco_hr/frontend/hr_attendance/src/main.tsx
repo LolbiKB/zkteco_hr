@@ -6,6 +6,7 @@ import { HrAppShell } from "./ui/HrAppShell";
 import { WeeklySchedulePage } from "./ui/WeeklySchedulePage";
 import "./index.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { FrappeProvider } from "frappe-react-sdk";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="*" element={<Navigate to="/hr-attendance" replace />} />
           </Routes>
         </BrowserRouter>
+        <Toaster />
       </TooltipProvider>
     </FrappeProvider>
   </React.StrictMode>

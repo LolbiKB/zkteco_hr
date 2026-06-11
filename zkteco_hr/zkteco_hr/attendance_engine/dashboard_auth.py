@@ -19,11 +19,31 @@ import frappe
 import requests
 from frappe import _
 
-# "ADMS Admin" is a custom website-only role created by
-# patches.add_adms_admin_role — assign it in Desk → User instead of handing
-# out System Manager. The bridge admin list is still the second gate.
-ALLOWED_ROLES = {"System Manager", "ADMS Admin"}
+# Dedicated, desk-less ADMS roles (ensured on migrate via after_migrate).
+# Assign in Desk → User. 'ADMS Super Admin' → full ADMS access; 'ADMS Admin' →
+# standard. System Manager deliberately does NOT grant access (it would let
+# every Frappe sysadmin, incl. Administrator, into ADMS). The role drives the
+# bridge: it auto-provisions the admin row, so there's no separate admin list
+# to maintain for role holders.
+ADMS_SUPER_ADMIN_ROLE = "ADMS Super Admin"
+ADMS_ADMIN_ROLE = "ADMS Admin"
+ALLOWED_ROLES = {ADMS_ADMIN_ROLE, ADMS_SUPER_ADMIN_ROLE}
 EXCHANGE_TIMEOUT_SECONDS = 20
+
+
+def ensure_adms_roles():
+    """Idempotently ensure the dedicated ADMS roles exist (run on after_migrate).
+
+    Desk-less roles assigned in Desk → User to grant /adms access. Holding a
+    role auto-provisions the bridge admin row on first login (see
+    get_dashboard_token). Self-healing: recreated if deleted.
+    """
+    for role_name in (ADMS_ADMIN_ROLE, ADMS_SUPER_ADMIN_ROLE):
+        if not frappe.db.exists("Role", role_name):
+            frappe.get_doc(
+                {"doctype": "Role", "role_name": role_name, "desk_access": 0}
+            ).insert(ignore_permissions=True)
+    frappe.clear_cache()
 
 
 @frappe.whitelist()
@@ -32,8 +52,11 @@ def get_dashboard_token():
     if frappe.session.user in (None, "", "Guest"):
         frappe.throw(_("Login required"), frappe.AuthenticationError)
 
-    if not (set(frappe.get_roles()) & ALLOWED_ROLES):
+    roles = set(frappe.get_roles())
+    if not (roles & ALLOWED_ROLES):
         frappe.throw(_("Not permitted to use the ADMS dashboard"), frappe.PermissionError)
+    # Super-admin role wins; otherwise standard admin.
+    app_role = "super_admin" if ADMS_SUPER_ADMIN_ROLE in roles else "admin"
 
     email = (
         frappe.db.get_value("User", frappe.session.user, "email")
@@ -54,7 +77,7 @@ def get_dashboard_token():
                 "Content-Type": "application/json",
                 "X-Bridge-Secret": bridge_secret,
             },
-            data=json.dumps({"email": email}),
+            data=json.dumps({"email": email, "app_role": app_role}),
             timeout=EXCHANGE_TIMEOUT_SECONDS,
         )
     except requests.RequestException:

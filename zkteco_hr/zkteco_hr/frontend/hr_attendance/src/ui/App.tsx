@@ -1,3 +1,4 @@
+import { Page } from "@lolbikb/dewey-ui";
 import {
   deviceAlertsByDate,
   deviceAlertsForWeek,
@@ -245,7 +246,7 @@ export function App() {
   return (
     <>
       <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
-        <div className="mx-auto flex h-full w-full max-w-7xl flex-col px-5 py-4 sm:px-8 sm:py-5">
+        <Page className="gap-0">
           {loadError ? (
             <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in duration-300">
               <CardContent className="py-3 text-sm text-destructive">
@@ -329,7 +330,7 @@ export function App() {
               </>
             )}
           </div>
-        </div>
+        </Page>
       </div>
 
       <DayInspectorSheet

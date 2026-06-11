@@ -38,7 +38,6 @@ import {
   Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
@@ -453,7 +452,7 @@ export function DeviceDetailDialog({
           onValueChange={(v) => setActiveTab(v as DeviceDetailTab)}
           className="flex-1 flex flex-col min-h-0 gap-3"
         >
-          <TabsList className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="users">
               <Users className="shrink-0" />
               <span className="truncate">Users ({stats.total})</span>
@@ -473,44 +472,50 @@ export function DeviceDetailDialog({
           </TabsList>
 
           <TabsContent value="users" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b pb-3 mb-2 shrink-0 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex flex-wrap gap-2 text-sm">
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b pb-3 mb-2 shrink-0 space-y-2.5">
+              {/* Full-width search (no viewport-based side-by-side — the modal
+                  is fixed-width, so always stack to avoid clipping). */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search user to sync..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 w-full pl-9 text-sm"
+                />
+              </div>
+              {/* Sync stats as calm dot+text. */}
+              {(stats.synced > 0 ||
+                stats.syncing > 0 ||
+                (stats as any).cleaning > 0 ||
+                (stats as any).notSynced > 0) && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   {stats.synced > 0 && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    <span className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                       {stats.synced} synced
                     </span>
                   )}
                   {stats.syncing > 0 && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800">
-                      <Loader2 className="h-3.5 w-3.5 text-blue-600 animate-spin" />
+                    <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
                       {stats.syncing} syncing
                     </span>
                   )}
                   {(stats as any).cleaning > 0 && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-800">
-                      <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                    <span className="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                       {(stats as any).cleaning} cleaning
                     </span>
                   )}
                   {(stats as any).notSynced > 0 && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
-                      <div className="h-3 w-3 rounded-full border-2 border-dashed border-slate-400" />
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
                       {(stats as any).notSynced} pending
                     </span>
                   )}
                 </div>
-                <div className="relative w-full sm:w-64 shrink-0">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search user to sync..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-8 w-full text-sm"
-                  />
-                </div>
-              </div>
+              )}
               <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                 <span className="font-medium">Row icons:</span>
                 <span className="inline-flex items-center gap-1">

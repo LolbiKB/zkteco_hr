@@ -1193,7 +1193,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="sync" className="flex items-center gap-2 text-xs">
                 <Users className="h-4 w-4" />
                 Sync ({stats.total})

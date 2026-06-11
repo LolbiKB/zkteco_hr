@@ -426,7 +426,7 @@ export function DeviceDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {device?.isOnline ? (
@@ -451,7 +451,7 @@ export function DeviceDetailDialog({
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as DeviceDetailTab)}
-          className="flex-1 flex flex-col min-h-0 gap-1"
+          className="flex-1 flex flex-col min-h-0 gap-3"
         >
           <TabsList className="grid w-full grid-cols-4 gap-1 p-1 h-auto">
             <TabsTrigger value="users" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
@@ -472,8 +472,8 @@ export function DeviceDetailDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="users" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
-            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b pb-3 mb-3 shrink-0 space-y-2.5">
+          <TabsContent value="users" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b pb-3 mb-2 shrink-0 space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex flex-wrap gap-2 text-sm">
                   {stats.synced > 0 && (
@@ -561,7 +561,7 @@ export function DeviceDetailDialog({
             </div>
           </TabsContent>
           
-          <TabsContent value="info" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+          <TabsContent value="info" className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 min-h-0 overflow-y-auto pr-1">
             <div className="space-y-6 pb-4">
               {/* Header Card */}
@@ -674,7 +674,7 @@ export function DeviceDetailDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="overview" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+          <TabsContent value="overview" className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {deviceSn && (
               <div className="flex flex-col flex-1 min-h-0">
                 <DeviceAttlogOverviewTab
@@ -686,7 +686,7 @@ export function DeviceDetailDialog({
             )}
           </TabsContent>
 
-          <TabsContent value="closeout" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+          <TabsContent value="closeout" className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {deviceSn && (
               <div className="flex flex-col flex-1 min-h-0">
                 <DeviceAttlogDailyCloseoutTab

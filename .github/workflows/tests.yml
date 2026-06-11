@@ -76,6 +76,9 @@ jobs:
           bench get-app zkteco_hr "$GITHUB_WORKSPACE/zkteco_hr-src" --skip-assets
           # zkteco_hr's nested package layout (zkteco_hr/zkteco_hr/) can skip
           # apps.txt auto-registration; ensure it's listed before install.
+          # Force a trailing newline first — apps.txt may lack one, else the
+          # append concatenates onto the last app (-> 'hrmszkteco_hr').
+          [ -s sites/apps.txt ] && [ -n "$(tail -c1 sites/apps.txt)" ] && echo >> sites/apps.txt
           grep -qxF zkteco_hr sites/apps.txt 2>/dev/null || echo zkteco_hr >> sites/apps.txt
 
       - name: MariaDB charset (utf8mb4)

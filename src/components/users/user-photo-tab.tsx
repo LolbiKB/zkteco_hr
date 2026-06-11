@@ -172,7 +172,7 @@ export function UserPhotoTab({ user, syncStatus, onProcessed }: UserPhotoTabProp
 
       {/* Pinned action bar — Frappe↔cache↔device actions stay reachable while
           the previews above scroll. */}
-      <DialogFooter variant="bar" className="sm:justify-start">
+      <DialogFooter variant="bar">
         <Button
           size="sm"
           onClick={handleProcess}

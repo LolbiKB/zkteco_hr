@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -1218,9 +1219,8 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                 </div>
               )}
               {isRegistered && (
-                <div className="flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-4 gap-4">
-                    <div className="flex items-center gap-4 text-sm">
+                <div className="flex flex-1 min-h-0 flex-col">
+                  <div className="mb-4 flex shrink-0 flex-wrap items-center gap-4 text-sm">
                       {stats.synced > 0 && (
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -1251,25 +1251,6 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                           <span>{stats.notSynced} pending</span>
                         </div>
                       )}
-                    </div>
-                    <SyncToolbarActions
-                      deviceSns={deviceSns}
-                      onlineDeviceSns={onlineDeviceSns}
-                      isSyncing={isSyncing}
-                      showResetFailed={stats.hasFailedCommands || stats.hasFailedDevices}
-                      showClearStuck={stats.staleCount > 0 || stats.syncing > 0}
-                      onSyncAll={handleSyncAllDevices}
-                      onResetFailed={() =>
-                        retryUserSync.mutate({ userId: user.id!, deviceSns: deviceSns })
-                      }
-                      onForceSync={() =>
-                        forceUserSync.mutate({ userId: user.id!, deviceSns: deviceSns })
-                      }
-                      onClearStuck={() => reconcileUserSync.mutate(user.id!)}
-                      resetPending={retryUserSync.isPending}
-                      forcePending={forceUserSync.isPending}
-                      clearPending={reconcileUserSync.isPending}
-                    />
                   </div>
 
                   <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1311,6 +1292,27 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                       </div>
                     )}
                   </div>
+
+                  <DialogFooter variant="bar">
+                    <SyncToolbarActions
+                      deviceSns={deviceSns}
+                      onlineDeviceSns={onlineDeviceSns}
+                      isSyncing={isSyncing}
+                      showResetFailed={stats.hasFailedCommands || stats.hasFailedDevices}
+                      showClearStuck={stats.staleCount > 0 || stats.syncing > 0}
+                      onSyncAll={handleSyncAllDevices}
+                      onResetFailed={() =>
+                        retryUserSync.mutate({ userId: user.id!, deviceSns: deviceSns })
+                      }
+                      onForceSync={() =>
+                        forceUserSync.mutate({ userId: user.id!, deviceSns: deviceSns })
+                      }
+                      onClearStuck={() => reconcileUserSync.mutate(user.id!)}
+                      resetPending={retryUserSync.isPending}
+                      forcePending={forceUserSync.isPending}
+                      clearPending={reconcileUserSync.isPending}
+                    />
+                  </DialogFooter>
                 </div>
               )}
             </TabsContent>
@@ -1337,10 +1339,10 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
               {!isRegistered ? (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Register first to manage biometrics</div>
               ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex flex-1 min-h-0 flex-col">
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-xs">
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
                         <div className="flex items-center gap-1.5">
                           <Fingerprint className="h-4 w-4 text-blue-500" />
                           <span>{fingerprints.length} fingerprints</span>
@@ -1349,10 +1351,6 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                           <ScanFace className="h-4 w-4 text-purple-500" />
                           <span>{faces.length > 0 ? 'Face enrolled' : 'No face'}</span>
                         </div>
-                      </div>
-                      <Button size="sm" onClick={() => setEnrollOpen(true)} className="h-8 gap-1.5 text-xs">
-                        <Fingerprint className="h-3.5 w-3.5" /> Enroll
-                      </Button>
                     </div>
 
                     {/* Fingerprints list */}
@@ -1390,6 +1388,13 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                       </div>
                     </div>
                   </div>
+                </div>
+
+                  <DialogFooter variant="bar">
+                    <Button size="sm" onClick={() => setEnrollOpen(true)} className="h-8 gap-1.5 text-xs">
+                      <Fingerprint className="h-3.5 w-3.5" /> Enroll
+                    </Button>
+                  </DialogFooter>
                 </div>
               )}
             </TabsContent>

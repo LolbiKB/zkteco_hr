@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from types import SimpleNamespace
@@ -97,13 +98,35 @@ class TestDashboardTokenRoleGate(unittest.TestCase):
         )
         self.assertNotIn("s3cret", str(result))
 
-    def test_system_manager_still_passes_gate(self):
-        result, _post = _exchange(
-            user="admin@example.com",
-            roles=["System Manager"],
-            response=_bridge_response(200, {"token": "tok2", "expires_in": 900}),
+    def test_system_manager_is_rejected(self):
+        # System Manager no longer grants ADMS access — dedicated roles only.
+        with self.assertRaises(PermissionError):
+            _exchange(
+                user="admin@example.com",
+                roles=["System Manager"],
+                response=_bridge_response(200, {"token": "tok2", "expires_in": 900}),
+            )
+
+    def test_adms_admin_sends_admin_app_role(self):
+        _result, post = _exchange(
+            user="ops@example.com",
+            roles=["ADMS Admin"],
+            response=_bridge_response(
+                200, {"token": "t", "expires_in": 900, "email": "ops@example.com", "role": "admin"}
+            ),
         )
-        self.assertEqual(result["token"], "tok2")
+        self.assertEqual(json.loads(post.call_args.kwargs["data"])["app_role"], "admin")
+
+    def test_adms_super_admin_sends_super_admin_app_role(self):
+        _result, post = _exchange(
+            user="boss@example.com",
+            roles=["ADMS Admin", "ADMS Super Admin"],
+            response=_bridge_response(
+                200,
+                {"token": "t", "expires_in": 900, "email": "boss@example.com", "role": "super_admin"},
+            ),
+        )
+        self.assertEqual(json.loads(post.call_args.kwargs["data"])["app_role"], "super_admin")
 
     def test_bridge_403_maps_to_permission_error(self):
         with self.assertRaises(PermissionError):

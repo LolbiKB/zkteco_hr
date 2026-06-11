@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/animate-ui/components/radix/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Accordion,
   AccordionItem,
@@ -33,7 +33,8 @@ import {
   Search,
   Info,
   MapPin,
-  ScrollText,
+  Activity,
+  CalendarCheck,
   Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -50,7 +51,9 @@ import {
   useDevice,
 } from '@/hooks'
 import { parseDeviceRegistrationData } from '@/lib/device-registration'
-import { DeviceAttlogTab } from '@/components/devices/device-attlog-tab'
+import { DeviceAttlogOverviewTab } from '@/components/devices/device-attlog-overview-tab'
+import { DeviceAttlogDailyCloseoutTab } from '@/components/devices/device-attlog-daily-closeout-tab'
+import type { DeviceDetailTab } from '@/components/devices/device-detail-tabs'
 import {
   buildComponentSyncOptions,
   getComponentSyncStatus,
@@ -64,6 +67,7 @@ interface DeviceDetailDialogProps {
   deviceSn: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialTab?: DeviceDetailTab
 }
 
 // Component to show individual sync component status
@@ -120,8 +124,8 @@ function UserSyncRow({
   return (
     <Accordion type="single" collapsible className="border rounded-lg overflow-hidden">
       <AccordionItem value={user.userId} className="border-0">
-        <AccordionTrigger className="px-3 py-2 hover:bg-muted/30 hover:no-underline rounded-lg [&>svg]:h-4 [&>svg]:w-4" showArrow>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <AccordionTrigger className="px-3 py-2.5 hover:bg-muted/30 hover:no-underline rounded-lg [&>svg]:h-4 [&>svg]:w-4" showArrow>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <span className="text-sm font-medium">{user.userName}</span>
             {user.employeeId && (
               <Badge variant="secondary" className="text-[10px] font-mono">{user.employeeId}</Badge>
@@ -163,7 +167,7 @@ function UserSyncRow({
         </AccordionTrigger>
         <AccordionContent className="px-4 pb-3 pt-2">
           {/* Biometric status cards */}
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             <ComponentStatusCard
               label="Fingerprint"
               icon={Fingerprint}
@@ -191,7 +195,7 @@ function UserSyncRow({
           
           {/* Error message */}
           {user.errorMessage && (
-            <div className="text-xs text-red-600 p-2 bg-red-50 border border-red-200 rounded-lg mt-2">
+            <div className="text-sm text-red-600 p-2.5 bg-red-50 border border-red-200 rounded-lg mt-2 break-words">
               {user.errorMessage}
             </div>
           )}
@@ -213,8 +217,13 @@ function connectionStatusClass(status?: string | null): string {
   return 'bg-green-100 text-green-800 border-green-200'
 }
 
-export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetailDialogProps) {
-  const [activeTab, setActiveTab] = useState('users')
+export function DeviceDetailDialog({
+  deviceSn,
+  open,
+  onOpenChange,
+  initialTab = 'users',
+}: DeviceDetailDialogProps) {
+  const [activeTab, setActiveTab] = useState<DeviceDetailTab>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
   // Use centralized hooks - single source of truth
   const { 
@@ -348,6 +357,12 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
   }, [paginatedUsers.data, batches, deviceCommands, deviceSn])
   
   useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab)
+    }
+  }, [open, initialTab, deviceSn])
+
+  useEffect(() => {
     if (open && deviceSn) {
       queryClient.invalidateQueries({ queryKey: queryKeys.devices.users(deviceSn, '') })
       queryClient.invalidateQueries({ queryKey: ['device-sync-summary', deviceSn] })
@@ -433,64 +448,91 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
           </div>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Users ({stats.total})
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as DeviceDetailTab)}
+          className="flex-1 flex flex-col min-h-0 gap-1"
+        >
+          <TabsList className="grid w-full grid-cols-4 gap-1 p-1 h-auto">
+            <TabsTrigger value="users" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Users ({stats.total})</span>
             </TabsTrigger>
-            <TabsTrigger value="info" className="flex items-center gap-2">
-              <Info className="h-4 w-4" />
-              Device Info
+            <TabsTrigger value="info" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
+              <Info className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Info</span>
             </TabsTrigger>
-            <TabsTrigger value="attlogs" className="flex items-center gap-2">
-              <ScrollText className="h-4 w-4" />
-              ATT Logs
+            <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="closeout" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
+              <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Closeout</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="users" className="flex-1 flex flex-col min-h-0 mt-4">
-            <div className="flex items-center justify-between mb-4 gap-4">
-              <div className="flex items-center gap-4 text-sm">
-                {stats.synced > 0 && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <span>{stats.synced} synced</span>
-                  </div>
-                )}
-                {stats.syncing > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                    <span>{stats.syncing} syncing</span>
-                  </div>
-                )}
-                {(stats as any).cleaning > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-purple-500" />
-                    <span>{(stats as any).cleaning} cleaning</span>
-                  </div>
-                )}
-                {(stats as any).notSynced > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 rounded-full border-2 border-dashed border-gray-400" />
-                    <span>{(stats as any).notSynced} pending</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
+          <TabsContent value="users" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b pb-3 mb-3 shrink-0 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex flex-wrap gap-2 text-sm">
+                  {stats.synced > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                      {stats.synced} synced
+                    </span>
+                  )}
+                  {stats.syncing > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800">
+                      <Loader2 className="h-3.5 w-3.5 text-blue-600 animate-spin" />
+                      {stats.syncing} syncing
+                    </span>
+                  )}
+                  {(stats as any).cleaning > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-800">
+                      <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                      {(stats as any).cleaning} cleaning
+                    </span>
+                  )}
+                  {(stats as any).notSynced > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
+                      <div className="h-3 w-3 rounded-full border-2 border-dashed border-slate-400" />
+                      {(stats as any).notSynced} pending
+                    </span>
+                  )}
+                </div>
+                <div className="relative w-full sm:w-64 shrink-0">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search user to sync..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-8 w-64 text-sm"
+                    className="pl-9 h-8 w-full text-sm"
                   />
                 </div>
               </div>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="font-medium">Row icons:</span>
+                <span className="inline-flex items-center gap-1">
+                  <StatusIcon status="synced" />
+                  User
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <StatusIcon status="synced" />
+                  FP
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <StatusIcon status="synced" />
+                  Face
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <StatusIcon status="synced" />
+                  Photo
+                </span>
+              </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
               {(paginatedUsers.isLoading || paginatedUsers.isFetching) && allUsers.length === 0 ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -632,13 +674,26 @@ export function DeviceDetailDialog({ deviceSn, open, onOpenChange }: DeviceDetai
             </div>
           </TabsContent>
 
-          <TabsContent value="attlogs" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+          <TabsContent value="overview" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
             {deviceSn && (
-              <DeviceAttlogTab
-                deviceSn={deviceSn}
-                isOnline={!!device?.isOnline}
-                enabled={open && activeTab === 'attlogs'}
-              />
+              <div className="flex flex-col flex-1 min-h-0">
+                <DeviceAttlogOverviewTab
+                  deviceSn={deviceSn}
+                  isOnline={!!device?.isOnline}
+                  enabled={open && activeTab === 'overview'}
+                />
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="closeout" className="flex-1 flex flex-col min-h-0 mt-4 overflow-hidden">
+            {deviceSn && (
+              <div className="flex flex-col flex-1 min-h-0">
+                <DeviceAttlogDailyCloseoutTab
+                  deviceSn={deviceSn}
+                  enabled={open && activeTab === 'closeout'}
+                />
+              </div>
             )}
           </TabsContent>
         </Tabs>

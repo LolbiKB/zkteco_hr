@@ -94,6 +94,25 @@ const LEGEND_STATUSES: (AttlogClosureStatus | 'not_started')[] = [
   'not_started',
 ]
 
+/** Solid status-dot color for the closeout calendar + legend. */
+export function attlogClosureDotClass(
+  status: AttlogClosureStatus | string | null | undefined
+): string {
+  switch (status) {
+    case 'closed':
+      return 'bg-green-500'
+    case 'closure_failed':
+      return 'bg-destructive'
+    case 'deferred_offline':
+      return 'bg-amber-500'
+    case 'backfill_running':
+    case 'pending_verify':
+      return 'bg-blue-500'
+    default:
+      return 'bg-muted-foreground/25'
+  }
+}
+
 /** Ring/bar colors for closeout calendar cells (matches badge semantics). */
 export function attlogClosureCellRingClass(
   status: AttlogClosureStatus | string | null | undefined

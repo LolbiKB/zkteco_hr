@@ -33,7 +33,7 @@ import {
 import { useExportAttendanceLogs } from '@/hooks/use-attendance-logs'
 import {
   attlogClosureLabel,
-  attlogClosureCellRingClass,
+  attlogClosureDotClass,
 } from '@/lib/attlog-closure-display'
 import { useAuth } from '@/contexts/auth-context'
 import { formatCheckTimeForLog } from '@/lib/attendance-log-display'
@@ -192,32 +192,37 @@ export function DeviceAttlogOverviewTab({
       >
         <div className="overflow-x-auto -mx-1 px-1 pb-0.5">
           <div className="grid grid-flow-col auto-cols-[minmax(2.75rem,1fr)] gap-1.5 min-w-max sm:min-w-0 sm:grid-flow-row sm:grid-cols-[repeat(14,minmax(0,1fr))] sm:gap-2">
-            {calendarDays.map(({ localDate, status, label, weekday, date }) => {
+            {calendarDays.map(({ localDate, status, label, weekday, date }, i) => {
               const today = isToday(date)
+              // Month label only where it changes (first cell + the 1st).
+              const showMonth = i === 0 || date.getDate() === 1
               return (
                 <div
                   key={localDate}
-                  className={cn(
-                    'flex flex-col items-center gap-1 rounded-lg border px-1 py-2 transition-colors',
-                    today
-                      ? 'border-blue-200 bg-blue-50/60 ring-1 ring-blue-200/80'
-                      : 'border-border/60 bg-muted/40 hover:bg-muted/60'
-                  )}
+                  className="flex flex-col items-center gap-1.5 rounded-md px-1 py-1.5 transition-colors hover:bg-muted/50"
                   title={`${localDate}: ${attlogClosureLabel(status)}`}
                 >
-                  <div
-                    className={cn(
-                      'h-1.5 w-[85%] rounded-full',
-                      attlogClosureCellRingClass(status)
-                    )}
-                  />
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">
+                  <span className="text-[10px] font-medium uppercase tracking-wide leading-none text-muted-foreground/70">
                     {weekday}
                   </span>
-                  <span className="text-xs font-mono tabular-nums font-medium leading-none">
+                  <span
+                    className={cn(
+                      'grid h-6 w-6 place-items-center rounded-full text-xs font-medium tabular-nums leading-none',
+                      today && 'bg-primary text-primary-foreground'
+                    )}
+                  >
                     {label}
                   </span>
-                  <span className="text-[9px] text-muted-foreground leading-none hidden sm:block">
+                  <span
+                    className={cn('h-1.5 w-1.5 rounded-full', attlogClosureDotClass(status))}
+                    aria-hidden
+                  />
+                  <span
+                    className={cn(
+                      'text-[9px] leading-none text-muted-foreground',
+                      !showMonth && 'invisible'
+                    )}
+                  >
                     {format(date, 'MMM')}
                   </span>
                 </div>

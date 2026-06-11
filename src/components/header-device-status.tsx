@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router'
 import { useDevices, useSyncStatus, useCommandQueue } from '@/hooks/use-core-data'
 import { useMemo, useState } from 'react'
 import {
-  Server,
   Activity,
   AlertTriangle,
   CheckCircle2,
@@ -202,19 +201,18 @@ export function HeaderDeviceStatus() {
     )
   }
 
-  // Concise command/user breakdown for the detail dashboard.
-  const commandStats = [
-    { key: 'active', label: 'Active', value: m.pendingCommands, tone: 'text-blue-600 dark:text-blue-400' },
-    { key: 'failed', label: 'Failed', value: m.failedCommands, tone: 'text-destructive' },
+  // Flat issue/activity rows — only non-zero entries render, so the healthy
+  // dialog stays a calm two-liner instead of boxes full of zeros.
+  const detailRows = [
+    { key: 'offline', label: 'Devices offline', value: m.offline, tone: 'text-red-500' },
+    { key: 'active', label: 'Commands in flight', value: m.pendingCommands, tone: 'text-blue-600 dark:text-blue-400' },
+    { key: 'failedCmd', label: 'Failed commands (last hour)', value: m.failedCommands, tone: 'text-destructive' },
+    { key: 'failedUsers', label: 'Failed user syncs', value: m.failedUsers, tone: 'text-destructive' },
     { key: 'enroll', label: 'Enrollment incomplete', value: m.enrollmentIncomplete, tone: 'text-amber-600 dark:text-amber-400' },
-    { key: 'cleanup', label: 'Enrollment cleanup', value: m.enrollmentCleanupPending, tone: 'text-blue-600 dark:text-blue-400' },
-    { key: 'cancelled', label: 'Cancelled', value: m.cancelledCommands, tone: 'text-amber-600 dark:text-amber-400' },
-    { key: 'resolved', label: 'Auto-resolved', value: m.autoResolvedCancelled, tone: 'text-muted-foreground' },
-  ].filter((s) => s.value > 0)
-
-  const userStats = [
-    { key: 'failed', label: 'Failed syncs', value: m.failedUsers, tone: 'text-destructive' },
-    { key: 'drift', label: 'Drift detected', value: m.driftCount, tone: 'text-amber-600 dark:text-amber-400' },
+    { key: 'cleanup', label: 'Enrollment cleanup running', value: m.enrollmentCleanupPending, tone: 'text-blue-600 dark:text-blue-400' },
+    { key: 'cancelled', label: 'Cancelled commands (30 min)', value: m.cancelledCommands, tone: 'text-amber-600 dark:text-amber-400' },
+    { key: 'drift', label: 'Devices with stats drift', value: m.driftCount, tone: 'text-amber-600 dark:text-amber-400' },
+    { key: 'resolved', label: 'Auto-resolved housekeeping', value: m.autoResolvedCancelled, tone: 'text-muted-foreground' },
   ].filter((s) => s.value > 0)
 
   return (
@@ -258,72 +256,31 @@ export function HeaderDeviceStatus() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-col gap-6 overflow-y-auto">
-            {/* Headline stat tiles */}
-            <div className="grid shrink-0 grid-cols-2 gap-3">
-              <StatTile label="Online" value={m.online} dot="bg-green-500" />
-              <StatTile label="Offline" value={m.offline} dot="bg-red-400" muted={m.offline === 0} />
-              <StatTile label="Active commands" value={m.pendingCommands} dot="bg-blue-500" muted={m.pendingCommands === 0} />
-              <StatTile label="Issues" value={m.issueCount} dot={m.issueCount > 0 ? 'bg-amber-500' : 'bg-green-500'} muted={m.issueCount === 0} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <Section title="Devices" icon={Server}>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Online = device polled the bridge within 65 seconds.
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="divide-y divide-border/60">
+              <StatusRow
+                tone="text-green-600 dark:text-green-400"
+                label="Devices online"
+                value={`${m.online}/${m.total}`}
+                hint="Online = device polled the bridge within the last 65 seconds."
+              />
+              {detailRows.map((s) => (
+                <StatusRow key={s.key} tone={s.tone} label={s.label} value={s.value} />
+              ))}
+              {detailRows.length === 0 && (
+                <p className="py-3 text-sm text-muted-foreground">
+                  No issues — commands idle and all users in sync.
                 </p>
-                <DotRow tone="text-green-600 dark:text-green-400" label="Online" value={m.online} />
-                {m.offline > 0 && (
-                  <DotRow tone="text-red-500" label="Offline" value={m.offline} />
-                )}
-              </Section>
-
-              <Section title="Commands" icon={RefreshCw}>
-                {commandStats.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active or recent command activity.</p>
-                ) : (
-                  commandStats.map((s) => (
-                    <DotRow key={s.key} tone={s.tone} label={s.label} value={s.value} />
-                  ))
-                )}
-              </Section>
-
-              <Section title="Users" icon={AlertTriangle}>
-                {userStats.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">All users in sync.</p>
-                ) : (
-                  userStats.map((s) => (
-                    <DotRow key={s.key} tone={s.tone} label={s.label} value={s.value} />
-                  ))
-                )}
-              </Section>
-
-              <Section title="Status" icon={CheckCircle2}>
-                <DotRow
-                  tone={
-                    m.status === 'critical'
-                      ? 'text-destructive'
-                      : m.status === 'warning'
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : m.status === 'syncing'
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-green-600 dark:text-green-400'
-                  }
-                  label={color.label}
-                  value={null}
-                />
-                {m.driftCount > 0 && (
-                  <DotRow tone="text-amber-600 dark:text-amber-400" label="Devices with drift" value={m.driftCount} />
-                )}
-              </Section>
+              )}
             </div>
           </div>
 
-          <DialogFooter className="sm:justify-between">
-            <span className="hidden text-xs text-muted-foreground sm:inline">
+          <DialogFooter variant="bar" className="sm:justify-between">
+            <span className="hidden self-center text-xs text-muted-foreground sm:inline">
               Live from the bridge — updates automatically.
             </span>
             <Button
+              size="sm"
               onClick={() => {
                 setOpen(false)
                 navigate('/devices')
@@ -339,66 +296,27 @@ export function HeaderDeviceStatus() {
   )
 }
 
-function StatTile({
-  label,
-  value,
-  dot,
-  muted = false,
-}: {
-  label: string
-  value: number
-  dot: string
-  muted?: boolean
-}) {
-  return (
-    <div className="rounded-xl border p-4">
-      <div className="flex items-center gap-2">
-        <span className={cn('h-2 w-2 rounded-full', muted ? 'bg-muted-foreground/30' : dot)} />
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <div className={cn('mt-1.5 text-2xl font-semibold tabular-nums', muted && 'text-muted-foreground')}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
-function Section({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string
-  icon: typeof Server
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-xl border p-4">
-      <div className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        {title}
-      </div>
-      <div className="space-y-2">{children}</div>
-    </div>
-  )
-}
-
-function DotRow({
+function StatusRow({
   tone,
   label,
   value,
+  hint,
 }: {
   tone: string
   label: string
-  value: number | null
+  value: number | string
+  hint?: string
 }) {
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div
+      className={cn('flex items-center justify-between py-2.5 text-sm', hint && 'cursor-help')}
+      title={hint}
+    >
       <span className={cn('inline-flex items-center gap-2', tone)}>
         <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
         <span className="text-foreground/80">{label}</span>
       </span>
-      {value !== null && <span className="font-semibold tabular-nums">{value}</span>}
+      <span className="font-semibold tabular-nums">{value}</span>
     </div>
   )
 }

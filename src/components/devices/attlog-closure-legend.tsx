@@ -1,7 +1,7 @@
 import {
   ATTLOG_CLOSURE_LEGEND_STATUSES,
   attlogClosureBadgeConfig,
-  attlogClosureCellRingClass,
+  attlogClosureDotClass,
 } from '@/lib/attlog-closure-display'
 
 export function AttlogClosureLegend({ compact = false }: { compact?: boolean }) {
@@ -20,7 +20,7 @@ export function AttlogClosureLegend({ compact = false }: { compact?: boolean }) 
         return (
           <span key={status} className="inline-flex items-center gap-1.5">
             <span
-              className={`h-2 w-2 rounded-full shrink-0 ${attlogClosureCellRingClass(key)}`}
+              className={`h-2 w-2 rounded-full shrink-0 ${attlogClosureDotClass(key)}`}
               aria-hidden
             />
             {!compact && <Icon className={`h-3 w-3 shrink-0 ${config.className}`} />}

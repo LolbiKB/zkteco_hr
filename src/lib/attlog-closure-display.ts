@@ -85,3 +85,32 @@ export function attlogClosureLabel(status: AttlogClosureStatus | string | null |
 export function attlogClosureBadgeClass(status: AttlogClosureStatus | string | null | undefined): string {
   return attlogClosureBadgeConfig(status).className
 }
+
+const LEGEND_STATUSES: (AttlogClosureStatus | 'not_started')[] = [
+  'closed',
+  'pending_verify',
+  'closure_failed',
+  'deferred_offline',
+  'not_started',
+]
+
+/** Ring/bar colors for closeout calendar cells (matches badge semantics). */
+export function attlogClosureCellRingClass(
+  status: AttlogClosureStatus | string | null | undefined
+): string {
+  switch (status) {
+    case 'closed':
+      return 'ring-2 ring-green-700/40 bg-green-500/20'
+    case 'closure_failed':
+      return 'ring-2 ring-destructive/40 bg-destructive/15'
+    case 'deferred_offline':
+      return 'ring-2 ring-amber-700/40 bg-amber-500/20'
+    case 'backfill_running':
+    case 'pending_verify':
+      return 'ring-2 ring-blue-700/40 bg-blue-500/20'
+    default:
+      return 'bg-muted'
+  }
+}
+
+export const ATTLOG_CLOSURE_LEGEND_STATUSES = LEGEND_STATUSES

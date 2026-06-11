@@ -77,7 +77,7 @@ export function ChangeStatusDialog({ user, open, onOpenChange }: ChangeStatusDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Change User Status</DialogTitle>
           <DialogDescription>

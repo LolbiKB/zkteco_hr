@@ -426,7 +426,7 @@ export function DeviceDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-4xl">
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {device?.isOnline ? (
@@ -453,21 +453,21 @@ export function DeviceDetailDialog({
           onValueChange={(v) => setActiveTab(v as DeviceDetailTab)}
           className="flex-1 flex flex-col min-h-0 gap-3"
         >
-          <TabsList className="grid w-full grid-cols-4 gap-1 p-1 h-auto">
-            <TabsTrigger value="users" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
-              <Users className="h-3.5 w-3.5 shrink-0" />
+          <TabsList className="w-full">
+            <TabsTrigger value="users">
+              <Users className="shrink-0" />
               <span className="truncate">Users ({stats.total})</span>
             </TabsTrigger>
-            <TabsTrigger value="info" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
-              <Info className="h-3.5 w-3.5 shrink-0" />
+            <TabsTrigger value="info">
+              <Info className="shrink-0" />
               <span className="truncate">Info</span>
             </TabsTrigger>
-            <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
-              <Activity className="h-3.5 w-3.5 shrink-0" />
+            <TabsTrigger value="overview">
+              <Activity className="shrink-0" />
               <span className="truncate">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="closeout" className="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-2">
-              <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
+            <TabsTrigger value="closeout">
+              <CalendarCheck className="shrink-0" />
               <span className="truncate">Closeout</span>
             </TabsTrigger>
           </TabsList>

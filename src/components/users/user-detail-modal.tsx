@@ -1158,7 +1158,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
   return (
     <>
       <Dialog open={open && !enrollOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -1193,7 +1193,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="w-full">
               <TabsTrigger value="sync" className="flex items-center gap-2 text-xs">
                 <Users className="h-4 w-4" />
                 Sync ({stats.total})
@@ -1413,7 +1413,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
           setEnrollOpen(false)
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">

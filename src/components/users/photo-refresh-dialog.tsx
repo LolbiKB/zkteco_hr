@@ -168,7 +168,7 @@ export function PhotoRefreshDialog({ user, open, onOpenChange, onSuccess }: Phot
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Image className="h-5 w-5" />

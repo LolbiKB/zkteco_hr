@@ -2,13 +2,15 @@ import { format, parseISO } from 'date-fns'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  MoreHorizontal, 
-  RotateCcw, 
+import {
+  MoreHorizontal,
+  RotateCcw,
   Wifi,
   WifiOff,
   Edit,
   Eye,
+  Activity,
+  CalendarCheck,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -26,13 +28,14 @@ import type { DeviceEntry } from '@/services/device-service'
 import type { DeviceAttlogClosureRow } from '@/hooks/use-attlog-closure'
 import { AttlogCatchUpBadge, AttlogClosureBadge } from '@/components/shared/status-badges'
 import { DeviceSecuritySerialHint } from '@/components/devices/device-security-banner'
+import type { DeviceDetailTab } from '@/components/devices/device-detail-tabs'
 
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
   currentStatusFilter?: string
   onDeviceCommand?: (serialNumber: string, commandType: string, commandBody: string) => void
   onEdit?: (device: DeviceEntry) => void
-  onShowDetail?: (serialNumber: string) => void
+  onShowDetail?: (serialNumber: string, tab?: DeviceDetailTab) => void
   yesterdayClosureBySn?: Map<string, DeviceAttlogClosureRow>
   catchUpDepthBySn?: Map<string, number>
 }
@@ -215,9 +218,17 @@ export function createDeviceColumns({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onShowDetail?.(serialNumber)}>
+              <DropdownMenuItem onClick={() => onShowDetail?.(serialNumber, 'users')}>
                 <Eye className="mr-2 h-4 w-4" />
                 View Sync Details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onShowDetail?.(serialNumber, 'overview')}>
+                <Activity className="mr-2 h-4 w-4" />
+                View ATT overview
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onShowDetail?.(serialNumber, 'closeout')}>
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                View daily closeout
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit?.(row.original)}>
                 <Edit className="mr-2 h-4 w-4" />

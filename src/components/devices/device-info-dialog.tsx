@@ -175,7 +175,7 @@ export function DeviceInfoDialog({ deviceSn, open, onOpenChange }: DeviceInfoDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Info className="h-5 w-5" />

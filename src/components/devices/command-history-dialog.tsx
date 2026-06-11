@@ -165,7 +165,7 @@ export function CommandHistoryDialog({ deviceSn, open, onOpenChange }: CommandHi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden">
         <DialogHeader className="shrink-0 border-b pb-4">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Server className="h-5 w-5" />

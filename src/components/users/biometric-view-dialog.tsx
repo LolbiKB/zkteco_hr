@@ -91,7 +91,7 @@ const formatHash = (hash: string | null) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Biometrics Summary</DialogTitle>
           <DialogDescription>{userName || 'User'}</DialogDescription>

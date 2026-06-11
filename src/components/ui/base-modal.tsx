@@ -23,7 +23,7 @@ interface BaseModalProps {
   children: React.ReactNode
   /** Optional footer content (buttons, actions) */
   footer?: React.ReactNode
-  /** Width preset — defaults to lg (672px); balanced for forms. */
+  /** Width preset — defaults to md (512px). */
   size?: DialogSize
 }
 
@@ -34,7 +34,7 @@ export function BaseModal({
   description,
   children,
   footer,
-  size = "lg"
+  size = "md"
 }: BaseModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

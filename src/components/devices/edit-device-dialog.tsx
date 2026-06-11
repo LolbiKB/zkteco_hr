@@ -179,7 +179,7 @@ export function EditDeviceDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[460px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Device</DialogTitle>
             <DialogDescription>

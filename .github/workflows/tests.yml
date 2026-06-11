@@ -69,9 +69,11 @@ jobs:
           bench init --skip-redis-config-generation --skip-assets \
             --frappe-branch "$FRAPPE_BRANCH" --python "$(which python)" frappe-bench
           cd frappe-bench
-          bench get-app erpnext --branch "$ERPNEXT_BRANCH"
-          bench get-app hrms --branch "$HRMS_BRANCH"
-          bench get-app zkteco_hr "$GITHUB_WORKSPACE/zkteco_hr-src"
+          # --skip-assets: zkteco_hr ships pre-built committed assets (Frappe
+          # Cloud never builds them), and backend tests need no frontend build.
+          bench get-app erpnext --branch "$ERPNEXT_BRANCH" --skip-assets
+          bench get-app hrms --branch "$HRMS_BRANCH" --skip-assets
+          bench get-app zkteco_hr "$GITHUB_WORKSPACE/zkteco_hr-src" --skip-assets
 
       - name: MariaDB charset (utf8mb4)
         run: |

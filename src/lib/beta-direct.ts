@@ -72,11 +72,9 @@ function logShadowDiff(direct: UsersResponse, bridge: UsersResponse, filters: Us
     if (!dKeys.has(rowKey(br))) diffs.push(`row only in bridge: ${rowKey(br)}`)
   }
 
-  const page = filters.page ?? 1
-  if (diffs.length === 0) {
-    // eslint-disable-next-line no-console
-    console.info(`%c[beta-direct] ✓ shadow match — page ${page}, ${d.length} rows`, 'color:#16a34a')
-  } else {
+  // Quiet on match (proven path); only surface discrepancies.
+  if (diffs.length > 0) {
+    const page = filters.page ?? 1
     // eslint-disable-next-line no-console
     console.warn(
       `[beta-direct] ✗ ${diffs.length} discrepancy(ies) — page ${page}:\n` + diffs.slice(0, 40).join('\n')

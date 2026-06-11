@@ -246,7 +246,8 @@ export function HeaderDeviceStatus() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="screen" className="flex flex-col">
+        {/* Content-adaptive: compact when healthy, grows with issues up to 85vh. */}
+        <DialogContent size="2xl" className="flex max-h-[85vh] flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span className={cn('h-2.5 w-2.5 rounded-full', color.dot)} />
@@ -257,7 +258,7 @@ export function HeaderDeviceStatus() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-6 overflow-y-auto">
             {/* Headline stat tiles */}
             <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
               <StatTile label="Online" value={m.online} dot="bg-green-500" />
@@ -266,7 +267,7 @@ export function HeaderDeviceStatus() {
               <StatTile label="Issues" value={m.issueCount} dot={m.issueCount > 0 ? 'bg-amber-500' : 'bg-green-500'} muted={m.issueCount === 0} />
             </div>
 
-            <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Section title="Devices" icon={Server}>
                 <p className="mb-3 text-xs text-muted-foreground">
                   Online = device polled the bridge within 65 seconds.

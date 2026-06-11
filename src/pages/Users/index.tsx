@@ -78,10 +78,10 @@ export function Users() {
       )}
 
       {flaggedCount > 0 && (
-        <Alert className="border-orange-500 bg-orange-50 text-orange-800">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertTitle className="text-orange-900">Suspicious Attendance</AlertTitle>
-          <AlertDescription className="text-orange-700">
+        <Alert className="border-amber-500/50 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTitle className="text-amber-900 dark:text-amber-100">Suspicious Attendance</AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
             {flaggedCount} user{flaggedCount !== 1 ? 's' : ''} with suspicious attendance patterns
           </AlertDescription>
         </Alert>

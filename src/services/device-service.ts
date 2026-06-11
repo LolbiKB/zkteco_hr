@@ -400,10 +400,8 @@ export class DeviceService {
     if (options.limit) params.append('limit', String(options.limit))
     if (options.search) params.append('search', options.search)
 
-    const response = await fetch(`/admin/devices/${deviceSn}/users?${params}`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    const response = await fetch(`${API_URL}/admin/devices/${deviceSn}/users?${params}`, {
+      headers: await this.authHeaders(),
     })
 
     if (!response.ok) {
@@ -418,7 +416,9 @@ export class DeviceService {
    * Get sync summary for a device
    */
   static async getDeviceSyncSummary(deviceSn: string): Promise<{ total: number; synced: number; syncing: number; failed: number }> {
-    const response = await fetch(`/admin/devices/${deviceSn}/sync-summary`)
+    const response = await fetch(`${API_URL}/admin/devices/${deviceSn}/sync-summary`, {
+      headers: await this.authHeaders(),
+    })
 
     if (!response.ok) {
       const error = await response.json()

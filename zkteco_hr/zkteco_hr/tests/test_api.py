@@ -20,12 +20,6 @@ _install_frappe_mock()
 from zkteco_hr.attendance_engine import api as mod  # noqa: E402
 
 
-def _getdate(value):
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value)[:10])
-
-
 class TestGetMyWeekAccess(unittest.TestCase):
     def test_denied_access_aborts_before_returning_data(self):
         with patch.object(
@@ -35,11 +29,12 @@ class TestGetMyWeekAccess(unittest.TestCase):
                 mod.get_my_week("EMP-999", "2026-06-01", "2026-06-02")
         guard.assert_called_once_with("EMP-999")
 
-    @patch("zkteco_hr.attendance_engine.api.getdate", _getdate)
     @patch.object(mod, "_require_calendar_access", return_value=None)
     @patch.object(mod.frappe, "get_all", return_value=[])
     def test_allowed_access_returns_week(self, _get_all, guard):
-        out = mod.get_my_week("EMP-001", "2026-06-01", "2026-06-01")
+        # Pass real date objects so the day loop works under both the unit-test
+        # Frappe mock (identity getdate) and the real getdate in CI's bench run.
+        out = mod.get_my_week("EMP-001", date(2026, 6, 1), date(2026, 6, 1))
         self.assertEqual(out["employee"], "EMP-001")
         self.assertEqual(len(out["days"]), 1)
         guard.assert_called_once_with("EMP-001")

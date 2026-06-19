@@ -271,7 +271,7 @@ test("classify same punches on past day as unpaired error", () => {
   const now = new Date("2026-06-03T15:30:00");
   const rows = classifyUnpairedPresentations(
     checkins,
-    { dateKey: "2026-06-02", now },
+    { dateKey: "2026-06-02", now, shiftAssigned: true },
     { parseTime, minutesFromDateTime, clamp }
   );
 

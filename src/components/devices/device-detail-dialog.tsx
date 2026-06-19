@@ -386,7 +386,9 @@ export function DeviceDetailDialog({
   useEffect(() => {
     if (!deviceSn) return
     const channel = supabase
-      .channel('device-realtime')
+      // Unique per deviceSn — a static channel name collides across dialogs
+      // opened for different devices (supabase-js keys channels by name).
+      .channel(`device-realtime:${deviceSn}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sync_batches', filter: `device_sn=eq.${deviceSn}` },

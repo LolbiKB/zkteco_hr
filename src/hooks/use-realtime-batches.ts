@@ -7,7 +7,10 @@ export function useRealtimeBatches(deviceSn?: string) {
   
   useEffect(() => {
     const channel = supabase
-      .channel('batches-realtime')
+      // Unique per deviceSn: supabase-js keys channels by name, so a static
+      // name collides when this hook is mounted for two devices (wrong filter
+      // wins / stale channel persists).
+      .channel(`batches-realtime:${deviceSn || 'all'}`)
       .on(
         'postgres_changes',
         {

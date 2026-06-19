@@ -4,5 +4,14 @@
   "required_apps": ["erpnext", "hrms"],
   "branch": "version-15",
   "frontend_dir": "../../zkteco_hr/zkteco_hr/frontend/hr_attendance",
-  "register_app_in_apps_txt": true
+  "register_app_in_apps_txt": true,
+  "exercise": {
+    "method": "zkteco_hr.attendance_engine.dev_tools.run_engine_for_employee",
+    "args": [
+      {"flag": "employee", "kwarg": "employee", "required": true},
+      {"flag": "start", "kwarg": "start_date", "required": true},
+      {"flag": "end", "kwarg": "end_date", "required": true},
+      {"flag": "mode", "kwarg": "mode", "default": "both", "choices": ["intraday", "closeout", "both"]}
+    ]
+  }
 }

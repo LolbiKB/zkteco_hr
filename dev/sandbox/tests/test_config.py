@@ -67,6 +67,50 @@ class TestLoadConfig(unittest.TestCase):
         with self.assertRaises(ConfigError):
             load_config("/nonexistent/path/frappe-sandbox.json")
 
+    def test_exercise_block_parsed(self):
+        with TemporaryDirectory() as d:
+            p = self._write(d, {
+                "app": "zkteco_hr", "app_src": "../..", "required_apps": ["hrms"],
+                "branch": "version-15", "frontend_dir": "../..",
+                "exercise": {
+                    "method": "zkteco_hr.attendance_engine.dev_tools.run_engine_for_employee",
+                    "args": [
+                        {"flag": "employee", "kwarg": "employee", "required": True},
+                        {"flag": "mode", "kwarg": "mode", "default": "both", "choices": ["both", "intraday"]},
+                    ],
+                },
+            })
+            cfg = load_config(p)
+            self.assertEqual(cfg.exercise_method,
+                             "zkteco_hr.attendance_engine.dev_tools.run_engine_for_employee")
+            self.assertEqual(len(cfg.exercise_args), 2)
+            self.assertEqual(cfg.exercise_args[0].flag, "employee")
+            self.assertTrue(cfg.exercise_args[0].required)
+            self.assertEqual(cfg.exercise_args[1].default, "both")
+            self.assertEqual(cfg.exercise_args[1].choices, ("both", "intraday"))
+
+    def test_method_defaults(self):
+        with TemporaryDirectory() as d:
+            p = self._write(d, {
+                "app": "myapp", "app_src": ".", "required_apps": ["frappe"],
+                "branch": "version-15", "frontend_dir": ".",
+            })
+            cfg = load_config(p)
+            self.assertEqual(cfg.anonymize_method, "myapp.utils.anonymize.run")
+            self.assertEqual(cfg.verify_method, "myapp.utils.sandbox_verify.run")
+            self.assertIsNone(cfg.exercise_method)
+            self.assertEqual(cfg.exercise_args, ())
+
+    def test_malformed_exercise_arg_raises(self):
+        with TemporaryDirectory() as d:
+            p = self._write(d, {
+                "app": "x", "app_src": ".", "required_apps": ["frappe"],
+                "branch": "version-15", "frontend_dir": ".",
+                "exercise": {"method": "x.y.z", "args": [{"flag": "only_flag"}]},
+            })
+            with self.assertRaises(ConfigError):
+                load_config(p)
+
 
 if __name__ == "__main__":
     unittest.main()

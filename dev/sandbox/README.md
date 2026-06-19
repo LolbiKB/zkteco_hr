@@ -132,3 +132,9 @@ Docker-free and run on the host. If Docker is unavailable, `doctor` will report
 `[FAIL] compose file exists` and `[FAIL]`/`[PASS] docker present` — this is expected
 in CI environments that only run the frontend job. The frontend GitHub Actions workflow
 (`.github/workflows/frontend.yml`) runs without Docker.
+
+## Reusing this for other Frappe apps
+The generic engine is packaged as the `frappe-sandbox` Claude skill at
+`~/.claude/skills/frappe-sandbox/`. To onboard another app: copy its `engine/` into that
+app's `dev/sandbox/`, run `./frappe-sandbox init --app <name>`, and fill the scaffolded
+config + `anonymize`/`sandbox_verify` stubs. See the skill's `SKILL.md`.

@@ -48,6 +48,18 @@ class TestCliDryRun(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("docker compose", r.stdout)
 
+    def test_exercise_dry_run(self):
+        out = self._run("exercise", "--employee", "E1", "--start", "2026-06-01", "--end", "2026-06-07")
+        self.assertIn("run_engine_for_employee", out)
+        self.assertIn("E1", out)
+
+    def test_engine_run_removed(self):
+        import io
+        from contextlib import redirect_stderr
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                main(["--config", CONFIG, "--dry-run", "engine-run", "--employee", "E1"])
+
 
 if __name__ == "__main__":
     unittest.main()

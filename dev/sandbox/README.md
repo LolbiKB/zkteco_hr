@@ -8,7 +8,7 @@ Docker-free frontend tests.
 
 | Requirement | Notes |
 |---|---|
-| Docker + Compose v2 | Required for `up`, `install-app`, `seed`, `test --backend`, `engine-run`, `verify`, `down` |
+| Docker + Compose v2 | Required for `up`, `install-app`, `seed`, `test --backend`, `exercise`, `verify`, `down` |
 | Python 3.9+ | Required for the CLI itself; run from the host |
 | Node.js 20+ | Required for `test --frontend` |
 | `NODE_AUTH_TOKEN` env var | GitHub PAT with `read:packages` — required to install `@lolbikb/dewey-ui` from GitHub Packages. Without it, frontend install degrades gracefully with a warning (both locally and in CI). |
@@ -40,7 +40,7 @@ Run all commands from the repo root or the `dev/sandbox/` directory.
 ./frappe-sandbox seed --prod <BACKUP_DIR>      # restore a Frappe Cloud backup into sandbox site
 ./frappe-sandbox test --backend [--fast] [--module <name>]   # run Python test suite
 ./frappe-sandbox test --frontend [--unit|--e2e]              # run React unit / E2E tests
-./frappe-sandbox engine-run --employee <id> --start <date> --end <date> [--mode both|intraday|closeout]
+./frappe-sandbox exercise --employee <id> --start <date> --end <date> [--mode both|intraday|closeout]
 ./frappe-sandbox verify                        # run sandbox_verify oracle (emits findings JSON)
 ./frappe-sandbox doctor                        # environment pre-flight check
 ./frappe-sandbox --dry-run <verb> ...          # print commands without running them
@@ -86,7 +86,7 @@ npx playwright install chromium
 
 # --- real-data triage ---
 ./frappe-sandbox seed --prod <backup-dir>
-./frappe-sandbox engine-run --employee <id> --start <date> --end <date>
+./frappe-sandbox exercise --employee <id> --start <date> --end <date>
 ./frappe-sandbox verify
 ```
 
@@ -114,7 +114,7 @@ local path creates a symlink on Linux/macOS inside the Docker container. The
 **HR-role gate** (resolved in Task 8): the Frappe sandbox site must have the
 `HR Manager` role assigned to the test user before `run_engine_for_employee` will
 accept API calls. `provision.sh` grants this during initial install. If running
-`engine-run` against a freshly restored `seed --prod` site, confirm the sandbox user
+`exercise` against a freshly restored `seed --prod` site, confirm the sandbox user
 has `HR Manager` set (`bench --site sandbox execute frappe.utils.set_user_permission ...`).
 
 **`migrate` verb** — a `migrate` subparser exists in the CLI but there is no dedicated

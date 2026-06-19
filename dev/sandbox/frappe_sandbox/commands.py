@@ -21,7 +21,7 @@ def docker_exec(cfg: Config, bash_cmd: str, *, service: str = "bench",
 
 def _bench(cfg: Config, args: str, *, site: str | None = None) -> str:
     site_part = f"--site {site} " if site else ""
-    return f"cd {cfg.bench_dir} && bench {site_part}{args}"
+    return f"cd {shlex.quote(cfg.bench_dir)} && bench {site_part}{args}"
 
 
 def build_up(cfg: Config) -> list[list[str]]:
@@ -35,7 +35,7 @@ def build_down(cfg: Config, *, purge: bool = False) -> list[list[str]]:
 def build_provision(cfg: Config) -> list[list[str]]:
     env = {
         "APP": cfg.app,
-        "APP_SRC": "/workspace/repo",
+        "APP_SRC": "/workspace/repo",  # in-container mount of the repo (docker-compose.yml), NOT cfg.app_src (a host path)
         "REQUIRED_APPS": " ".join(cfg.required_apps),
         "BRANCH": cfg.branch,
         "TEST_SITE": cfg.test_site,
@@ -87,7 +87,10 @@ def build_verify(cfg: Config) -> list[list[str]]:
 
 
 def build_frontend(cfg: Config, *, mode: str) -> list[list[str]]:
-    script = {"unit": "test:web", "e2e": "test:e2e"}.get(mode)
+    fe = shlex.quote(cfg.frontend_dir)
     if mode == "all":
-        return [["bash", "-lc", f"cd {cfg.frontend_dir} && npm run test:web && npm run test:e2e"]]
-    return [["bash", "-lc", f"cd {cfg.frontend_dir} && npm run {script}"]]
+        return [["bash", "-lc", f"cd {fe} && npm run test:web && npm run test:e2e"]]
+    script = {"unit": "test:web", "e2e": "test:e2e"}.get(mode)
+    if script is None:
+        raise ValueError(f"Unknown frontend mode: {mode!r}")
+    return [["bash", "-lc", f"cd {fe} && npm run {script}"]]

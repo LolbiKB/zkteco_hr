@@ -67,6 +67,15 @@ class TestCommands(unittest.TestCase):
         joined = " ".join(c.build_frontend(_cfg(), mode="unit")[0])
         self.assertIn("npm run test:web", joined)
 
+    def test_run_tests_fast_module(self):
+        joined = " ".join(c.build_run_tests(_cfg(), fast=True, module="test_closeout")[0])
+        self.assertNotIn("docker", joined)
+        self.assertIn("zkteco_hr.tests.test_closeout", joined)
+
+    def test_frontend_unknown_mode_raises(self):
+        with self.assertRaises(ValueError):
+            c.build_frontend(_cfg(), mode="bogus")
+
 
 if __name__ == "__main__":
     unittest.main()

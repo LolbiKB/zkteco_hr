@@ -54,14 +54,38 @@ lifecycle has **three distinct layers**, and this harness is layer ①:
   makes "push straight to main" safe — run it before pushing, since CI currently runs
   *after* push.
 
+### 2.1 Distribution & reuse — a skill, not a repo
+
+The harness reuses across your other Frappe Cloud apps as **three artifacts**, each in its
+right home:
+
+- **A Claude skill `frappe-sandbox`** (portable; any agent installs it) — bundles the
+  *generic engine* (docker-compose + CLI) and the recipes (warm loop, autonomous-verify,
+  safety guardrail). This is the "add it to their tooling" unit — a sibling to `setup-ci`.
+- **A per-app profile** in each app's repo (the coupled ~20%): `frappe-sandbox.yml` +
+  `sandbox_profile.py` (scrub spec + exercise commands + invariants).
+- **An onboarding procedure** in the skill that *generates* a starter profile for a new app
+  (inspect `hooks.py` + doctypes + rules docs → propose yml + scrub + invariant skeleton;
+  the human fills the domain truth).
+
+The coupled part **can't be a shared skill** (it's app data) — but the skill is what *mints*
+it. Another agent's flow: install skill → onboard the app → fill invariants → loop.
+
+**Sequencing — prove, then package:**
+- **1a** build the engine + zkteco_hr profile in-repo under `dev/sandbox/` and hit the
+  acceptance bars (one app, demonstrably working).
+- **1b** lift the *proven* engine into the `frappe-sandbox` skill + onboarding generator,
+  leaving zkteco_hr's profile as the reference example. Extract a skill from working usage —
+  never abstract first.
+
 ## 3. Roadmap
 
 | Phase | What | Status |
 |---|---|---|
-| **1 — Substrate** | local bench + dual seeding (clean + prod-restore) + warm loop + backend & frontend test lanes | **this spec** |
+| **1 — Substrate** | local bench + dual seeding (clean + prod-restore) + warm loop + backend & frontend test lanes. **1a** prove in-repo (acceptance bars); **1b** package the proven engine as the `frappe-sandbox` skill (§2.1) | **this spec** |
 | **2 — Autonomous Verification Loop** (the north star) | error capture + the **oracle layer** (crash / invariant / idempotency / regression) + `/loop` & goal-skill driver + remediation-as-PR guardrail. Subsumes "coverage growth" and "flag triage" — both become *outcomes* of this loop. | design intent (§11) |
 | 3 — CD | grow deploy-rehearsal into automated deploy to Frappe Cloud on merge, after gates | later |
-| 4 — Generalize + optional MCP | extract to its own repo for any Frappe app; optional remote read-only MCP; `--raw`/`--scrubbed` seeding variants | later |
+| 4 — Onboard other apps + optional MCP | onboard your other Frappe Cloud apps via the skill (§2.1); optional remote read-only MCP; `--raw` seeding variant | later |
 | **Hygiene track** (parallel, not a phase — do anytime) | merge `frontend.yml`; `.gitignore` + de-commit `node_modules`/built assets; one lockfile + pin deps; make CI a required check | §13 |
 
 ## 4. Confirmed Decisions
@@ -70,7 +94,7 @@ lifecycle has **three distinct layers**, and this harness is layer ①:
 - **Seeding source:** a backup **downloaded from the Frappe Cloud dashboard** (every tier) — no SSH; real data never leaves the machine.
 - **No MCP in Phase 1.** Revisited in Phase 4.
 - **Deliverable:** a config-driven CLI/scripts engine + a thin Claude skill with loop recipes. CLI first.
-- **Harness location:** **in-repo first**, under `dev/sandbox/`, config-driven, clean extraction path in Phase 4.
+- **Harness location & distribution:** in-repo first under `dev/sandbox/` (1a), then lift the proven engine into a portable Claude skill `frappe-sandbox` (1b); per-app profiles live in each app's repo. See §2.1.
 - **PII:** restore real data then **anonymize by default, non-skippable** (deterministic, id-preserving). Local-only regardless.
 - **Phase 1 scope:** backend **and** frontend.
 - **Substrate:** official `frappe/bench` image as base; all value in our CLI.
@@ -321,7 +345,10 @@ and `--raw` seeding. The hygiene track (§13) is parallel, not Phase 1.
 
 ## 17. Deliverable Summary (Phase 1)
 
-- `dev/sandbox/` — `docker-compose.yml`, the `frappe-sandbox` CLI, `frappe-sandbox.yml`, scripts, and a `verify` stub + structured engine-run output (seams for §11).
-- `zkteco_hr/zkteco_hr/utils/anonymize.py` — the anonymization pass.
+**1a — prove (in-repo):**
+- `dev/sandbox/` — `docker-compose.yml`, the `frappe-sandbox` CLI/scripts, `frappe-sandbox.yml`, a `verify` stub + structured engine-run output (seams for §11).
+- `dev/sandbox/sandbox_profile.py` (+ `zkteco_hr/zkteco_hr/utils/anonymize.py`) — zkteco_hr's scrub spec + exercise commands + (later) invariants.
 - Frontend: merge the `setup-ci`-produced worktree to main.
-- A thin Claude skill documenting the loop recipes.
+
+**1b — package (skill):**
+- A portable `frappe-sandbox` Claude skill bundling the proven engine + loop recipes + an onboarding generator; zkteco_hr's profile stays in-repo as the reference example. Built via the **writing-skills** skill, from working 1a usage.

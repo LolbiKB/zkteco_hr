@@ -19,6 +19,13 @@
   --ring: var(--brand-ring);
 }
 
+/* Expose the orange accent as a Tailwind color utility so the urgent/attention
+   signal is a token, not a hardcoded hue: text-brand-accent / bg-brand-accent /
+   border-brand-accent (supports /opacity, e.g. bg-brand-accent/10). */
+@theme inline {
+  --color-brand-accent: var(--brand-accent);
+}
+
 /* ---------------------------------------------------------------------------
    Signal system — apply by the MEANING of the action, never as decoration:
 

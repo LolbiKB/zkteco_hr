@@ -27,4 +27,5 @@ test("brand tokens define the ring + accent signals and wire --ring", () => {
   assert.match(css, /--brand-ring:\s*oklch/, "defines --brand-ring (focus halo green)");
   assert.match(css, /--brand-accent:\s*#c2410c/i, "defines --brand-accent (International orange)");
   assert.match(css, /--ring:\s*var\(--brand-ring\)/, "wires dewey-ui --ring to --brand-ring");
+  assert.match(css, /--color-brand-accent:\s*var\(--brand-accent\)/, "exposes --brand-accent as a Tailwind utility");
 });

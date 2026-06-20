@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { AppShell } from "@lolbikb/dewey-ui";
 
 import { useCalendarSession } from "@/hooks/useCalendarSession";
-import { APP_LOGO } from "@/lib/brand";
+import { DeweyTimeWordmark } from "@/brand/DeweyTimeWordmark";
 import { defaultHrAccessContext, type HrAccessOutletContext } from "@/lib/hrAccess";
 const DESK_URL = "/desk";
 const FLAGS_INBOX_URL = "/app/attendance-flag";
@@ -61,10 +61,7 @@ export function HrAppShell() {
             : []),
         ],
       }}
-      logo={
-        <img src={APP_LOGO} alt="" className="size-6 shrink-0 rounded-sm" width={24} height={24} />
-      }
-      title="ZKTeco HR"
+      logo={<DeweyTimeWordmark />}
       homeHref={tabHref("attendance", employee)}
       linkComponent={RouterLink}
       headerEnd={

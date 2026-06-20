@@ -144,7 +144,7 @@ function HolidayBoard(props: { description: string; weeklyOff: boolean }) {
   // Show as multiple vertical “lines” using columns; keep it stable and non-wrapping in height.
   return (
     <div className="relative h-full rounded-xl border border-border bg-muted/25 p-2 shadow-sm">
-      <div className="text-[15px] leading-snug text-muted-foreground whitespace-normal break-words line-clamp-6">
+      <div className="text-[15px] leading-snug text-brand-accent whitespace-normal break-words line-clamp-6">
         {text}
       </div>
     </div>
@@ -169,7 +169,7 @@ function DayDayTrack(props: {
     ? cn(color, "shadow-sm ring-1 ring-foreground/10")
     : "border border-dashed border-brand-accent/50 bg-brand-accent/25 shadow-sm ring-1 ring-brand-accent/20";
   const openSessionUncertainClass =
-    "border border-dashed border-brand-accent/50 bg-muted/30";
+    "border border-dashed border-brand-accent/50 bg-brand-accent/15";
 
   const span = computeDaySpan(props.firstIn, props.lastOut);
   const segments = deriveSegments(props.checkins);

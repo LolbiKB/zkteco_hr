@@ -13,7 +13,7 @@ from .runner import run_all
 
 DEFAULT_CONFIG = str(Path(__file__).resolve().parents[1] / "frappe-sandbox.json")
 
-_ANON_STUB = '''"""Anonymization for the sandbox site. Non-skippable; refuses on prod.
+_ANON_STUB = '''"""Anonymization for the sandbox site. Non-skippable; fail-closed (only sandbox sites).
 Run via: bench --site sandbox execute {app}.utils.anonymize.run
 
 Column-tolerant: only scrubs columns that exist on the restored schema.
@@ -22,12 +22,14 @@ from __future__ import annotations
 
 import frappe
 
-_PROD_MARKERS = ("prod", "frappehr.com")
+# Fail-closed: only the harness's throwaway sandbox/test sites may EVER be scrubbed,
+# so a mis-set site name can never let anonymize run against real prod data.
+_SANDBOX_SITES = ("sandbox", "test_site")
 
 
-def is_prod_site(site_name: str) -> bool:
-    name = (site_name or "").lower()
-    return any(m in name for m in _PROD_MARKERS)
+def is_sandbox_site(site_name: str) -> bool:
+    name = (site_name or "").strip().lower()
+    return name in _SANDBOX_SITES or name.startswith("sandbox")
 
 
 def _scrub_specs() -> list[tuple[str, dict, str]]:
@@ -38,8 +40,8 @@ def _scrub_specs() -> list[tuple[str, dict, str]]:
 
 def run() -> str:
     site = frappe.local.site
-    if is_prod_site(site):
-        raise RuntimeError(f"refusing to anonymize a prod-looking site: {site}")
+    if not is_sandbox_site(site):
+        raise RuntimeError(f"refusing to anonymize a non-sandbox site: {site}")
     for doctype, set_map, where in _scrub_specs():
         try:
             existing = set(frappe.db.get_table_columns(doctype))

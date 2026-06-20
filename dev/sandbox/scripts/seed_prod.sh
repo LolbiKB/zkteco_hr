@@ -33,12 +33,22 @@ _resolve_dbname() {
   # Resolve the site's DB name from site_config.json; never fails the script.
   python3 -c "import json;print(json.load(open('sites/$SANDBOX_SITE/site_config.json'))['db_name'])" 2>/dev/null || true
 }
+run_anonymize() {
+  # Full anonymization = generic baseline PII sweep (harness-owned, raw SQL, version-
+  # robust) + the app's own anonymize. BOTH must succeed for the data to count as
+  # scrubbed, so the caller only sets ANONYMIZED=1 when this returns 0.
+  if [ "${SCRUB_COMMON_PII:-1}" = "1" ]; then
+    DB_HOST="$DB_HOST" DB_ROOT_PASSWORD="$DB_ROOT_PASSWORD" \
+      env/bin/python /workspace/repo/dev/sandbox/scripts/scrub_common_pii.py "$SANDBOX_SITE" || return 1
+  fi
+  bench --site "$SANDBOX_SITE" execute "$ANONYMIZE_METHOD" || return 1
+}
 pii_safety() {
   rc=$?
   trap - EXIT INT TERM HUP   # disarm first, so a signal during cleanup can't re-enter
   if [ "$RESTORED" = "1" ] && [ "$ANONYMIZED" != "1" ]; then
     echo "PII-SAFETY: restore completed but anonymize did not — enforcing now." >&2
-    if bench --site "$SANDBOX_SITE" execute "$ANONYMIZE_METHOD" >&2; then
+    if run_anonymize >&2; then
       echo "PII-SAFETY: anonymize succeeded in trap." >&2
     else
       # Last resort: destroy the DB so un-anonymized prod data cannot rest. Resolve
@@ -63,7 +73,11 @@ trap pii_safety EXIT INT TERM HUP
 # --- restore prod data ---
 RESTORE=(--force restore "$DB_GZ" --mariadb-root-password "$DB_ROOT_PASSWORD")
 [ -n "$PUB" ]  && RESTORE+=(--with-public-files "$PUB")
-[ -n "$PRIV" ] && RESTORE+=(--with-private-files "$PRIV")
+if [ -n "$PRIV" ] && [ "${RESTORE_PRIVATE_FILES:-0}" = "1" ]; then
+  RESTORE+=(--with-private-files "$PRIV")
+elif [ -n "$PRIV" ]; then
+  echo "note: skipping private-files restore (RESTORE_PRIVATE_FILES!=1; PII-heavy, rarely needed for tests)." >&2
+fi
 bench --site "$SANDBOX_SITE" "${RESTORE[@]}"
 RESTORED=1
 DBNAME="$(_resolve_dbname)"
@@ -77,10 +91,11 @@ DB_HOST="$DB_HOST" DB_ROOT_PASSWORD="$DB_ROOT_PASSWORD" \
 bench --site "$SANDBOX_SITE" list-apps | grep -qx "$APP" || \
   bench --site "$SANDBOX_SITE" install-app "$APP"
 
-# --- ANONYMIZE first, before any fragile step. It is raw, column-tolerant SQL
-#     (no doc-save hooks), so it survives cross-version skew that later doc-saving
-#     steps may not. Non-skippable; the EXIT trap above is the backstop. ---
-bench --site "$SANDBOX_SITE" execute "$ANONYMIZE_METHOD"
+# --- ANONYMIZE first, before any fragile step: generic baseline PII sweep + the
+#     app's anonymize. Both are raw column-tolerant SQL (no doc-save hooks), so they
+#     survive cross-version skew that later doc-saving steps may not. Non-skippable;
+#     the EXIT trap above is the backstop. ---
+run_anonymize
 ANONYMIZED=1
 
 # --- app bootstrap (best-effort): ensure custom fields / masters / config. On a

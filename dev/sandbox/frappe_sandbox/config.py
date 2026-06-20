@@ -35,6 +35,8 @@ class Config:
     anonymize_method: str = ""
     verify_method: str = ""
     bootstrap_method: str = ""  # optional: app-provided post-provision setup (custom fields, masters, config)
+    restore_private_files: bool = False  # private files are PII-heavy + rarely needed for tests; opt in
+    scrub_common_pii: bool = True        # run the harness's generic baseline PII scrub during seed
 
 
 _REQUIRED = ("app", "app_src", "required_apps", "branch", "frontend_dir")
@@ -97,4 +99,6 @@ def load_config(path: str | Path) -> Config:
         anonymize_method=data.get("anonymize_method", f"{data['app']}.utils.anonymize.run"),
         verify_method=data.get("verify_method", f"{data['app']}.utils.sandbox_verify.run"),
         bootstrap_method=data.get("bootstrap_method", ""),
+        restore_private_files=bool(data.get("restore_private_files", False)),
+        scrub_common_pii=bool(data.get("scrub_common_pii", True)),
     )

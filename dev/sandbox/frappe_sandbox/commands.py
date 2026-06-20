@@ -76,6 +76,8 @@ def build_seed_prod(cfg: Config, backup_dir: str) -> list[list[str]]:
         "BENCH_DIR": cfg.bench_dir,
         "ANONYMIZE_METHOD": cfg.anonymize_method,
         "BOOTSTRAP_METHOD": cfg.bootstrap_method,
+        "RESTORE_PRIVATE_FILES": "1" if cfg.restore_private_files else "0",
+        "SCRUB_COMMON_PII": "1" if cfg.scrub_common_pii else "0",
     }
     return [docker_exec(cfg, "bash /workspace/repo/dev/sandbox/scripts/seed_prod.sh", env=env)]
 

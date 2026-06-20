@@ -68,12 +68,7 @@ export function FlagDetailPanel(props: FlagDetailPanelProps) {
           {finalization ? (
             <Badge
               variant="outline"
-              className={cn(
-                "rounded-md text-[11px]",
-                provisional
-                  ? "border-dashed border-border bg-muted/30 text-muted-foreground"
-                  : "border-border bg-muted/30 text-muted-foreground"
-              )}
+              className="rounded-md text-[11px] border-dashed border-border bg-muted/30 text-muted-foreground"
             >
               {finalization}
             </Badge>

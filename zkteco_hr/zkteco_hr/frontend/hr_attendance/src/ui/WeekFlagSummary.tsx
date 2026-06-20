@@ -18,7 +18,7 @@ export function WeekFlagSummary(props: WeekFlagSummaryProps) {
   return (
     <div
       className={cn(
-        "flex min-w-0 items-center gap-1.5 animate-in fade-in duration-200",
+        "flex min-w-0 items-center gap-1.5 animate-in fade-in",
         className
       )}
       aria-label={`This week: ${counts.CRITICAL} critical, ${counts.WARNING} warning, ${counts.INFO} info`}

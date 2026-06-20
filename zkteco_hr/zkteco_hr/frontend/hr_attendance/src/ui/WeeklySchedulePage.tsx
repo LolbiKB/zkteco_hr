@@ -368,7 +368,7 @@ export function WeeklySchedulePage() {
             )}
 
             {ineligibleMessage ? (
-              <Card className="border-brand-accent/30 bg-brand-accent/15">
+              <Card className="border-brand-accent/30 bg-muted/40">
                 <CardContent className="py-2.5 text-sm text-foreground">
                   {ineligibleMessage} Pick an eligible employee above to continue.
                 </CardContent>
@@ -376,7 +376,7 @@ export function WeeklySchedulePage() {
             ) : null}
 
             {previewOnly ? (
-              <Card className="border-brand-accent/30 bg-brand-accent/15">
+              <Card className="border-brand-accent/30 bg-muted/40">
                 <CardContent className="py-2.5 text-sm text-foreground">
                   Active schedule assignments exist — read-only preview. Use{" "}
                   <strong>Clear schedule data</strong> above or edit in Desk to make changes.
@@ -385,9 +385,9 @@ export function WeeklySchedulePage() {
             ) : null}
 
             {saveSuccessUrl ? (
-              <Card className="border-primary/30 bg-primary/10">
+              <Card className="border-primary/30 bg-muted/40">
                 <CardContent className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
-                  <span>Schedule saved successfully.</span>
+                  <span className="text-primary">Schedule saved successfully.</span>
                   <Button asChild size="sm" variant="outline">
                     <Link to={saveSuccessUrl}>Open attendance</Link>
                   </Button>

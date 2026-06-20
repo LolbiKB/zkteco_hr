@@ -619,7 +619,7 @@ function FlagInspectorRow(props: { flag: Flag; onOpen: () => void }) {
           {provisional ? (
             <Badge
               variant="outline"
-              className="h-5 rounded-md border-dashed border-brand-accent/60 px-1.5 text-[10px] font-semibold text-brand-accent"
+              className="h-5 rounded-md border-dashed border-border px-1.5 text-[10px] font-semibold text-muted-foreground"
             >
               Provisional
             </Badge>

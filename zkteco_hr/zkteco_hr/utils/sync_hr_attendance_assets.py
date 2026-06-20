@@ -59,13 +59,13 @@ def _remove_dest(dest_dir: str) -> None:
 
 
 SITE_FAVICON_LOGO = "/assets/zkteco_hr/images/DI-logo.svg"
-HR_APP_LOGO = "/assets/zkteco_hr/images/attendance-svgrepo-com.svg"
+HR_APP_LOGO = "/assets/zkteco_hr/images/dewey-time.svg"
 
 # Site-wide Desk/login favicon (DI) vs ZKTeco HR app tile / SPA header (attendance).
 APP_BRAND_LOGO = SITE_FAVICON_LOGO
 ATTENDANCE_APP_LOGO = HR_APP_LOGO
 
-_BRANDING_FILES = ("DI-logo.svg", "attendance-svgrepo-com.svg")
+_BRANDING_FILES = ("DI-logo.svg", "dewey-time.svg")
 
 
 def _branding_assets_ok(base_dir: str) -> bool:

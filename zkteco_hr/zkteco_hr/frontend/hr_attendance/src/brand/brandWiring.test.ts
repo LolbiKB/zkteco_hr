@@ -23,3 +23,29 @@ test("Dewey Time dial SVG exists and is the adaptive clock mark", () => {
   assert.match(svg, /#066031/, "Forest green present");
   assert.match(svg, /#C2410C/i, "brand orange present");
 });
+
+const DIAL = "dewey-time.svg";
+const OLD = "attendance-svgrepo-com.svg";
+
+test("app mark + Dewey Time SPA favicons point at the dial", () => {
+  assert.match(readFileSync(resolve(PKG, "src/lib/brand.ts"), "utf8"), new RegExp(DIAL), "brand.ts → dial");
+  assert.match(readFileSync(resolve(PKG, "index.html"), "utf8"), new RegExp(DIAL), "Vite index.html favicon → dial");
+  assert.match(readFileSync(resolve(PKG, "../../www/hr-personal.html"), "utf8"), new RegExp(DIAL), "hr-personal favicon → dial");
+
+  const py = readFileSync(resolve(PKG, "../../utils/sync_hr_attendance_assets.py"), "utf8");
+  assert.match(py, new RegExp(`HR_APP_LOGO\\s*=\\s*"[^"]*${DIAL}"`), "HR_APP_LOGO → dial");
+  assert.match(py, new RegExp(`_BRANDING_FILES[\\s\\S]{0,80}${DIAL}`), "_BRANDING_FILES has the dial");
+});
+
+test("attendance-svgrepo icon fully retired", () => {
+  for (const p of [
+    "src/lib/brand.ts",
+    "src/ui/HrAppShell.tsx",
+    "index.html",
+    "../../www/hr-personal.html",
+    "../../utils/sync_hr_attendance_assets.py",
+  ]) {
+    assert.ok(!readFileSync(resolve(PKG, p), "utf8").includes(OLD), `${p} free of ${OLD}`);
+  }
+  assert.ok(!existsSync(resolve(PKG, "public/images/attendance-svgrepo-com.svg")), "old SVG deleted");
+});

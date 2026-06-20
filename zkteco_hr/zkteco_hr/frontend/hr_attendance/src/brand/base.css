@@ -1,0 +1,89 @@
+/* ===========================================================================
+   Dewey base — motion + touch conventions. Import AFTER dewey-ui.
+
+   Works with dewey-ui's Radix-based primitives (data-slot / data-state) — so
+   every dialog, sheet, popover, dropdown, select, and tooltip animates with no
+   per-component code. GPU-only (transform/opacity). The ONE house easing:
+   cubic-bezier(0.22, 1, 0.36, 1). Everything is disabled under reduced-motion.
+   =========================================================================== */
+
+/* —— entrance utilities (stagger list items with an inline animation-delay) —— */
+@keyframes dw-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes dw-fade { from { opacity: 0; } to { opacity: 1; } }
+.anim-page { animation: dw-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-rise { animation: dw-rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-fade { animation: dw-fade 0.30s ease both; }
+
+/* —— overlay / sheet / popover choreography —— */
+@keyframes dw-overlay-in  { from { opacity: 0; } }
+@keyframes dw-overlay-out { to   { opacity: 0; } }
+@keyframes dw-pop-in  { from { opacity: 0; transform: scale(0.96); } }
+/* motion-led exit: hold opacity while scaling, fade only at the end, so the
+   panel tucks away instead of cross-dissolving into the (also-fading) backdrop. */
+@keyframes dw-pop-out { 0% { opacity: 1; transform: scale(1); } 55% { opacity: 1; transform: scale(0.98); } 100% { opacity: 0; transform: scale(0.95); } }
+@keyframes dw-sheet-bottom     { from { transform: translateY(100%); } }
+@keyframes dw-sheet-bottom-out { to   { transform: translateY(100%); } }
+@keyframes dw-sheet-top   { from { transform: translateY(-100%); } }
+@keyframes dw-sheet-right { from { transform: translateX(100%); } }
+@keyframes dw-sheet-left  { from { transform: translateX(-100%); } }
+/* poppers: scale only, NO opacity fade — they float with no overlay. */
+@keyframes dw-scale-in  { from { transform: scale(0.97); } }
+@keyframes dw-scale-out { to   { transform: scale(0.97); } }
+
+[data-slot='dialog-overlay'][data-state='open'],
+[data-slot='sheet-overlay'][data-state='open']   { animation: dw-overlay-in 0.2s ease both; }
+[data-slot='dialog-overlay'][data-state='closed'],
+[data-slot='sheet-overlay'][data-state='closed'] { animation: dw-overlay-out 0.15s ease both; }
+
+[data-slot='dialog-content'][data-state='open']   { animation: dw-pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+[data-slot='dialog-content'][data-state='closed'] { animation: dw-pop-out 0.2s ease both; }
+
+[data-slot='popover-content'],
+[data-slot='select-content'],
+[data-slot='dropdown-menu-content'],
+[data-slot='dropdown-menu-sub-content'],
+[data-slot='tooltip-content'] { transform-origin: var(--radix-popper-transform-origin, center); }
+[data-slot='popover-content'][data-state='open'],
+[data-slot='select-content'][data-state='open'],
+[data-slot='dropdown-menu-content'][data-state='open'],
+[data-slot='dropdown-menu-sub-content'][data-state='open'],
+[data-slot='tooltip-content'][data-state='open']   { animation: dw-scale-in 0.12s ease both; }
+[data-slot='popover-content'][data-state='closed'],
+[data-slot='select-content'][data-state='closed'],
+[data-slot='dropdown-menu-content'][data-state='closed'],
+[data-slot='dropdown-menu-sub-content'][data-state='closed'],
+[data-slot='tooltip-content'][data-state='closed'] { animation: dw-scale-out 0.1s ease both; }
+
+[data-slot='sheet-content'][data-side='bottom'][data-state='open']   { animation: dw-sheet-bottom 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+[data-slot='sheet-content'][data-side='bottom'][data-state='closed'] { animation: dw-sheet-bottom-out 0.25s ease both; }
+[data-slot='sheet-content'][data-side='top'][data-state='open']   { animation: dw-sheet-top 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+[data-slot='sheet-content'][data-side='right'][data-state='open']  { animation: dw-sheet-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+[data-slot='sheet-content'][data-side='left'][data-state='open']   { animation: dw-sheet-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* —— tactile press on real action buttons (exclude switches / tabs) —— */
+button:not([role='switch']):not([role='tab']) { transition: transform 0.06s ease; }
+button:not([role='switch']):not([role='tab']):active:not(:disabled) { transform: scale(0.97); }
+
+/* —— reduced motion: blanket off —— */
+@media (prefers-reduced-motion: reduce) {
+  .anim-page, .anim-rise, .anim-fade { animation: none !important; }
+  [data-slot$='-content'], [data-slot$='-overlay'] { animation: none !important; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   OPTIONAL — native-app touch shell. Enable for USER-FACING apps only (skip
+   for internal/admin/dev tools). On touch, UI text isn't selectable and a
+   long-press shows no OS callout, so gestures (row actions, long-press sheets)
+   belong to the app, not the system. Re-enable selection for editable fields
+   and for content meant to be read/copied via the `.selectable` class. Desktop
+   is unaffected. Uncomment to turn on.
+--------------------------------------------------------------------------- */
+/*
+@media (pointer: coarse) {
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input, textarea, select, [contenteditable], .selectable, .selectable * {
+    -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
+  }
+}
+*/

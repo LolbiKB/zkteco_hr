@@ -133,7 +133,7 @@ export function WeekView(props: WeekViewProps) {
               key={key}
               className={cn(
                 "px-3 py-2",
-                holiday ? "bg-amber-500/[0.06]" : isOffDay && "bg-destructive/[0.06]"
+                holiday ? "bg-muted/40" : isOffDay && "bg-destructive/[0.06]"
               )}
             >
               <div className="flex items-center justify-between">
@@ -142,7 +142,7 @@ export function WeekView(props: WeekViewProps) {
                     className={cn(
                       "text-xs font-medium",
                       holiday
-                        ? "text-amber-700/80 dark:text-amber-200/80"
+                        ? "text-brand-accent/80"
                         : isOffDay
                           ? "text-destructive/60"
                           : "text-muted-foreground"
@@ -170,7 +170,7 @@ export function WeekView(props: WeekViewProps) {
               </div>
 
               {holiday ? (
-                <div className="mt-0.5 truncate text-[10px] font-semibold text-amber-900/80 dark:text-amber-100/80">
+                <div className="mt-0.5 truncate text-[10px] font-semibold text-brand-accent/80">
                   Holiday
                 </div>
               ) : null}
@@ -191,7 +191,7 @@ export function WeekView(props: WeekViewProps) {
                     }
                     side="bottom"
                   >
-                    <span className="inline-flex max-w-full items-center truncate rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-sky-900 dark:text-sky-100">
+                    <span className="inline-flex max-w-full items-center truncate rounded-full border border-border bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
                       Leave
                     </span>
                   </AppTooltip>
@@ -209,7 +209,7 @@ export function WeekView(props: WeekViewProps) {
                 ) : null}
                 {(props.alertsByDate.get(key) ?? []).length > 0 ? (
                   <AppTooltip content="Device closeout pending" side="bottom">
-                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-amber-500/50 bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-800 dark:text-amber-200">
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-brand-accent/40 bg-brand-accent/10 px-1 text-[10px] font-semibold text-brand-accent">
                       !
                     </span>
                   </AppTooltip>

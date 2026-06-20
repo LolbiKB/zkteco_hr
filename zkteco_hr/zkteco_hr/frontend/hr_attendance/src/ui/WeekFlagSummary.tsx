@@ -37,7 +37,7 @@ export function WeekFlagSummary(props: WeekFlagSummaryProps) {
         <span
           className={cn(
             "inline-flex shrink-0 items-center rounded-full border px-1.5 py-px text-[10px] font-semibold leading-none sm:px-2 sm:text-[11px]",
-            "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+            "border-brand-accent/40 bg-brand-accent/10 text-brand-accent"
           )}
         >
           {counts.WARNING} Warning

@@ -59,7 +59,7 @@ export function FlagDetailPanel(props: FlagDetailPanelProps) {
               flag.severity === "CRITICAL" &&
                 "border-destructive/40 bg-destructive/10 text-destructive",
               flag.severity === "WARNING" &&
-                "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100",
+                "border-brand-accent/40 bg-brand-accent/10 text-brand-accent",
               flag.severity === "INFO" && "border-border bg-muted/40 text-foreground"
             )}
           >
@@ -71,7 +71,7 @@ export function FlagDetailPanel(props: FlagDetailPanelProps) {
               className={cn(
                 "rounded-md text-[11px]",
                 provisional
-                  ? "border-dashed border-amber-500/60 bg-amber-500/10 text-amber-950 dark:text-amber-100"
+                  ? "border-dashed border-border bg-muted/30 text-muted-foreground"
                   : "border-border bg-muted/30 text-muted-foreground"
               )}
             >

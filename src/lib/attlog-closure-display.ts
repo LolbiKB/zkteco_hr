@@ -6,6 +6,7 @@ import {
   Loader2,
   MinusCircle,
 } from 'lucide-react'
+import { signalBadge, signalDot, signalText } from '@/lib/signal'
 
 export type AttlogClosureStatus =
   | 'pending_verify'
@@ -28,37 +29,37 @@ export function attlogClosureBadgeConfig(
     case 'closed':
       return {
         label: 'Closed',
-        className: 'text-green-700 dark:text-green-400',
+        className: signalText.success,
         icon: CheckCircle2,
       }
     case 'deferred_offline':
       return {
         label: 'Deferred (offline)',
-        className: 'text-amber-700 dark:text-amber-400',
+        className: signalText.attention,
         icon: Clock,
       }
     case 'backfill_running':
       return {
         label: 'Backfill',
-        className: 'text-blue-700 dark:text-blue-400',
+        className: signalText.progress,
         icon: Loader2,
       }
     case 'pending_verify':
       return {
         label: 'Verifying',
-        className: 'text-blue-700 dark:text-blue-400',
+        className: signalText.progress,
         icon: Loader2,
       }
     case 'closure_failed':
       return {
         label: 'Failed',
-        className: 'text-destructive',
+        className: signalText.danger,
         icon: AlertCircle,
       }
     default:
       return {
         label: 'Not started',
-        className: 'text-muted-foreground',
+        className: signalText.idle,
         icon: MinusCircle,
       }
   }
@@ -100,16 +101,17 @@ export function attlogClosureDotClass(
 ): string {
   switch (status) {
     case 'closed':
-      return 'bg-green-500'
+      return signalDot.success
     case 'closure_failed':
-      return 'bg-destructive'
+      return signalDot.danger
     case 'deferred_offline':
-      return 'bg-amber-500'
+      return signalDot.attention
     case 'backfill_running':
+      return signalDot.progress
     case 'pending_verify':
-      return 'bg-blue-500'
+      return signalDot.progress
     default:
-      return 'bg-muted-foreground/25'
+      return signalDot.idle
   }
 }
 
@@ -119,16 +121,17 @@ export function attlogClosureCellRingClass(
 ): string {
   switch (status) {
     case 'closed':
-      return 'ring-2 ring-green-700/40 bg-green-500/20'
+      return `ring-2 ${signalBadge.success}`
     case 'closure_failed':
-      return 'ring-2 ring-destructive/40 bg-destructive/15'
+      return `ring-2 ${signalBadge.danger}`
     case 'deferred_offline':
-      return 'ring-2 ring-amber-700/40 bg-amber-500/20'
+      return `ring-2 ${signalBadge.attention}`
     case 'backfill_running':
+      return `ring-2 ${signalBadge.progress}`
     case 'pending_verify':
-      return 'ring-2 ring-blue-700/40 bg-blue-500/20'
+      return `ring-2 ${signalBadge.progress}`
     default:
-      return 'bg-muted'
+      return signalBadge.idle
   }
 }
 

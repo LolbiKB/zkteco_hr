@@ -14,6 +14,7 @@ import { Loader2, Check, X, Download, RefreshCw, Image } from 'lucide-react'
 import type { UserEntry } from '@/services/user-service'
 import { supabase } from '@/lib/supabase'
 import { getAuthHeaders } from '@/lib/auth-token'
+import { signalText, signalBadge, signalAlert } from '@/lib/signal'
 
 interface PhotoRefreshDialogProps {
   user: UserEntry | null
@@ -187,7 +188,7 @@ export function PhotoRefreshDialog({ user, open, onOpenChange, onSuccess }: Phot
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Cached in Bridge:</span>
               {photoInfo?.hasCached ? (
-                <Badge variant="secondary" className="gap-1 text-green-700">
+                <Badge variant="secondary" className={`gap-1 ${signalBadge.success}`}>
                   <Check className="h-3 w-3" />
                   Yes
                 </Badge>
@@ -216,32 +217,26 @@ export function PhotoRefreshDialog({ user, open, onOpenChange, onSuccess }: Phot
 
             {/* Comparison Result */}
             {status === 'ready' && photoInfo && (
-              <div className={`p-3 rounded-lg border ${
-                !photoInfo.frappeUrl 
-                  ? 'bg-muted/40 border-border'
-                  : !photoInfo.hasCached 
-                    ? 'bg-blue-50 border-blue-200' 
-                    : 'bg-green-50 border-green-200'
-              }`}>
+              <div className="p-3 rounded-lg border border-border bg-muted/40">
                 <div className="flex items-center gap-2">
                   {!photoInfo.frappeUrl ? (
                     <>
-                      <X className="h-4 w-4 text-muted-foreground/70" />
-                      <span className="text-sm text-muted-foreground">
+                      <X className={`h-4 w-4 ${signalText.idle}`} />
+                      <span className={`text-sm ${signalText.idle}`}>
                         No photo in Frappe - cannot refresh
                       </span>
                     </>
                   ) : !photoInfo.hasCached ? (
                     <>
-                      <Download className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm text-blue-700">
+                      <Download className={`h-4 w-4 ${signalText.progress}`} />
+                      <span className={`text-sm ${signalText.progress}`}>
                         No cached photo - click refresh to download
                       </span>
                     </>
                   ) : (
                     <>
-                      <Check className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-700">
+                      <Check className={`h-4 w-4 ${signalText.success}`} />
+                      <span className={`text-sm ${signalText.success}`}>
                         Photo cached in Bridge
                       </span>
                     </>
@@ -264,8 +259,8 @@ export function PhotoRefreshDialog({ user, open, onOpenChange, onSuccess }: Phot
 
           {/* Error */}
           {status === 'error' && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <div className="flex items-center gap-2 text-red-700">
+            <div className={`p-3 rounded-lg border ${signalAlert.danger}`}>
+              <div className="flex items-center gap-2">
                 <X className="h-4 w-4" />
                 <span className="text-sm">{error}</span>
               </div>
@@ -274,8 +269,8 @@ export function PhotoRefreshDialog({ user, open, onOpenChange, onSuccess }: Phot
 
           {/* Success */}
           {status === 'success' && (
-            <div className="p-3 rounded-lg bg-green-50 border border-green-200">
-              <div className="flex items-center gap-2 text-green-700">
+            <div className={`p-3 rounded-lg border ${signalAlert.success}`}>
+              <div className="flex items-center gap-2">
                 <Check className="h-4 w-4" />
                 <span className="text-sm">Photo refreshed successfully!</span>
               </div>

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Check, X, Loader2 } from 'lucide-react'
 import { useUserSyncAggregate } from '@/hooks/use-user-sync-aggregate'
+import { signalText } from '@/lib/signal'
 
 interface SyncStatusSummaryProps {
   userId: string
@@ -35,8 +36,8 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
               variant="secondary"
               className={`gap-1.5 cursor-help ${
                 is_fully_synced && !isSyncing
-                  ? 'text-green-700 dark:text-green-400'
-                  : 'text-muted-foreground dark:text-muted-foreground/70'
+                  ? signalText.success
+                  : signalText.idle
               }`}
             >
               {is_fully_synced && !isSyncing && <Check className="h-3 w-3" />}
@@ -56,20 +57,20 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
               <div className="font-semibold">Sync Status</div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                 <span className="text-muted-foreground">Synced:</span>
-                <span className="text-green-600 font-medium">{synced}</span>
+                <span className={`${signalText.success} font-medium`}>{synced}</span>
                 <span className="text-muted-foreground">Not synced:</span>
                 <span className={notSynced > 0 ? 'text-foreground font-medium' : ''}>{notSynced}</span>
                 {aggregate.syncing > 0 && (
                   <>
                     <span className="text-muted-foreground">In progress:</span>
-                    <span className="text-blue-600 font-medium">{aggregate.syncing}</span>
+                    <span className={`${signalText.progress} font-medium`}>{aggregate.syncing}</span>
                   </>
                 )}
                 <span className="text-muted-foreground">Total devices:</span>
                 <span>{total_devices}</span>
               </div>
               {isSyncing && (
-                <div className="text-blue-600 pt-0.5 border-t">
+                <div className={`${signalText.progress} pt-0.5 border-t`}>
                   Commands still pending on the device — same rules as the Sync tab.
                 </div>
               )}
@@ -85,16 +86,16 @@ export function SyncStatusSummary({ userId, variant = 'badge' }: SyncStatusSumma
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">Sync Status:</span>
         {is_fully_synced && !isSyncing ? (
-          <Badge variant="secondary" className="gap-1.5 text-green-700 dark:text-green-400">
+          <Badge variant="secondary" className={`gap-1.5 ${signalText.success}`}>
             <Check className="h-3 w-3" />
             All devices synced
           </Badge>
         ) : (
-          <Badge variant="secondary" className="gap-1.5 text-muted-foreground dark:text-muted-foreground/70">
+          <Badge variant="secondary" className={`gap-1.5 ${signalText.idle}`}>
             {synced}/{total_devices} devices
           </Badge>
         )}
-        {isSyncing && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+        {isSyncing && <Loader2 className={`h-4 w-4 animate-spin ${signalText.progress}`} />}
       </div>
 
       {!is_fully_synced && (

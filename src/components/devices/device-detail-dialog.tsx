@@ -36,6 +36,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { signalText, signalBadge, signalAlert } from '@/lib/signal'
 import { supabase } from '@/lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
@@ -85,10 +86,10 @@ function rowAggregateStatus(user: any): { state: SyncComponentState; label: stri
 }
 
 const ROW_STATUS_TONE: Record<string, string> = {
-  synced: 'text-green-600 dark:text-green-400',
-  syncing: 'text-blue-600 dark:text-blue-400',
-  pending: 'text-amber-600 dark:text-amber-400',
-  failed: 'text-destructive',
+  synced: signalText.success,
+  syncing: signalText.progress,
+  pending: signalText.attention,
+  failed: signalText.danger,
 }
 
 // User row component with animated accordion
@@ -217,9 +218,9 @@ function connectionStatusLabel(status?: string | null): string {
 }
 
 function connectionStatusClass(status?: string | null): string {
-  if (status === 'pending') return 'bg-amber-100 text-amber-800 border-amber-200'
-  if (status === 'rejected') return 'bg-red-100 text-red-800 border-red-200'
-  return 'bg-green-100 text-green-800 border-green-200'
+  if (status === 'pending') return signalBadge.attention
+  if (status === 'rejected') return signalBadge.danger
+  return signalBadge.success
 }
 
 export function DeviceDetailDialog({
@@ -437,9 +438,9 @@ export function DeviceDetailDialog({
         <DialogHeader>
           <div className="flex items-center gap-3">
             {device?.isOnline ? (
-              <Wifi className="h-5 w-5 text-green-500" />
+              <Wifi className={cn('h-5 w-5', signalText.success)} />
             ) : (
-              <WifiOff className="h-5 w-5 text-red-500" />
+              <WifiOff className={cn('h-5 w-5', signalText.danger)} />
             )}
             <div>
               <DialogTitle className="text-lg">
@@ -448,7 +449,7 @@ export function DeviceDetailDialog({
               <DialogDescription className="text-xs">
                 {device?.location || 'No location'} · {deviceSn}
                 {device?.isOnline && (
-                  <span className="ml-2 text-green-600">Online</span>
+                  <span className={cn('ml-2', signalText.success)}>Online</span>
                 )}
               </DialogDescription>
             </div>
@@ -499,25 +500,25 @@ export function DeviceDetailDialog({
                 (stats as any).notSynced > 0) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   {stats.synced > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                    <span className={cn('inline-flex items-center gap-1.5', signalText.success)}>
                       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                       {stats.synced} synced
                     </span>
                   )}
                   {stats.syncing > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                    <span className={cn('inline-flex items-center gap-1.5', signalText.progress)}>
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {stats.syncing} syncing
                     </span>
                   )}
                   {(stats as any).cleaning > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400">
+                    <span className={cn('inline-flex items-center gap-1.5', signalText.idle)}>
                       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                       {(stats as any).cleaning} cleaning
                     </span>
                   )}
                   {(stats as any).notSynced > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <span className={cn('inline-flex items-center gap-1.5', signalText.idle)}>
                       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
                       {(stats as any).notSynced} pending
                     </span>
@@ -568,7 +569,7 @@ export function DeviceDetailDialog({
                   <span
                     className={cn(
                       'inline-flex items-center gap-1.5 text-xs font-medium',
-                      device?.isOnline ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+                      device?.isOnline ? signalText.success : signalText.idle
                     )}
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
@@ -654,7 +655,7 @@ export function DeviceDetailDialog({
                   </div>
                 </div>
                 {infoDevice?.connection_status === 'pending' && (
-                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
+                  <p className={cn('text-xs border rounded-lg p-2', signalAlert.attention)}>
                     This serial is not approved yet. Use Edit device → Approve SN before the terminal
                     can sync users or attendance.
                   </p>

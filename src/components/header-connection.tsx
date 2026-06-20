@@ -2,6 +2,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useConnectionStatus } from '@/hooks/use-connection-status'
 import { LogOut, Wifi, WifiOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { signalDot } from '@/lib/signal'
 
 interface HeaderConnectionProps {
   userEmail?: string
@@ -24,9 +25,9 @@ export function HeaderConnection({ userEmail, onSignOut }: HeaderConnectionProps
               {/* Status Dot */}
               <span 
                 className={`h-2 w-2 rounded-full transition-colors ${
-                  overall === 'connected' ? 'bg-green-500' :
-                  overall === 'connecting' ? 'bg-amber-500 animate-pulse' :
-                  'bg-red-500'
+                  overall === 'connected' ? signalDot.success :
+                  overall === 'connecting' ? `${signalDot.progress} animate-pulse` :
+                  signalDot.danger
                 }`}
               />
             </button>

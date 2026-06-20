@@ -41,8 +41,8 @@ export function AttendanceLogStatFilters({
               : 'text-destructive/80 hover:bg-destructive/5'
             : stat.tone === 'warn'
               ? active
-                ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
-                : 'text-amber-700/90 hover:bg-amber-500/10'
+                ? 'bg-attention/15 text-attention'
+                : 'text-attention/90 hover:bg-attention/10'
               : active
                 ? 'bg-primary/10 text-primary'
                 : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'

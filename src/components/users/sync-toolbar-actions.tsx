@@ -16,6 +16,7 @@ import {
 import { ConfirmationDialog } from '@/components/ui/base-modal'
 import { RefreshCw, Loader2, RotateCcw, Zap, AlertCircle, ChevronDown, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { signalText } from '@/lib/signal'
 
 export interface SyncToolbarActionsProps {
   deviceSns: string[]
@@ -116,7 +117,7 @@ export function SyncToolbarActions({
               <DropdownMenuItem
                 onClick={() => setForceConfirmOpen(true)}
                 disabled={forcePending}
-                className={cn('gap-2 text-orange-700 focus:text-orange-700')}
+                className={cn('gap-2', signalText.attention, 'focus:text-attention')}
               >
                 {forcePending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

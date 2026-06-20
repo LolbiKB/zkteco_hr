@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { signalText } from '@/lib/signal'
 import { attlogClosureBadgeConfig } from '@/lib/attlog-closure-display'
 
 const badgeBase = 'w-fit pointer-events-none shrink-0 gap-1'
@@ -72,7 +73,7 @@ export function AttlogCatchUpBadge({ depth }: { depth: number }) {
   return (
     <SecondaryToneBadge
       label={`${depth}d open`}
-      className="text-amber-700 dark:text-amber-400"
+      className={signalText.attention}
       icon={Clock}
     />
   )
@@ -85,7 +86,7 @@ export function LedgerTrustBadge({ closureStatus }: { closureStatus?: string }) 
     return (
       <SecondaryToneBadge
         label="Archived"
-        className="text-green-700 dark:text-green-400"
+        className={signalText.idle}
         icon={Archive}
       />
     )
@@ -93,7 +94,7 @@ export function LedgerTrustBadge({ closureStatus }: { closureStatus?: string }) 
   return (
     <SecondaryToneBadge
       label="Provisional"
-      className="text-amber-700 dark:text-amber-400"
+      className={signalText.attention}
       icon={Clock}
     />
   )
@@ -104,10 +105,10 @@ type HrSyncConfig = { label: string; className: string; icon: LucideIcon }
 function hrSyncConfig(syncStatus?: string | null): HrSyncConfig {
   const status = (syncStatus || 'PENDING').toUpperCase()
   const config: Record<string, HrSyncConfig> = {
-    SUCCESS: { label: 'Delivered', className: 'text-green-700 dark:text-green-400', icon: CloudUpload },
-    FAILED: { label: 'Failed', className: 'text-destructive', icon: CloudOff },
-    PENDING: { label: 'Pending', className: 'text-amber-700 dark:text-amber-400', icon: Clock },
-    SKIPPED: { label: 'Not HR', className: 'text-muted-foreground', icon: CloudOff },
+    SUCCESS: { label: 'Delivered', className: signalText.success, icon: CloudUpload },
+    FAILED: { label: 'Failed', className: signalText.danger, icon: CloudOff },
+    PENDING: { label: 'Pending', className: signalText.attention, icon: Clock },
+    SKIPPED: { label: 'Not HR', className: signalText.idle, icon: CloudOff },
   }
   return config[status] || config.PENDING
 }
@@ -122,13 +123,13 @@ export function HrSyncBadge({ syncStatus }: { syncStatus?: string | null }) {
 export function CommandQueueStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase()
   if (normalized === 'pending') {
-    return <SecondaryToneBadge label="Queued" className="text-blue-700 dark:text-blue-400" icon={Clock} />
+    return <SecondaryToneBadge label="Queued" className={signalText.attention} icon={Clock} />
   }
   if (normalized === 'sent') {
     return (
       <SecondaryToneBadge
         label="Sent"
-        className="text-blue-700 dark:text-blue-400"
+        className={signalText.progress}
         icon={Loader2}
         iconSpin
       />
@@ -138,16 +139,16 @@ export function CommandQueueStatusBadge({ status }: { status: string }) {
     return (
       <SecondaryToneBadge
         label="Success"
-        className="text-green-700 dark:text-green-400"
+        className={signalText.success}
         icon={CloudUpload}
       />
     )
   }
   if (normalized === 'failed') {
-    return <SecondaryToneBadge label="Failed" className="text-red-700 dark:text-red-400" icon={CloudOff} />
+    return <SecondaryToneBadge label="Failed" className={signalText.danger} icon={CloudOff} />
   }
   return (
-    <SecondaryToneBadge label={status} className="text-muted-foreground" icon={Clock} />
+    <SecondaryToneBadge label={status} className={signalText.idle} icon={Clock} />
   )
 }
 

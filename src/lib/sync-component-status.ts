@@ -3,6 +3,7 @@ import {
   getActiveComponentsFromCommands,
   hasActiveDeleteFingerprint,
 } from './command-types'
+import { signalTile } from './signal'
 
 export type SyncComponent = SyncComponentKey
 
@@ -322,15 +323,15 @@ export function isDeviceAllComponentsSynced(
 export function syncComponentTileClass(state: SyncComponentState): string {
   switch (state) {
     case 'synced':
-      return 'bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800'
+      return signalTile.success
     case 'syncing':
-      return 'bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-800'
+      return signalTile.progress
     case 'pending':
-      return 'bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+      return signalTile.attention
     case 'failed':
-      return 'bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-800'
+      return signalTile.danger
     default:
-      return 'bg-gray-50 dark:bg-muted/30'
+      return signalTile.idle
   }
 }
 

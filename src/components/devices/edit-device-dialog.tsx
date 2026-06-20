@@ -26,6 +26,7 @@ import { useFrappeBranches } from '@/hooks/use-frappe-branches'
 import { ConfirmationDialog } from '@/components/ui/base-modal'
 import { useAuth } from '@/contexts/auth-context'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { signalAlert, signalText } from '@/lib/signal'
 
 interface EditDeviceDialogProps {
   device: DeviceEntry | null
@@ -158,9 +159,9 @@ export function EditDeviceDialog({
 
   const changesMessage = (
     <div className="grid gap-3">
-      <div className="flex items-center gap-2 rounded-md border border-yellow-500/50 bg-yellow-500/10 p-3">
-        <ShieldCheck className="h-5 w-5 text-yellow-600 shrink-0" />
-        <span className="text-sm text-yellow-700 dark:text-yellow-400">
+      <div className={`flex items-center gap-2 rounded-md border ${signalAlert.attention} p-3`}>
+        <ShieldCheck className={`h-5 w-5 ${signalText.attention} shrink-0`} />
+        <span className="text-sm">
           Review the following changes before confirming:
         </span>
       </div>
@@ -230,8 +231,8 @@ export function EditDeviceDialog({
             </div>
 
             {device?.connection_status === 'pending' && isSuperAdmin && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 flex items-center justify-between gap-2">
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className={`rounded-md border ${signalAlert.attention} p-3 flex items-center justify-between gap-2`}>
+                <p className="text-sm">
                   Serial pending approval — device cannot sync until approved.
                 </p>
                 <Button size="sm" onClick={handleApproveSn} disabled={approving}>

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { signalText, signalDot } from '@/lib/signal'
 import { useNavigate } from 'react-router'
 import { useDevices, useSyncStatus, useCommandQueue } from '@/hooks/use-core-data'
 import { useMemo, useState } from 'react'
@@ -96,10 +97,10 @@ const STATUS_COLORS: Record<
   Status,
   { dot: string; icon: typeof CheckCircle2; label: string }
 > = {
-  healthy: { dot: 'bg-green-500', icon: CheckCircle2, label: 'All operational' },
-  syncing: { dot: 'bg-blue-500', icon: RefreshCw, label: 'Sync in progress' },
-  warning: { dot: 'bg-amber-500', icon: Activity, label: 'Minor issues' },
-  critical: { dot: 'bg-red-500', icon: AlertTriangle, label: 'Issues detected' },
+  healthy: { dot: signalDot.success, icon: CheckCircle2, label: 'All operational' },
+  syncing: { dot: signalDot.progress, icon: RefreshCw, label: 'Sync in progress' },
+  warning: { dot: signalDot.attention, icon: Activity, label: 'Minor issues' },
+  critical: { dot: signalDot.danger, icon: AlertTriangle, label: 'Issues detected' },
 }
 
 export function HeaderDeviceStatus() {
@@ -204,15 +205,15 @@ export function HeaderDeviceStatus() {
   // Flat issue/activity rows — only non-zero entries render, so the healthy
   // dialog stays a calm two-liner instead of boxes full of zeros.
   const detailRows = [
-    { key: 'offline', label: 'Devices offline', value: m.offline, tone: 'text-red-500' },
-    { key: 'active', label: 'Commands in flight', value: m.pendingCommands, tone: 'text-blue-600 dark:text-blue-400' },
-    { key: 'failedCmd', label: 'Failed commands (last hour)', value: m.failedCommands, tone: 'text-destructive' },
-    { key: 'failedUsers', label: 'Failed user syncs', value: m.failedUsers, tone: 'text-destructive' },
-    { key: 'enroll', label: 'Enrollment incomplete', value: m.enrollmentIncomplete, tone: 'text-amber-600 dark:text-amber-400' },
-    { key: 'cleanup', label: 'Enrollment cleanup running', value: m.enrollmentCleanupPending, tone: 'text-blue-600 dark:text-blue-400' },
-    { key: 'cancelled', label: 'Cancelled commands (30 min)', value: m.cancelledCommands, tone: 'text-amber-600 dark:text-amber-400' },
-    { key: 'drift', label: 'Devices with stats drift', value: m.driftCount, tone: 'text-amber-600 dark:text-amber-400' },
-    { key: 'resolved', label: 'Auto-resolved housekeeping', value: m.autoResolvedCancelled, tone: 'text-muted-foreground' },
+    { key: 'offline', label: 'Devices offline', value: m.offline, tone: signalText.danger },
+    { key: 'active', label: 'Commands in flight', value: m.pendingCommands, tone: signalText.progress },
+    { key: 'failedCmd', label: 'Failed commands (last hour)', value: m.failedCommands, tone: signalText.danger },
+    { key: 'failedUsers', label: 'Failed user syncs', value: m.failedUsers, tone: signalText.danger },
+    { key: 'enroll', label: 'Enrollment incomplete', value: m.enrollmentIncomplete, tone: signalText.attention },
+    { key: 'cleanup', label: 'Enrollment cleanup running', value: m.enrollmentCleanupPending, tone: signalText.progress },
+    { key: 'cancelled', label: 'Cancelled commands (30 min)', value: m.cancelledCommands, tone: signalText.attention },
+    { key: 'drift', label: 'Devices with stats drift', value: m.driftCount, tone: signalText.attention },
+    { key: 'resolved', label: 'Auto-resolved housekeeping', value: m.autoResolvedCancelled, tone: signalText.idle },
   ].filter((s) => s.value > 0)
 
   return (
@@ -259,7 +260,7 @@ export function HeaderDeviceStatus() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="divide-y divide-border/60">
               <StatusRow
-                tone="text-green-600 dark:text-green-400"
+                tone={signalText.success}
                 label="Devices online"
                 value={`${m.online}/${m.total}`}
                 hint="Online = device polled the bridge within the last 65 seconds."

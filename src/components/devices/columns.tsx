@@ -29,6 +29,7 @@ import type { DeviceAttlogClosureRow } from '@/hooks/use-attlog-closure'
 import { AttlogCatchUpBadge, AttlogClosureBadge } from '@/components/shared/status-badges'
 import { DeviceSecuritySerialHint } from '@/components/devices/device-security-banner'
 import type { DeviceDetailTab } from '@/components/devices/device-detail-tabs'
+import { signalBadge, signalText } from '@/lib/signal'
 
 interface CreateDeviceColumnsProps {
   onFilterByStatus?: (status: string) => void
@@ -103,7 +104,7 @@ export function createDeviceColumns({
         
         return (
           <div className="flex justify-center">
-            <Badge variant="secondary" className={isOnline ? 'text-green-700' : 'text-muted-foreground'}>
+            <Badge variant="secondary" className={isOnline ? signalBadge.success : signalBadge.idle}>
               {isOnline ? (
                 <Wifi className="h-3 w-3 mr-1" />
               ) : (
@@ -237,7 +238,7 @@ export function createDeviceColumns({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onDeviceCommand?.(serialNumber, 'reboot', 'REBOOT')}
-                className="text-red-600 focus:text-red-600"
+                className={`${signalText.danger} focus:text-destructive`}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reboot Device

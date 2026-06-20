@@ -22,7 +22,7 @@ export function AttlogHealthMetric({
       title={hint}
       className={cn(
         'p-3 rounded-lg border bg-muted/40 border-border/60',
-        highlight && 'ring-1 ring-amber-400/50 border-amber-200',
+        highlight && 'ring-1 ring-attention/50 border-attention',
         hint && 'cursor-help'
       )}
     >

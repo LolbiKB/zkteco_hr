@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useAuth } from '@/contexts/auth-context'
+import { signalText } from '@/lib/signal'
 import { supabase } from '@/lib/supabase'
 import type { DeviceEntry } from '@/services/device-service'
 
@@ -110,7 +111,7 @@ export function DeviceSecuritySerialHint({ device }: { device: DeviceEntry }) {
 
   if (device.connection_status === 'pending') {
     return (
-      <span className="text-[10px] text-amber-700 dark:text-amber-400 whitespace-nowrap">
+      <span className={`text-[10px] ${signalText.attention} whitespace-nowrap`}>
         pending
       </span>
     )

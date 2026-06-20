@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { signalText, signalAlert } from '@/lib/signal'
 import {
   useDeviceAttlogClosureHistory,
   useDeviceAttlogMeta,
@@ -134,7 +135,7 @@ export function DeviceAttlogOverviewTab({
       {/* Scrollable content; whole-view actions live in the pinned bar below. */}
       <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 pb-4">
       {postPurgeRecent && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+        <div className={cn('rounded-xl border px-4 py-3 text-sm', signalAlert.attention)}>
           Device log buffer was cleared recently — bridge is the source of truth for archived days.
         </div>
       )}
@@ -170,7 +171,7 @@ export function DeviceAttlogOverviewTab({
           highlight={!!meta?.attlog_time_drift_suspected}
           icon={
             meta?.attlog_time_drift_suspected ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <AlertTriangle className={cn('h-3.5 w-3.5 shrink-0', signalText.attention)} />
             ) : undefined
           }
         />
@@ -235,8 +236,8 @@ export function DeviceAttlogOverviewTab({
       </AttlogSection>
 
       {inFlight.length > 0 && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 space-y-2">
-          <div className="text-sm font-medium text-amber-900 dark:text-amber-100">
+        <div className={cn('rounded-xl border px-4 py-3 space-y-2', signalAlert.attention)}>
+          <div className="text-sm font-medium">
             In-flight ATTLOG commands
           </div>
           {inFlight.map((cmd) => (

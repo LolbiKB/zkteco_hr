@@ -7,6 +7,7 @@ import { UserService } from '@/services/user-service'
 import type { UserEntry } from '@/services/user-service'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { notifyError, notifySuccess } from '@/lib/toast'
+import { signalText } from '@/lib/signal'
 
 interface RegisterDialogProps {
   employee: UserEntry | null
@@ -216,7 +217,7 @@ export function RegisterDialog({ employee, open, onOpenChange }: RegisterDialogP
 
           <div className="space-y-2">
             <label htmlFor="pin" className="text-sm font-medium">
-              PIN <span className="text-destructive">*</span>
+              PIN <span className={signalText.danger}>*</span>
             </label>
             <Input
               id="pin"
@@ -233,10 +234,10 @@ export function RegisterDialog({ employee, open, onOpenChange }: RegisterDialogP
               </p>
             )}
             {pinError && !isCheckingPin && (
-              <p className="text-sm text-destructive">{pinError}</p>
+              <p className={`text-sm ${signalText.danger}`}>{pinError}</p>
             )}
             {!pinError && !isCheckingPin && pin && (
-              <p className="text-sm text-green-600">PIN is available</p>
+              <p className={`text-sm ${signalText.success}`}>PIN is available</p>
             )}
             {pin === suggestedPin && (
               <p className="text-sm text-muted-foreground">

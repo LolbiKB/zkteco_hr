@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from 'react'
 import { cn } from '@/lib/utils'
+import { signalDot, signalText } from '@/lib/signal'
 import {
   Check,
   Loader2,
@@ -24,13 +25,13 @@ type StepStatus = 'completed' | 'sent' | 'waiting' | 'failed' | 'idle'
 function circleClass(status: StepStatus) {
   switch (status) {
     case 'completed':
-      return 'bg-green-500 text-white'
+      return `${signalDot.success} text-white`
     case 'sent':
-      return 'bg-blue-500 text-white ring-2 ring-blue-500/20'
+      return `${signalDot.progress} text-white ring-2 ring-progress/20`
     case 'waiting':
       return 'bg-muted border border-border text-muted-foreground'
     case 'failed':
-      return 'bg-red-500 text-white'
+      return `${signalDot.danger} text-white`
     default:
       return 'bg-muted/50 border border-border/50 text-muted-foreground/40'
   }
@@ -39,11 +40,11 @@ function circleClass(status: StepStatus) {
 function labelClass(status: StepStatus) {
   switch (status) {
     case 'completed':
-      return 'text-green-700 dark:text-green-400'
+      return signalText.success
     case 'sent':
-      return 'text-blue-700 dark:text-blue-400 font-medium'
+      return `${signalText.progress} font-medium`
     case 'failed':
-      return 'text-red-700 dark:text-red-400'
+      return signalText.danger
     default:
       return 'text-muted-foreground'
   }
@@ -51,8 +52,8 @@ function labelClass(status: StepStatus) {
 
 function connectorClass(left: StepStatus, right: StepStatus) {
   if (left === 'completed' && (right === 'completed' || right === 'sent'))
-    return 'bg-green-500'
-  if (left === 'failed') return 'bg-red-300 dark:bg-red-700'
+    return signalDot.success
+  if (left === 'failed') return signalDot.danger
   return 'bg-border'
 }
 

@@ -46,6 +46,7 @@ import {
   Copy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { signalText, signalDot, signalBorder, signalAlert } from '@/lib/signal'
 import {
   buildComponentSyncOptions,
   getComponentSyncStatus,
@@ -254,20 +255,20 @@ function DeviceCard({
       <AccordionItem value={status.id} className="border-0">
         <AccordionTrigger className="px-3 py-2 hover:bg-muted/30 hover:no-underline rounded-lg [&>svg]:h-4 [&>svg]:w-4" showArrow>
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isOnline ? "bg-green-500" : "bg-muted-foreground/40")} />
-            {allSynced && <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
+            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isOnline ? signalDot.success : "bg-muted-foreground/40")} />
+            {allSynced && <CheckCircle2 className={cn("h-4 w-4 shrink-0", signalText.success)} />}
             <span className="text-sm font-medium truncate">{device?.name || status.device_sn}</span>
-            {hasActiveCommands && <Loader2 className="h-3 w-3 animate-spin text-blue-500 shrink-0" />}
+            {hasActiveCommands && <Loader2 className={cn("h-3 w-3 animate-spin shrink-0", signalText.progress)} />}
             {!hasActiveCommands && staleCommands.length > 0 && (
-              <Badge variant="outline" className="text-[10px] text-amber-700 shrink-0">Retrying</Badge>
+              <Badge variant="outline" className={cn("text-[10px] shrink-0", signalText.attention)}>Retrying</Badge>
             )}
           </div>
         </AccordionTrigger>
         <AccordionContent className="px-4 pb-3 pt-2">
           {enrollmentCleanup?.cleanupPending && enrollmentCleanup.deviceSn === status.device_sn && (
-            <div className="mb-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-2 text-[11px] text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+            <div className={cn("mb-2 rounded-md border px-2.5 py-2 text-[11px]", signalAlert.progress)}>
               <p className="font-medium">Enrollment cleanup in progress</p>
-              <p className="text-blue-700/90 dark:text-blue-300/90 mt-0.5">
+              <p className="mt-0.5">
                 A cancelled enrollment may still have a fingerprint on this device. Sync will not remove it — wait for
                 cleanup or use retry below.
               </p>
@@ -287,12 +288,12 @@ function DeviceCard({
           {enrollmentCleanup?.rogueRisk &&
             !enrollmentCleanup?.cleanupPending &&
             enrollmentCleanup.deviceSn === status.device_sn && (
-              <p className="mb-2 text-[11px] text-amber-700 dark:text-amber-400">
+              <p className={cn("mb-2 text-[11px]", signalText.attention)}>
                 Possible fingerprint on device without cloud record — enrollment cleanup may be needed.
               </p>
             )}
           {staleCommands.length > 0 && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">
+            <p className={cn("text-[11px] mb-2", signalText.attention)}>
               {staleCommands[0].command_type} #{staleCommands[0].id}:{' '}
               {staleCommands[0].error_message ||
                 (isFingerprintTemplatePush(staleCommands[0].command)
@@ -657,13 +658,13 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
       {/* Current Biometrics */}
       <div className="flex items-center justify-center gap-6 p-3 bg-muted/30 rounded-lg">
         <div className="flex items-center gap-1.5">
-          <Fingerprint className="h-4 w-4 text-blue-500" />
+          <Fingerprint className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-bold">{biometricsList.filter(b => b.type === 'fingerprint').length}</span>
           <span className="text-xs text-muted-foreground">FP</span>
         </div>
         <div className="w-px h-4 bg-border" />
         <div className="flex items-center gap-1.5">
-          <ScanFace className="h-4 w-4 text-purple-500" />
+          <ScanFace className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-bold">{biometricsList.some(b => b.type === 'face') ? 1 : 0}</span>
           <span className="text-xs text-muted-foreground">Face</span>
         </div>
@@ -673,15 +674,15 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
         <div className="space-y-4">
           {/* Type Selection */}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setBiometricType('fingerprint')} disabled={!capabilities.includes('fingerprint')} className={cn("flex items-center gap-2 p-3 rounded-lg border-2 transition-all", biometricType === 'fingerprint' ? "border-blue-500 bg-blue-50" : "border-border hover:border-muted-foreground/30", !capabilities.includes('fingerprint') && "opacity-50")}>
-              <Fingerprint className="h-5 w-5 text-blue-500" />
+            <button type="button" onClick={() => setBiometricType('fingerprint')} disabled={!capabilities.includes('fingerprint')} className={cn("flex items-center gap-2 p-3 rounded-lg border-2 transition-all", biometricType === 'fingerprint' ? "border-primary ring-2 ring-primary bg-card" : "border-border hover:border-muted-foreground/30", !capabilities.includes('fingerprint') && "opacity-50")}>
+              <Fingerprint className="h-5 w-5 text-muted-foreground" />
               <div className="text-left">
                 <div className="text-sm font-semibold">Fingerprint</div>
                 <div className="text-[10px] text-muted-foreground">{capabilities.includes('fingerprint') ? 'Select' : 'N/A'}</div>
               </div>
             </button>
-            <button type="button" onClick={() => setBiometricType('face')} disabled={!capabilities.includes('face')} className={cn("flex items-center gap-2 p-3 rounded-lg border-2 transition-all", biometricType === 'face' ? "border-purple-500 bg-purple-50" : "border-border hover:border-muted-foreground/30", !capabilities.includes('face') && "opacity-50")}>
-              <ScanFace className="h-5 w-5 text-purple-500" />
+            <button type="button" onClick={() => setBiometricType('face')} disabled={!capabilities.includes('face')} className={cn("flex items-center gap-2 p-3 rounded-lg border-2 transition-all", biometricType === 'face' ? "border-primary ring-2 ring-primary bg-card" : "border-border hover:border-muted-foreground/30", !capabilities.includes('face') && "opacity-50")}>
+              <ScanFace className="h-5 w-5 text-muted-foreground" />
               <div className="text-left">
                 <div className="text-sm font-semibold">Face</div>
                 <div className="text-[10px] text-muted-foreground">{capabilities.includes('face') ? 'Select' : 'N/A'}</div>
@@ -708,9 +709,9 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
                         disabled={enrolled}
                         className={cn(
                           'relative aspect-square rounded-lg border-2 flex items-center justify-center transition-all',
-                          isSelected && 'border-blue-500 bg-blue-100',
-                          !isSelected && enrolled && 'border-red-200 bg-red-50 opacity-50 cursor-not-allowed',
-                          !isSelected && !enrolled && 'border-dashed border-border text-muted-foreground/70 hover:border-blue-300'
+                          isSelected && 'border-primary ring-2 ring-primary bg-card',
+                          !isSelected && enrolled && cn('bg-card opacity-50 cursor-not-allowed', signalBorder.attention, signalText.attention),
+                          !isSelected && !enrolled && 'border-dashed border-border text-muted-foreground/70 hover:border-muted-foreground/40'
                         )}
                       >
                         <span className="text-xs font-bold">{ZK_PROTOCOL_FINGER_GRID_LETTERS[id]}</span>
@@ -733,9 +734,9 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
                         disabled={enrolled}
                         className={cn(
                           'relative aspect-square rounded-lg border-2 flex items-center justify-center transition-all',
-                          isSelected && 'border-blue-500 bg-blue-100',
-                          !isSelected && enrolled && 'border-red-200 bg-red-50 opacity-50 cursor-not-allowed',
-                          !isSelected && !enrolled && 'border-dashed border-border text-muted-foreground/70 hover:border-blue-300'
+                          isSelected && 'border-primary ring-2 ring-primary bg-card',
+                          !isSelected && enrolled && cn('bg-card opacity-50 cursor-not-allowed', signalBorder.attention, signalText.attention),
+                          !isSelected && !enrolled && 'border-dashed border-border text-muted-foreground/70 hover:border-muted-foreground/40'
                         )}
                       >
                         <span className="text-xs font-bold">{ZK_PROTOCOL_FINGER_GRID_LETTERS[id]}</span>
@@ -746,7 +747,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
                 </div>
               </div>
               <div className="text-center text-[9px] text-muted-foreground">
-                <span className={cn(enrolledFingers.has(fingerId) && 'text-red-500')}>
+                <span className={cn(enrolledFingers.has(fingerId) && signalText.attention)}>
                   {protocolFingerLabel(fingerId)}
                   {enrolledFingers.has(fingerId) && ' (in use)'}
                 </span>
@@ -758,7 +759,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground font-medium">Device</div>
             {registrarDevices.length === 0 ? (
-              <div className="flex items-center gap-2 p-3 rounded-lg border border-orange-200 bg-orange-50 text-orange-800">
+              <div className={cn("flex items-center gap-2 p-3 rounded-lg border", signalAlert.attention)}>
                 <WifiOff className="h-4 w-4" />
                 <div className="text-xs font-medium">No registrar devices online</div>
               </div>
@@ -773,7 +774,7 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
                     return (
                       <SelectItem key={s.device_sn} value={s.device_sn}>
                         <div className="flex items-center gap-2">
-                          <Wifi className="h-3 w-3 text-green-600" />
+                          <Wifi className={cn("h-3 w-3", signalText.success)} />
                           <span>{s.devices?.name || s.device_sn}</span>
                           <span className="text-xs text-muted-foreground ml-1">
                             {caps.includes('fingerprint') && 'FP'}
@@ -821,12 +822,12 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
               return (
                 <div key={p} className="flex items-center">
                   <div className="flex flex-col items-center gap-0.5">
-                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center border-2 text-xs font-bold", isCompleted && "border-green-500 bg-green-100 text-green-600", isCurrent && !isFailed && "border-blue-500 bg-blue-100 text-blue-600", isFailed && "border-red-500 bg-red-100 text-red-600", !isCompleted && !isCurrent && !isFailed && "border-border bg-muted text-muted-foreground")}>
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center border-2 text-xs font-bold bg-card", isCompleted && cn(signalBorder.success, signalText.success), isCurrent && !isFailed && cn(signalBorder.progress, signalText.progress), isFailed && cn(signalBorder.danger, signalText.danger), !isCompleted && !isCurrent && !isFailed && "border-border bg-muted text-muted-foreground")}>
                       {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : isCurrent && !isFailed ? <Loader2 className="h-4 w-4 animate-spin" /> : isFailed ? <AlertCircle className="h-4 w-4" /> : idx + 1}
                     </div>
                     <span className="text-[9px] font-medium">{p === 'queued' ? 'Queued' : p === 'enrolling' ? 'Capture' : p === 'accepted' ? 'Process' : 'Done'}</span>
                   </div>
-                  {idx < 3 && <div className={cn("h-0.5 w-5 mx-0.5", isCompleted ? "bg-green-500" : "bg-border")} />}
+                  {idx < 3 && <div className={cn("h-0.5 w-5 mx-0.5", isCompleted ? signalDot.success : "bg-border")} />}
                 </div>
               )
             })}
@@ -837,17 +838,17 @@ function EnrollContent({ user, onSuccess, onClose, open, onPhaseChange }: Enroll
             <div role="status" aria-live="polite" className="sr-only">
               {phaseAnnouncement}
             </div>
-            {phase === 'queued' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><RefreshCw className="h-5 w-5 text-blue-600" /></div><div className="font-medium text-sm">Command Sent</div><div className="text-xs text-muted-foreground">Waiting for device...</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
-            {phase === 'enrolling' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div><div className="font-medium text-sm">{biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'}</div><div className="text-xs text-muted-foreground">{commandStatus === 'sent' ? 'Device is ready — follow prompts on the device screen' : 'Waiting for device to start enrollment…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
-            {phase === 'accepted' && <div><div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-amber-600 animate-spin" /></div><div className="font-medium text-sm">Saving to cloud</div><div className="text-xs text-muted-foreground">{isPullingTemplate ? 'Requesting template from device…' : 'Waiting for template upload…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div><div className="h-1 mt-2 w-full rounded-full bg-muted overflow-hidden"><div className="h-full w-1/3 bg-amber-500 animate-pulse rounded-full" /></div></div>}
-            {phase === 'success' && <div><div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2"><CheckCircle2 className="h-5 w-5 text-green-600" /></div><div className="font-medium text-sm text-green-700">Success</div><div className="text-xs text-muted-foreground">{biometricType === 'fingerprint' ? `${protocolFingerLabel(fingerId)} enrolled` : 'Face enrolled'}</div></div>}
-            {phase === 'failed' && errorInfo && <div><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2"><AlertCircle className="h-5 w-5 text-red-600" /></div><div className="font-medium text-sm text-red-700">{errorInfo.label}</div><div className="text-xs text-muted-foreground">{errorInfo.description}</div>{errorInfo.action && <div className="text-xs text-amber-700 mt-1 font-medium">{errorInfo.action}</div>}{cleanupPending && <div className="text-xs text-blue-700 mt-2 font-medium">Removing fingerprint from device…</div>}</div>}
-            {phase === 'cleaning_up' && <div><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-2"><Loader2 className="h-5 w-5 text-blue-600 animate-spin" /></div><div className="font-medium text-sm">Removing from device</div><div className="text-xs text-muted-foreground">Enrollment did not complete — cleaning up registrar</div></div>}
+            {phase === 'queued' && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><RefreshCw className={cn("h-5 w-5", signalText.progress)} /></div><div className="font-medium text-sm">Command Sent</div><div className="text-xs text-muted-foreground">Waiting for device...</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
+            {phase === 'enrolling' && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><Loader2 className={cn("h-5 w-5 animate-spin", signalText.progress)} /></div><div className="font-medium text-sm">{biometricType === 'fingerprint' ? 'Place finger on sensor' : 'Look at camera'}</div><div className="text-xs text-muted-foreground">{commandStatus === 'sent' ? 'Device is ready — follow prompts on the device screen' : 'Waiting for device to start enrollment…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div></div>}
+            {phase === 'accepted' && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><Loader2 className={cn("h-5 w-5 animate-spin", signalText.attention)} /></div><div className="font-medium text-sm">Saving to cloud</div><div className="text-xs text-muted-foreground">{isPullingTemplate ? 'Requesting template from device…' : 'Waiting for template upload…'}</div><div className="text-[10px] text-muted-foreground mt-2 font-medium">{flowContextLabel}</div><div className="h-1 mt-2 w-full rounded-full bg-muted overflow-hidden"><div className={cn("h-full w-1/3 animate-pulse rounded-full", signalDot.attention)} /></div></div>}
+            {phase === 'success' && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><CheckCircle2 className={cn("h-5 w-5", signalText.success)} /></div><div className={cn("font-medium text-sm", signalText.success)}>Success</div><div className="text-xs text-muted-foreground">{biometricType === 'fingerprint' ? `${protocolFingerLabel(fingerId)} enrolled` : 'Face enrolled'}</div></div>}
+            {phase === 'failed' && errorInfo && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><AlertCircle className={cn("h-5 w-5", signalText.danger)} /></div><div className={cn("font-medium text-sm", signalText.danger)}>{errorInfo.label}</div><div className="text-xs text-muted-foreground">{errorInfo.description}</div>{errorInfo.action && <div className={cn("text-xs mt-1 font-medium", signalText.attention)}>{errorInfo.action}</div>}{cleanupPending && <div className={cn("text-xs mt-2 font-medium", signalText.progress)}>Removing fingerprint from device…</div>}</div>}
+            {phase === 'cleaning_up' && <div><div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2"><Loader2 className={cn("h-5 w-5 animate-spin", signalText.progress)} /></div><div className="font-medium text-sm">Removing from device</div><div className="text-xs text-muted-foreground">Enrollment did not complete — cleaning up registrar</div></div>}
           </div>
 
           {showTimeout && (phase === 'enrolling' || phase === 'accepted') && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 p-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800">
+              <div className={cn("flex items-center gap-2 p-2 rounded-lg border text-xs", signalAlert.attention)}>
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   {phase === 'accepted'
@@ -1180,7 +1181,7 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                   {user.frappe_employee_id && <span>{user.frappe_employee_id}</span>}
                   {user.pin && (
                     <button onClick={handleCopyPin} className="flex items-center gap-1 font-mono bg-muted px-1.5 py-0.5 rounded hover:bg-muted/80">
-                      {copiedPin ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                      {copiedPin ? <CheckCircle2 className={cn("h-3 w-3", signalText.success)} /> : <Copy className="h-3 w-3" />}
                       PIN {user.pin}
                     </button>
                   )}
@@ -1223,25 +1224,25 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                   <div className="mb-4 flex shrink-0 flex-wrap items-center gap-4 text-sm">
                       {stats.synced > 0 && (
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className={cn("h-4 w-4", signalText.success)} />
                           <span>{stats.synced} synced</span>
                         </div>
                       )}
                       {stats.syncing > 0 && (
                         <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                          <Loader2 className={cn("h-4 w-4 animate-spin", signalText.progress)} />
                           <span>{stats.syncing} syncing</span>
                         </div>
                       )}
                       {stats.staleCount > 0 && stats.syncing === 0 && (
                         <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <AlertCircle className={cn("h-4 w-4", signalText.attention)} />
                           <span>{stats.staleCount} retrying</span>
                         </div>
                       )}
                       {stats.cleaning > 0 && (
                         <div className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-purple-500" />
+                          <Sparkles className={cn("h-4 w-4", signalText.progress)} />
                           <span>{stats.cleaning} cleaning</span>
                         </div>
                       )}
@@ -1344,11 +1345,11 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-4 text-xs">
                         <div className="flex items-center gap-1.5">
-                          <Fingerprint className="h-4 w-4 text-blue-500" />
+                          <Fingerprint className="h-4 w-4 text-muted-foreground" />
                           <span>{fingerprints.length} fingerprints</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <ScanFace className="h-4 w-4 text-purple-500" />
+                          <ScanFace className="h-4 w-4 text-muted-foreground" />
                           <span>{faces.length > 0 ? 'Face enrolled' : 'No face'}</span>
                         </div>
                     </div>
@@ -1360,10 +1361,10 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                         {fingerprints.map(bio => (
                           <div key={bio.id} className="flex items-center justify-between text-sm rounded-lg border px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <Fingerprint className="h-4 w-4 text-blue-500" />
+                              <Fingerprint className="h-4 w-4 text-muted-foreground" />
                               <span className="font-mono text-xs">{protocolFingerLabel(bio.finger_id ?? 0)}</span>
                             </div>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500" onClick={() => handleDeleteBiometric(bio.id, 'fingerprint', bio.finger_id ?? undefined)}>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteBiometric(bio.id, 'fingerprint', bio.finger_id ?? undefined)}>
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
@@ -1375,11 +1376,11 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
                     <div className="rounded-lg border p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <ScanFace className="h-4 w-4 text-purple-500" />
+                          <ScanFace className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Face</span>
                         </div>
                         {faces.length > 0 ? (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500" onClick={() => handleDeleteBiometric(faces[0].id, 'face')}>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteBiometric(faces[0].id, 'face')}>
                             <X className="h-3 w-3" />
                           </Button>
                         ) : (
@@ -1421,8 +1422,8 @@ export function UserDetailModal({ user, open, onOpenChange, onRefreshList }: Use
         <DialogContent>
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Fingerprint className="h-5 w-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                <Fingerprint className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
                 <DialogTitle>Enroll Biometric</DialogTitle>

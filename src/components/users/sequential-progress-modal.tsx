@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { signalText } from '@/lib/signal'
 
 interface DeviceProgress {
   deviceSn: string
@@ -52,11 +53,11 @@ export function SequentialProgressModal({
   const getDeviceIcon = (status: DeviceProgress['status']) => {
     switch (status) {
       case 'success':
-        return <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+        return <CheckCircle2 className={`h-4 w-4 ${signalText.success} shrink-0`} />
       case 'failed':
         return <XCircle className="h-4 w-4 text-destructive shrink-0" />
       case 'processing':
-        return <Loader2 className="h-4 w-4 text-blue-600 animate-spin shrink-0" />
+        return <Loader2 className={`h-4 w-4 ${signalText.progress} animate-spin shrink-0`} />
       default:
         return <div className="h-4 w-4 rounded-full border-2 border-muted shrink-0" />
     }
@@ -90,7 +91,7 @@ export function SequentialProgressModal({
               {devices.map((device, index) => (
                 <div
                   key={device.deviceSn}
-                  className={`flex items-start gap-3 p-3 ${index === currentIndex && isProcessing ? 'bg-blue-50' : ''
+                  className={`flex items-start gap-3 p-3 ${index === currentIndex && isProcessing ? 'bg-muted/40' : ''
                     }`}
                 >
                   {getDeviceIcon(device.status)}
@@ -108,13 +109,13 @@ export function SequentialProgressModal({
                     )}
                   </div>
                   {device.status === 'success' && (
-                    <span className="text-xs text-green-600 font-medium">Removed</span>
+                    <span className={`text-xs ${signalText.success} font-medium`}>Removed</span>
                   )}
                   {device.status === 'failed' && (
                     <span className="text-xs text-destructive font-medium">Failed</span>
                   )}
                   {device.status === 'processing' && (
-                    <span className="text-xs text-blue-600 font-medium">Processing...</span>
+                    <span className={`text-xs ${signalText.progress} font-medium`}>Processing...</span>
                   )}
                 </div>
               ))}
@@ -127,7 +128,7 @@ export function SequentialProgressModal({
               {hasFailures ? (
                 <AlertTriangle className="h-4 w-4" />
               ) : (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className={`h-4 w-4 ${signalText.success}`} />
               )}
               <AlertDescription>
                 {hasFailures ? (

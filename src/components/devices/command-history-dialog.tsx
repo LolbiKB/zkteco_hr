@@ -36,6 +36,7 @@ import { useDevicePresence } from '@/hooks/use-device-presence'
 import { format, formatDistanceToNow } from 'date-fns'
 import { useState } from 'react'
 import { getCommandLabel } from '@/lib/command-types'
+import { signalText, signalBorder } from '@/lib/signal'
 
 interface CommandHistoryDialogProps {
   deviceSn: string | null
@@ -46,28 +47,28 @@ interface CommandHistoryDialogProps {
 const STATUS_CONFIG = {
   pending: {
     icon: Clock,
-    color: 'text-muted-foreground',
-    border: 'border-border',
+    color: signalText.idle,
+    border: signalBorder.idle,
   },
   sent: {
     icon: Loader2,
-    color: 'text-blue-500',
-    border: 'border-blue-300',
+    color: signalText.progress,
+    border: signalBorder.progress,
   },
   success: {
     icon: CheckCircle2,
-    color: 'text-green-500',
-    border: 'border-green-300',
+    color: signalText.success,
+    border: signalBorder.success,
   },
   failed: {
     icon: AlertCircle,
-    color: 'text-red-500',
-    border: 'border-red-300',
+    color: signalText.danger,
+    border: signalBorder.danger,
   },
   cancelled: {
     icon: Clock,
-    color: 'text-muted-foreground/70',
-    border: 'border-border',
+    color: signalText.idle,
+    border: signalBorder.idle,
   },
 }
 
@@ -177,8 +178,8 @@ export function CommandHistoryDialog({ deviceSn, open, onOpenChange }: CommandHi
               <span className="flex items-center gap-1">
                 {isOnline ? (
                   <>
-                    <Wifi className="h-3.5 w-3.5 text-green-500" />
-                    <span className="text-green-600">Online</span>
+                    <Wifi className={`h-3.5 w-3.5 ${signalText.success}`} />
+                    <span className={signalText.success}>Online</span>
                   </>
                 ) : (
                   <>
@@ -266,7 +267,7 @@ export function CommandHistoryDialog({ deviceSn, open, onOpenChange }: CommandHi
                         </div>
 
                         {errorMsg && (
-                          <div className="text-xs text-red-600 mt-1.5 flex items-start gap-1">
+                          <div className={`text-xs mt-1.5 flex items-start gap-1 ${signalText.danger}`}>
                             <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                             <span>{errorMsg}</span>
                           </div>
@@ -307,7 +308,7 @@ export function CommandHistoryDialog({ deviceSn, open, onOpenChange }: CommandHi
                               {(cmd.status === 'pending' || cmd.status === 'sent') && (
                                 <button
                                   onClick={() => handleClear(cmd.id)}
-                                  className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
+                                  className={`text-xs hover:text-destructive/80 flex items-center gap-1 ${signalText.danger}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                   Clear

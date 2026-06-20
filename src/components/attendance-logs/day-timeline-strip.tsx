@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { signalText } from '@/lib/signal'
 
 interface TimelinePunch {
   seq: number
@@ -35,7 +36,7 @@ export function DayTimelineStrip({ userPin, punches, warnings }: DayTimelineStri
       {warnings.map((w) => (
         <span
           key={w}
-          className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-400"
+          className={`inline-flex items-center gap-0.5 ${signalText.attention}`}
         >
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span className="line-clamp-1">{w}</span>

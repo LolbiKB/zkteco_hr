@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2, RefreshCw, Fingerprint, Wifi, WifiOff, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { DeviceService } from '@/services/device-service'
 import { supabase } from '@/lib/supabase'
+import { signalText } from '@/lib/signal'
 import type { DeviceEntry } from '@/services/device-service'
 
 interface DeviceInfoDialogProps {
@@ -131,13 +132,13 @@ export function DeviceInfoDialog({ deviceSn, open, onOpenChange }: DeviceInfoDia
   const getStatusBadge = (status?: string) => {
     if (status === 'online') {
       return (
-        <Badge variant="secondary" className="text-green-700">
+        <Badge variant="secondary" className={signalText.success}>
           <Wifi className="h-3 w-3 mr-1" /> Online
         </Badge>
       )
     }
     return (
-      <Badge variant="secondary" className="text-muted-foreground">
+      <Badge variant="secondary" className={signalText.idle}>
         <WifiOff className="h-3 w-3 mr-1" /> Offline
       </Badge>
     )
@@ -150,21 +151,21 @@ export function DeviceInfoDialog({ deviceSn, open, onOpenChange }: DeviceInfoDia
       case 'pending':
       case 'sent':
         return (
-        <Badge variant="secondary" className="gap-1 text-blue-700">
+        <Badge variant="secondary" className={`gap-1 ${signalText.progress}`}>
             <Loader2 className="h-3 w-3 animate-spin" />
             {commandResult.status === 'sent' ? 'Sent to device...' : 'Queued...'}
           </Badge>
         )
       case 'success':
           return (
-            <Badge variant="secondary" className="gap-1 text-green-700">
+            <Badge variant="secondary" className={`gap-1 ${signalText.success}`}>
               <CheckCircle2 className="h-3 w-3" />
               Received
             </Badge>
         )
       case 'failed':
         return (
-          <Badge variant="secondary" className="gap-1 text-red-700">
+          <Badge variant="secondary" className={`gap-1 ${signalText.danger}`}>
             <AlertCircle className="h-3 w-3" />
             Failed
           </Badge>

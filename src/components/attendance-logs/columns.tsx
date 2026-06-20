@@ -10,6 +10,7 @@ import {
   erpPairingPreviewLabel,
 } from '@/lib/attendance-log-display'
 import { HrSyncBadge } from '@/components/shared/status-badges'
+import { signalText } from '@/lib/signal'
 
 interface CreateAttendanceLogColumnsProps {
   onFilterByVerifyType?: (type: string) => void
@@ -114,7 +115,7 @@ export function createAttendanceLogColumns({
             ) : (
               <>
                 <code className="font-mono font-medium">{pin}</code>
-                <span className="text-xs text-amber-700 dark:text-amber-400">Unknown PIN</span>
+                <span className={`text-xs ${signalText.attention}`}>Unknown PIN</span>
               </>
             )}
           </div>
@@ -166,7 +167,7 @@ export function createAttendanceLogColumns({
               </span>
             )}
             {log.last_error_message && status === 'FAILED' && (
-              <span className="text-[10px] text-destructive line-clamp-2">
+              <span className={`text-[10px] line-clamp-2 ${signalText.danger}`}>
                 {log.last_error_message}
               </span>
             )}
@@ -189,7 +190,7 @@ export function createAttendanceLogColumns({
               ? 'Duplicate within 10 min'
               : log.suspicious_reason || 'Flagged'
         return (
-          <span className="inline-flex items-center gap-1.5 text-xs text-destructive">
+          <span className={`inline-flex items-center gap-1.5 text-xs ${signalText.attention}`}>
             <span aria-hidden className="size-1.5 rounded-full bg-current opacity-80" />
             {reason}
           </span>

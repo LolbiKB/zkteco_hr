@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Page } from '@lolbikb/dewey-ui'
 import { AlertCircle, AlertTriangle } from 'lucide-react'
+import { signalAlert, signalText } from '@/lib/signal'
 
 export function Users() {
   const [filters, setFilters] = useState<UserFilters>({
@@ -78,10 +79,10 @@ export function Users() {
       )}
 
       {flaggedCount > 0 && (
-        <Alert className="border-amber-500/50 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          <AlertTitle className="text-amber-900 dark:text-amber-100">Suspicious Attendance</AlertTitle>
-          <AlertDescription className="text-amber-700 dark:text-amber-300">
+        <Alert className={signalAlert.attention}>
+          <AlertTriangle className={`h-4 w-4 ${signalText.attention}`} />
+          <AlertTitle>Suspicious Attendance</AlertTitle>
+          <AlertDescription>
             {flaggedCount} user{flaggedCount !== 1 ? 's' : ''} with suspicious attendance patterns
           </AlertDescription>
         </Alert>

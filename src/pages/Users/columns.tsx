@@ -14,6 +14,7 @@ import {
 import { SyncStatusSummary } from '@/components/users/sync-status-summary'
 import { UserCell } from '@/components/ui/table-components'
 import type { UserEntry } from '@/services/user-service'
+import { signalBadge, signalText } from '@/lib/signal'
 
 interface UserColumnMeta {
   onUserClick?: (user: UserEntry) => void
@@ -71,10 +72,10 @@ export const columns: ColumnDef<UserEntry>[] = [
       if (!status) return <span className="text-xs text-muted-foreground">-</span>
 
       const statusConfig = {
-        active: { label: 'Active', className: 'text-green-700 dark:text-green-400' },
-        inactive: { label: 'Inactive', className: 'text-muted-foreground dark:text-muted-foreground/70' },
-        compromised: { label: 'Compromised', className: 'text-red-700 dark:text-red-400' },
-        archived: { label: 'Archived', className: 'text-muted-foreground' },
+        active: { label: 'Active', className: signalText.success },
+        inactive: { label: 'Inactive', className: signalText.idle },
+        compromised: { label: 'Compromised', className: signalText.danger },
+        archived: { label: 'Archived', className: signalText.idle },
       }
 
       const config = statusConfig[status]
@@ -95,7 +96,7 @@ export const columns: ColumnDef<UserEntry>[] = [
       if (!isFlagged) return null
 
       return (
-        <Badge variant="secondary" className="gap-1 text-red-700" title="Suspicious attendance detected">
+        <Badge variant="secondary" className={`gap-1 ${signalBadge.danger}`} title="Suspicious attendance detected">
           <AlertTriangle className="h-3 w-3" />
         </Badge>
       )

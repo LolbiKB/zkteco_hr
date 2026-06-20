@@ -38,8 +38,8 @@ Counts (occurrences): **amber ≈103, emerald ≈54, sky ≈26**, across 16 file
 ### G5 — Motion restraint · **LOW**
 Mostly fine. `animate-spin` (23) = loading spinners, acceptable. Issues: a few ad-hoc `duration-300/200/350` + `ease-out` (≈14 hits) instead of the one house easing/durations from `base.css`; `animate-in` (12, tailwindcss-animate) overlaps the `base.css` choreography. Normalize opportunistically; low priority.
 
-### G6 — Accessible names · **LOW / verify**
-18 `aria-label`s across 53 `<Button>`s. Four `size="icon"` (icon-only) buttons to confirm carry an accessible name: `AttendanceToolbar.tsx:84,105,130` and `RunEngineDialog.tsx:99`. Add `aria-label` to any that lack one.
+### G6 — Accessible names · **✓ CONFORMANT (verified)**
+All four `size="icon"` (icon-only) buttons already carry `aria-label`s — `AttendanceToolbar.tsx:84` ("Previous week"), `:105` ("Next week"), `:130` ("Refresh attendance data"), `RunEngineDialog.tsx:99` ("Run flag engine"). The icon-button a11y guardrail passes; **no action needed.** (This was the only Phase-2 item separable from the palette decision — it's already done.)
 
 ## Recommended Phase 2 sequencing
 

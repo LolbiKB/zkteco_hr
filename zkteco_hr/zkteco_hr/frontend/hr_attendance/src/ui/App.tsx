@@ -248,7 +248,7 @@ export function App() {
       <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
         <Page className="gap-0">
           {loadError ? (
-            <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in duration-300">
+            <Card className="mb-3 border-destructive/40 bg-destructive/5 animate-in fade-in">
               <CardContent className="py-3 text-sm text-destructive">
                 <div>
                   Could not load attendance data.{" "}
@@ -266,7 +266,7 @@ export function App() {
             {isBootstrapping ? (
               <AttendanceHeaderSkeleton />
             ) : (
-              <div className="shrink-0 animate-in fade-in slide-in-from-top-1 duration-300">
+              <div className="shrink-0 animate-in fade-in slide-in-from-top-1">
                 <AttendanceToolbar
                   employees={employees}
                   employee={employee}

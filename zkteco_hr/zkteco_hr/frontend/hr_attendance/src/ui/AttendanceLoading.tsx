@@ -9,7 +9,7 @@ export function LoadingIndicator(props: { label?: string; className?: string }) 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in duration-300",
+        "flex items-center gap-2 text-sm text-muted-foreground animate-in fade-in",
         props.className
       )}
     >
@@ -39,7 +39,7 @@ export function AttendanceHeaderSkeleton() {
 
 export function WeekViewSkeleton() {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card animate-in fade-in duration-300">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card animate-in fade-in">
       <div className="grid shrink-0 grid-cols-7 border-b border-border/60">
         {Array.from({ length: 7 }).map((_, idx) => (
           <div key={idx} className="space-y-2 px-3 py-2">
@@ -91,7 +91,7 @@ export function WeekViewAnimatedShell(props: {
 }) {
   if (props.loading) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
+      <div className="flex min-h-0 flex-1 flex-col animate-in fade-in">
         <WeekViewSkeleton />
       </div>
     );
@@ -101,7 +101,7 @@ export function WeekViewAnimatedShell(props: {
     <div
       key={`${props.weekKey}-${props.direction}`}
       className={cn(
-        "flex min-h-0 flex-1 flex-col ease-out animate-in fade-in fill-mode-both duration-350",
+        "flex min-h-0 flex-1 flex-col animate-in fade-in fill-mode-both",
         props.direction === "next" && "slide-in-from-right-6",
         props.direction === "prev" && "slide-in-from-left-6",
         props.direction === "jump" && "slide-in-from-bottom-2 zoom-in-98"
@@ -131,7 +131,7 @@ export function WeeklyScheduleHeaderSkeleton() {
 
 export function WeeklyScheduleEditorSkeleton() {
   return (
-    <Card className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-300">
+    <Card className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden animate-in fade-in">
       <CardHeader className="shrink-0 gap-4 px-5 pb-3 pt-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <Skeleton className="h-5 w-28" />
@@ -178,7 +178,7 @@ export function WeeklyScheduleAnimatedShell(props: {
 }) {
   if (props.loading) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
+      <div className="flex min-h-0 flex-1 flex-col animate-in fade-in">
         <WeeklyScheduleEditorSkeleton />
       </div>
     );
@@ -187,7 +187,7 @@ export function WeeklyScheduleAnimatedShell(props: {
   return (
     <div
       key={props.employeeKey}
-      className="flex min-h-0 flex-1 flex-col ease-out animate-in fade-in fill-mode-both duration-350 slide-in-from-bottom-2 zoom-in-98"
+      className="flex min-h-0 flex-1 flex-col animate-in fade-in fill-mode-both slide-in-from-bottom-2 zoom-in-98"
     >
       {props.children}
     </div>

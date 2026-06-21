@@ -141,11 +141,11 @@ export function ClearSitePatternsDialog(props: ClearSitePatternsDialogProps) {
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {result ? (
-              <div className="space-y-3 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-3">
+              <div className="space-y-3 rounded-lg border px-3 py-3">
                 <div className="flex items-start gap-2">
-                  <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-primary" />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                    <p className="text-sm font-medium text-primary">
                       {result.error_count ? "Partial wipe completed" : "Site patterns wiped"}
                     </p>
                   </div>
@@ -222,7 +222,7 @@ export function ClearSitePatternsDialog(props: ClearSitePatternsDialogProps) {
                       </p>
                     ) : null}
 
-                    <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+                    <div className="flex gap-2 rounded-lg border border-brand-accent/20 bg-brand-accent/10 px-3 py-2 text-xs text-brand-accent">
                       <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
                       <p>
                         Requires System Manager. Import will recreate PATs/FTs on apply. Cannot be

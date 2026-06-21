@@ -149,7 +149,7 @@ export function ImportSchedulePlanSummary(props: ImportSchedulePlanSummaryProps)
                           {item.entry.plan.warnings.map((warning, index) => (
                             <li
                               key={index}
-                              className="text-[11px] text-amber-700 dark:text-amber-400"
+                              className="text-[11px] text-brand-accent"
                             >
                               {warning}
                             </li>

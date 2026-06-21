@@ -7,11 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export function DeviceCloseoutBanner({ alerts }: { alerts: DeviceAlert[] }) {
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5 animate-in fade-in duration-300">
+    <Card className="border-brand-accent/40 bg-muted/25 animate-in fade-in">
       <CardContent className="flex gap-3 py-3">
-        <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-brand-accent" />
         <div className="min-w-0 space-y-2 text-sm">
-          <div className="font-medium text-amber-950 dark:text-amber-100">
+          <div className="font-medium text-foreground">
             Device closeout pending ({alerts.length})
           </div>
           <ul className="space-y-1.5 text-xs text-muted-foreground">
@@ -34,7 +34,7 @@ export function DeviceCloseoutBanner({ alerts }: { alerts: DeviceAlert[] }) {
 
 export function DeviceAlertRow({ alert }: { alert: DeviceAlert }) {
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+    <div className="rounded-lg border border-brand-accent/30 bg-muted/25 px-3 py-2 text-xs">
       <div className="font-medium text-foreground">{alert.device_sn}</div>
       <div className="mt-0.5 text-muted-foreground">
         {formatDeviceAlertStatus(alert.status)}

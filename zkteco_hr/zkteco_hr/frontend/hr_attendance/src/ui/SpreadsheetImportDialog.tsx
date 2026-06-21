@@ -303,7 +303,7 @@ function IssueBadge(props: { issue: ImportIssue }) {
       className={cn(
         "text-[10px] font-normal",
         issue.severity === "error" && "border-destructive/40 text-destructive",
-        issue.severity === "warning" && "border-amber-500/40 text-amber-800 dark:text-amber-200",
+        issue.severity === "warning" && "border-brand-accent/40 text-brand-accent",
         issue.severity === "info" && "border-border text-muted-foreground"
       )}
       title={issue.suggestion ?? issue.message}
@@ -334,7 +334,7 @@ function PreviewRow(props: {
       className={cn(
         "rounded-lg border px-3 py-2.5 text-sm transition-colors",
         applied
-          ? "border-emerald-500/30 bg-emerald-500/5"
+          ? "border-primary/30 bg-primary/5"
           : failed
             ? "border-destructive/30 bg-destructive/5"
             : selected
@@ -386,15 +386,15 @@ function PreviewRow(props: {
               {applyStatus?.type === "applying" ? (
                 <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
               ) : applied ? (
-                <CheckCircle2Icon className="size-4 text-emerald-500" />
+                <CheckCircle2Icon className="size-4 text-primary" />
               ) : failed ? (
                 <XCircleIcon className="size-4 text-destructive" />
               ) : row.importable ? (
-                <CheckCircle2Icon className="size-4 text-emerald-500/80" />
+                <CheckCircle2Icon className="size-4 text-primary/80" />
               ) : issues.some((i) => i.severity === "error") ? (
                 <XCircleIcon className="size-4 text-destructive" />
               ) : issues.length > 0 ? (
-                <AlertCircleIcon className="size-4 text-amber-500" />
+                <AlertCircleIcon className="size-4 text-brand-accent" />
               ) : null}
             </div>
           </div>
@@ -416,7 +416,7 @@ function PreviewRow(props: {
           {applyStatus?.type === "error" ? (
             <p className="text-[11px] text-destructive">{applyStatus.message}</p>
           ) : applyStatus?.type === "ok" ? (
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400">Schedule saved</p>
+            <p className="text-[11px] text-primary">Schedule saved</p>
           ) : null}
         </div>
       </div>
@@ -440,7 +440,7 @@ function SummaryBar(props: {
     { key: "all", label: "All", count: summary.total_rows },
     { key: "importable", label: "Ready", count: summary.importable },
     { key: "errors", label: "Errors", count: summary.errors, tone: "text-destructive" },
-    { key: "warnings", label: "Warnings", count: summary.warnings, tone: "text-amber-700 dark:text-amber-300" },
+    { key: "warnings", label: "Warnings", count: summary.warnings, tone: "text-brand-accent" },
     { key: "not_found", label: "Not found", count: summary.unmatched, tone: "text-destructive" },
   ];
 
@@ -773,7 +773,7 @@ export function SpreadsheetImportDialog(props: {
               {isDone ? (
                 <>
                   {doneCount > 0 ? (
-                    <span className="mr-auto self-center text-xs text-emerald-600 dark:text-emerald-400">
+                    <span className="mr-auto self-center text-xs text-primary">
                       {doneCount} saved
                     </span>
                   ) : null}

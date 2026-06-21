@@ -91,7 +91,7 @@ export function WeeklyScheduleSheet(props: WeeklyScheduleSheetProps) {
           />
 
           {status.tone === "warn" ? (
-            <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+            <p className="mt-4 rounded-lg border border-brand-accent/30 bg-brand-accent/8 px-3 py-2 text-xs leading-relaxed text-foreground">
               {status.detail ?? status.label}
               {!hasSsa ? " Assign a Shift Schedule Assignment in ERPNext to generate shifts." : null}
             </p>

@@ -8,5 +8,10 @@
 /* Canonical design tokens (palette, Geist, radius scale, dark variant) come
    from the shared Dewey design system — do not redeclare them here. */
 @import "@lolbikb/dewey-ui/theme.css";
+
+/* Dewey brand layer — MUST come after dewey-ui so the green wins the cascade. */
+@import "./brand/tokens.css";
+@import "./brand/base.css";
+
 /* Tailwind must scan the package for the primitives' utility classes. */
 @source "../node_modules/@lolbikb/dewey-ui/dist";

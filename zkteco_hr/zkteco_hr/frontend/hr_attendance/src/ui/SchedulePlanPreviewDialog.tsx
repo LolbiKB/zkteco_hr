@@ -87,7 +87,7 @@ export function SchedulePlanPreviewDialog(props: SchedulePlanPreviewDialogProps)
             {props.plan?.warnings?.length ? (
               <ul className="space-y-1">
                 {props.plan.warnings.map((w, i) => (
-                  <li key={i} className="text-xs text-amber-700 dark:text-amber-400">{w}</li>
+                  <li key={i} className="text-xs text-brand-accent">{w}</li>
                 ))}
               </ul>
             ) : null}
@@ -171,7 +171,7 @@ function MiniShiftTrack(props: { row: WeekPatternDay }) {
 
   return (
     <div className="relative mt-2 h-14 w-2 overflow-hidden rounded-full bg-muted/40">
-      <div className="absolute inset-0 rounded-full bg-amber-500/90 ring-1 ring-amber-700/20" />
+      <div className="absolute inset-0 rounded-full bg-primary/90 ring-1 ring-primary/20" />
       {lunchTop != null && lunchHeight != null ? (
         <div
           className="absolute inset-x-0 rounded-sm bg-background ring-1 ring-border/40"

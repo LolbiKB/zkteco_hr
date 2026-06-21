@@ -7,6 +7,8 @@
 /* Dewey brand layer — green primary, orange/blue signals. Must come AFTER
    dewey-ui's theme so it overrides the neutral graphite primary. */
 @import "./brand/tokens.css";
+/* Brand motion — the self-drawing ADMS Bridge logo (launch intro + header hover). */
+@import "./brand/brand-motion.css";
 /* Tailwind must scan the package for the primitives' utility classes. */
 @source "../node_modules/@lolbikb/dewey-ui/dist";
 

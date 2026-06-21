@@ -5,6 +5,7 @@ import { AppShell } from "@lolbikb/dewey-ui";
 
 import { useCalendarSession } from "@/hooks/useCalendarSession";
 import { DeweyTimeLockup } from "@/brand/DeweyTimeLockup";
+import { InstallButton } from "@/pwa/InstallButton";
 import { defaultHrAccessContext, type HrAccessOutletContext } from "@/lib/hrAccess";
 const DESK_URL = "/desk";
 const FLAGS_INBOX_URL = "/app/attendance-flag";
@@ -66,6 +67,7 @@ export function HrAppShell() {
       linkComponent={RouterLink}
       headerEnd={
         <>
+          <InstallButton />
           {hrStaff ? <DeskLink href={FLAGS_INBOX_URL} label="Flags" icon={FlagIcon} /> : null}
           <DeskLink href={DESK_URL} label="Desk" icon={LayoutGridIcon} />
         </>

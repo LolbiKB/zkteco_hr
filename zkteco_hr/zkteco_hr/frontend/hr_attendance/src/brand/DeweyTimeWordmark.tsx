@@ -1,19 +1,15 @@
-import { Wordmark } from "./Wordmark";
-
 /**
- * The Dewey Time house mark: monospace "DT" that expands to "Dewey Time" on
- * hover, D in brand green, T in brand orange. Single source of truth for the
- * header logo — keep the words/tint here, not inline in the shell.
+ * The Dewey Time wordtext — static, two-weight, modelled on the ADMS Bridge
+ * house mark: the lead word "Dewey" sits in the foreground, "Time" recedes to
+ * muted. No hover-expand animation. Color identity lives in the dial mark
+ * beside it (DeweyTimeMark), so the text itself stays neutral. The visible
+ * text is the accessible name (AppShell links the lockup to homeHref).
  */
 export function DeweyTimeWordmark() {
   return (
-    <Wordmark
-      words={[
-        ["D", "ewey "],
-        ["T", "ime"],
-      ]}
-      title="Dewey Time"
-      tint={(i) => (i === 0 ? "var(--brand-primary)" : "var(--brand-accent)")}
-    />
+    <span className="text-sm font-semibold tracking-tight select-none">
+      <span className="text-foreground">Dewey</span>{" "}
+      <span className="font-normal text-muted-foreground">Time</span>
+    </span>
   );
 }

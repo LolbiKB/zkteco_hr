@@ -1,0 +1,69 @@
+/* ===========================================================================
+   ADMS Bridge brand motion — the self-drawing Waypoints logo.
+
+   Imported by index.css AFTER brand/tokens.css. Color rides the brand tokens
+   (--primary green identity, --signal-attention orange signal); this file is
+   motion ONLY, no color knobs.
+
+   The whole glyph is one continuous <path> (AdmsBridgeMark). A single linear
+   stroke-dashoffset sweep draws it at constant pen speed — precise dash-draw,
+   one animation, no stutter. Triggered two ways: the intro container carries
+   `.adms-draw`; the header lockup redraws on hover/focus.
+   =========================================================================== */
+:root { --adms-draw-dur: 1.6s; }
+
+/* Dash values are plain lengths in the 24-unit viewBox: 80 ≥ the glyph's real
+   path length (~77.3). We deliberately do NOT use SVG `pathLength` normalization
+   — it makes the dasharray unitless while the CSS minifier emits `…offset:100px`,
+   and that normalized-vs-px mismatch silently breaks the draw. One length unit
+   everywhere = minifier-safe. */
+.adms-glyph {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 80;
+  stroke-dashoffset: 0;            /* resting state = the finished logo */
+}
+.adms-pen {
+  fill: none;
+  stroke: var(--signal-attention);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 2.5 80;         /* short pen-tip + a gap longer than the path */
+  stroke-dashoffset: 80;
+  opacity: 0;                       /* the orange pen-tip, hidden unless drawing */
+}
+
+@keyframes adms-draw { from { stroke-dashoffset: 80; } to { stroke-dashoffset: 0; } }
+@keyframes adms-pen {
+  0%   { stroke-dashoffset: 80; opacity: 0; }
+  6%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes adms-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* draw triggers: the intro container, and the header lockup on hover/focus */
+.adms-draw .adms-glyph,
+.adms-lockup:hover .adms-glyph,
+.adms-lockup:focus-visible .adms-glyph {
+  animation: adms-draw var(--adms-draw-dur) linear both;
+}
+.adms-draw .adms-pen,
+.adms-lockup:hover .adms-pen,
+.adms-lockup:focus-visible .adms-pen {
+  animation: adms-pen var(--adms-draw-dur) linear both;
+}
+
+/* intro wordtext rises once the draw has finished */
+.adms-intro-rise {
+  animation: adms-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--adms-draw-dur) + 0.05s) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adms-glyph { animation: none !important; stroke-dashoffset: 0 !important; }
+  .adms-pen { display: none !important; }
+  .adms-intro-rise { animation: none !important; opacity: 1 !important; transform: none !important; }
+}

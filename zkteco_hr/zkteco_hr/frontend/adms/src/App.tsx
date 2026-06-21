@@ -14,6 +14,7 @@ import { Loader2, LogOut, CalendarCheck, Users as UsersIcon, HardDrive } from 'l
 import { Separator } from '@/components/ui/separator'
 import { AppShell, type ShellNavMode } from '@lolbikb/dewey-ui'
 import { Brandmark } from '@/brand/Brandmark'
+import { AdmsBridgeIntro } from '@/brand/AdmsBridgeIntro'
 import { HeaderConnection } from '@/components/header-connection'
 import { HeaderDeviceStatus } from '@/components/header-device-status'
 import { useRealtimeDevices } from '@/hooks/use-core-data'
@@ -117,6 +118,8 @@ function AppContent() {
 
   return (
     <div className="h-full">
+      {/* Plays once per session on first paint of the signed-in dashboard. */}
+      <AdmsBridgeIntro />
       <AppShell
         navMode={navMode}
         logo={<Brandmark />}

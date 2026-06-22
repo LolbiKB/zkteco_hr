@@ -1,4 +1,5 @@
 from dewey_time.utils.sync_hr_attendance_assets import (
+    ADMS_APP_LOGO,
     ATTENDANCE_APP_LOGO,
     SITE_FAVICON_LOGO,
 )
@@ -24,7 +25,13 @@ add_to_apps_screen = [
         "title": "Dewey Time",
         "logo": ATTENDANCE_APP_LOGO,
         "route": "/hr-attendance",
-    }
+    },
+    {
+        "name": "adms",
+        "title": "ADMS Bridge",
+        "logo": ADMS_APP_LOGO,
+        "route": "/adms",
+    },
 ]
 
 # Website SPA entry (Doppio-style) for ergonomic SPA routing.

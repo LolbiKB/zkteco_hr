@@ -60,12 +60,14 @@ def _remove_dest(dest_dir: str) -> None:
 
 SITE_FAVICON_LOGO = "/assets/dewey_time/images/DI-logo.svg"
 HR_APP_LOGO = "/assets/dewey_time/images/dewey-time.svg"
+ADMS_APP_LOGO = "/assets/dewey_time/images/adms-bridge.svg"
 
-# Site-wide Desk/login favicon (DI) vs Dewey Time app tile / SPA header (attendance).
+# Site-wide Desk/login favicon (DI) vs Dewey Time app tile / SPA header (attendance)
+# vs the ADMS device-admin dashboard (the self-drawing Waypoints bridge mark).
 APP_BRAND_LOGO = SITE_FAVICON_LOGO
 ATTENDANCE_APP_LOGO = HR_APP_LOGO
 
-_BRANDING_FILES = ("DI-logo.svg", "dewey-time.svg")
+_BRANDING_FILES = ("DI-logo.svg", "dewey-time.svg", "adms-bridge.svg")
 
 
 def _branding_assets_ok(base_dir: str) -> bool:
@@ -78,8 +80,15 @@ def _copy_branding_files(src_dir: str, dest_dir: str) -> None:
     os.makedirs(dest_dir, exist_ok=True)
     for name in os.listdir(src_dir):
         src_file = os.path.join(src_dir, name)
-        if os.path.isfile(src_file):
-            shutil.copy2(src_file, os.path.join(dest_dir, name))
+        if not os.path.isfile(src_file):
+            continue
+        dst_file = os.path.join(dest_dir, name)
+        # On Frappe Cloud sites/assets/<app> can be a symlink back to the app's
+        # own public/, so src and dest resolve to the same inode — copy2 would
+        # raise SameFileError and abort `bench migrate`. Skip those.
+        if os.path.realpath(src_file) == os.path.realpath(dst_file):
+            continue
+        shutil.copy2(src_file, dst_file)
 
 
 def sync_app_branding_assets():

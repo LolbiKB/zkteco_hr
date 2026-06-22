@@ -50,7 +50,7 @@ test("attendance-svgrepo icon fully retired", () => {
   assert.ok(!existsSync(resolve(PKG, "public/images/attendance-svgrepo-com.svg")), "old SVG deleted");
 });
 
-test("DI-logo preserved on protected surfaces (Desk / website / adms)", () => {
+test("DI-logo preserved on Desk / website; adms uses its own ADMS Bridge mark", () => {
   const py = readFileSync(resolve(PKG, "../../utils/sync_hr_attendance_assets.py"), "utf8");
   assert.match(py, /_BRANDING_FILES[\s\S]{0,80}DI-logo\.svg/, "_BRANDING_FILES still publishes DI-logo");
   assert.match(py, /SITE_FAVICON_LOGO\s*=\s*"[^"]*DI-logo\.svg"/, "SITE_FAVICON_LOGO is DI-logo");
@@ -60,6 +60,6 @@ test("DI-logo preserved on protected surfaces (Desk / website / adms)", () => {
   assert.match(hooks, /"favicon":\s*SITE_FAVICON_LOGO/, "website favicon uses SITE_FAVICON_LOGO (DI-logo)");
 
   const adms = readFileSync(resolve(PKG, "../../www/adms.html"), "utf8");
-  assert.ok(adms.includes("DI-logo.svg"), "adms keeps DI-logo favicon");
-  assert.ok(!adms.includes("dewey-time.svg"), "adms not repointed to the dial");
+  assert.ok(adms.includes("adms-bridge.svg"), "adms uses its own ADMS Bridge mark");
+  assert.ok(!adms.includes("dewey-time.svg"), "adms not repointed to the HR dial");
 });

@@ -60,7 +60,7 @@ const html = `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/assets/dewey_time/images/DI-logo.svg" />
+    <link rel="icon" type="image/svg+xml" href="/assets/dewey_time/images/adms-bridge.svg" />
     <title>ADMS Dashboard</title>
     <script>
       window.csrf_token = "{{ frappe.session.csrf_token }}";

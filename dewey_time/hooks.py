@@ -41,6 +41,8 @@ website_route_rules = [
     {"from_route": "/hr-attendance", "to_route": "hr-attendance"},
     {"from_route": "/hr-schedule/<path:app_path>", "to_route": "hr-schedule"},
     {"from_route": "/hr-schedule", "to_route": "hr-schedule"},
+    {"from_route": "/home/<path:app_path>", "to_route": "home"},
+    {"from_route": "/home", "to_route": "home"},
 ]
 
 # Ensure dewey_time's custom fields exist on install (and after every upgrade).
@@ -50,6 +52,7 @@ after_install = "dewey_time.setup.custom_fields.make_custom_fields"
 after_migrate = [
     "dewey_time.setup.custom_fields.make_custom_fields",
     "dewey_time.utils.sync_hr_attendance_assets.sync_hr_attendance_assets",
+    "dewey_time.utils.sync_home_assets.sync_home_assets",
     "dewey_time.utils.sync_adms_assets.sync_adms_assets",
     "dewey_time.attendance_engine.dashboard_auth.ensure_adms_roles",
     "dewey_time.webpush.ensure_vapid_keys",

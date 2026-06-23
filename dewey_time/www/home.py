@@ -8,3 +8,9 @@ def get_context(context):
     if frappe.session.user in (None, "", "Guest"):
         frappe.local.flags.redirect_location = "/login?redirect-to=/home"
         raise frappe.Redirect
+
+    csrf_token = frappe.sessions.get_csrf_token()
+    frappe.db.commit()
+
+    context.update({"csrf_token": csrf_token})
+    return context

@@ -40,7 +40,7 @@ export function Launcher() {
 
   const apps = launcher?.apps ?? [];
   return (
-    <Shell user={launcher?.user}>
+    <Shell user={launcher?.user} canManageTiles={launcher?.user?.can_manage_tiles ?? false}>
       <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Your apps</p>
       {apps.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
@@ -90,7 +90,7 @@ function UserAvatar({ user }: { user: LauncherData["user"] }) {
   );
 }
 
-function Shell({ children, user }: { children: React.ReactNode; user?: LauncherData["user"] }) {
+function Shell({ children, user, canManageTiles }: { children: React.ReactNode; user?: LauncherData["user"]; canManageTiles?: boolean }) {
   const { logout } = useFrappeAuth();
 
   const handleLogout = async () => {
@@ -127,6 +127,11 @@ function Shell({ children, user }: { children: React.ReactNode; user?: LauncherD
               <DropdownMenuItem onSelect={() => { window.location.href = "/app/user-profile"; }}>
                 Profile / account
               </DropdownMenuItem>
+              {canManageTiles && (
+                <DropdownMenuItem onSelect={() => { window.location.href = "/home/admin"; }}>
+                  Manage tiles
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={handleLogout}>
                 Log out
               </DropdownMenuItem>

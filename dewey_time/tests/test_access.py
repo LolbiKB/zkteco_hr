@@ -91,6 +91,8 @@ class AccessOverviewTests(unittest.TestCase):
         self.assertTrue(rows["dev@x.com"]["adms"])
         self.assertFalse(rows["dev@x.com"]["desk"])
         self.assertFalse(rows["dev@x.com"]["lands_on_home"])
+        self.assertEqual(rows["maria@x.com"]["roles"], ["HR User"])
+        self.assertEqual(rows["dev@x.com"]["roles"], ["ADMS Admin"])
 
 
 if __name__ == "__main__":

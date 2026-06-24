@@ -104,12 +104,6 @@ export function AdminTiles() {
           </p>
         </div>
         <div className="flex gap-2">
-          <a
-            href="/home"
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            Back
-          </a>
           <Button
             onClick={() =>
               setEditing({

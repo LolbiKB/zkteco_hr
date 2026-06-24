@@ -6,7 +6,15 @@ const LINKS = [
 
 export function AdminNav({ active }: { active: string }) {
   return (
-    <nav className="mb-5 flex gap-1.5">
+    <nav className="mb-5 flex items-center gap-1.5">
+      <a
+        href="/home"
+        className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        aria-label="Back to launcher"
+      >
+        ‹ Launcher
+      </a>
+      <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
       {LINKS.map((l) => (
         <a
           key={l.href}

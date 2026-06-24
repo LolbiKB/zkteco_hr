@@ -25,12 +25,14 @@ def _clear_cache():
     clear_cache()
 
 
+# Built-in pseudo-roles that should never be offered as a landing toggle.
+_PSEUDO_ROLES = {"Administrator", "Guest", "All"}
+
+
 def _assignable_roles():
-    return frappe.get_all(
-        "Role",
-        filters={"disabled": 0, "is_custom": 0},
-        pluck="name",
-    )
+    # Include custom roles (e.g. ADMS Admin) — only drop disabled + pseudo-roles.
+    roles = frappe.get_all("Role", filters={"disabled": 0}, pluck="name")
+    return [r for r in roles if r not in _PSEUDO_ROLES]
 
 
 def _system_users_with_role(role):

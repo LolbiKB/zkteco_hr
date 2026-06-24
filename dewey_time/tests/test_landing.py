@@ -1,6 +1,5 @@
 import json
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from dewey_time.tests.test_closeout import _install_frappe_mock

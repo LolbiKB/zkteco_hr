@@ -18,6 +18,10 @@ website_context = {
     "splash_image": SITE_FAVICON_LOGO,
 }
 
+# Branded /login reskin. Loads on every web page, but every rule is scoped to
+# Frappe's `.for-login` wrapper, so only the login page is restyled.
+web_include_css = ["/assets/dewey_time/css/login_brand.css"]
+
 # Frappe v16 Desktop / Sidebar integration
 add_to_apps_screen = [
     {

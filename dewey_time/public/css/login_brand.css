@@ -86,6 +86,11 @@ main.container:has(.for-login) {
 }
 .for-login img.app-logo {
   height: 140px !important;
+  /* Frappe's login.bundle.css clamps the logo with `.page-card-head img
+     { max-height: 42px }`. `height` alone can't beat a `max-height`, so we
+     must override max-height (and pin min-height) or the logo stays tiny. */
+  max-height: 140px !important;
+  min-height: 140px !important;
   width: auto !important;
   max-width: none !important;
   margin: 0 0 26px !important;
@@ -214,6 +219,8 @@ main.container:has(.for-login) {
   }
   .for-login img.app-logo {
     height: 104px !important;
+    max-height: 104px !important;
+    min-height: 104px !important;
     margin-bottom: 20px !important;
   }
   .for-login .page-card-head h4::after {

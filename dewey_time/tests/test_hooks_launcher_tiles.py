@@ -54,11 +54,26 @@ class HookShapeTests(unittest.TestCase):
             self.assertIn(".", gate, f"{gate} is neither built-in nor dotted")
             self.assertTrue(callable(_resolve(gate)), f"{gate} not callable")
 
-    def test_sync_registered_in_after_migrate(self):
-        self.assertIn(
-            "dewey_time.attendance_engine.launcher_sync.sync_launcher_tiles",
-            hooks.after_migrate,
-        )
+    def test_access_roles_hook_well_formed(self):
+        groups = hooks.dewey_portal_access_roles
+        self.assertIsInstance(groups, list)
+        labels = {g["label"] for g in groups}
+        self.assertIn("HR", labels)
+        self.assertIn("ADMS", labels)
+        for g in groups:
+            self.assertIsInstance(g["roles"], (list, tuple))
+            self.assertTrue(g["roles"])
+
+    def test_access_roles_match_source_constants(self):
+        # The hook's role names are INLINED in hooks.py (importing the source
+        # constants there would poison the module cache for mock tests). Import
+        # them here — under the mock installed at module top — to guard drift.
+        from dewey_time.attendance_engine.dashboard_auth import ALLOWED_ROLES
+        from dewey_time.attendance_engine.hr_calendar import HR_STAFF_ROLES
+
+        by_label = {g["label"]: set(g["roles"]) for g in hooks.dewey_portal_access_roles}
+        self.assertEqual(by_label["HR"], set(HR_STAFF_ROLES))
+        self.assertEqual(by_label["ADMS"], set(ALLOWED_ROLES))
 
 
 if __name__ == "__main__":

@@ -43,6 +43,7 @@ const FIELDS: (keyof LauncherTile)[] = [
   "enabled",
   "is_admin",
   "gate",
+  "source_app",
 ];
 
 export function AdminTiles() {
@@ -57,6 +58,8 @@ export function AdminTiles() {
   const [error, setError] = useState<string | null>(null);
 
   const tiles = useMemo(() => data ?? [], [data]);
+
+  const isManaged = (t: LauncherTile) => !!t.source_app;
 
   async function toggle(t: LauncherTile) {
     setError(null);
@@ -107,7 +110,7 @@ export function AdminTiles() {
           <Button
             onClick={() =>
               setEditing({
-                gate: "hr_or_employee",
+                gate: "roles",
                 enabled: 1,
                 is_admin: 0,
                 tile_order: (tiles.at(-1)?.tile_order ?? 0) + 10,
@@ -148,7 +151,14 @@ export function AdminTiles() {
                 onError={(e) => (e.currentTarget.style.visibility = "hidden")}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{t.title}</p>
+                <p className="truncate text-sm font-medium">
+                  {t.title}
+                  {isManaged(t) && (
+                    <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Managed by {t.source_app}
+                    </span>
+                  )}
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {t.route} · {t.gate}
                   {t.is_admin ? " · admin" : ""}
@@ -178,12 +188,16 @@ export function AdminTiles() {
                   onCheckedChange={() => toggle(t)}
                   aria-label="Enabled"
                 />
-                <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
-                  Edit
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => remove(t)}>
-                  Delete
-                </Button>
+                {!isManaged(t) && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove(t)}>
+                      Delete
+                    </Button>
+                  </>
+                )}
               </div>
             </Card>
           ))}

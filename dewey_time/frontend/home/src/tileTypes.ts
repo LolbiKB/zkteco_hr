@@ -7,8 +7,10 @@ export interface LauncherTile {
   tile_order: number;
   enabled: number; // 0 | 1
   is_admin: number; // 0 | 1
-  gate: "hr_or_employee" | "adms" | "desk" | "roles";
+  gate: string; // built-in name ("desk"/"roles") or a dotted path
+  source_app?: string; // set ⇒ app-managed (code-owned), blank ⇒ hand-made
 }
 
-// All four gates are now selectable; "roles" uses the Visible-to-roles picker.
-export const GATE_OPTIONS: LauncherTile["gate"][] = ["hr_or_employee", "adms", "desk", "roles"];
+// Gates an admin can choose without code. App-registered tiles carry code-owned
+// gates (often dotted paths) and are not editable here.
+export const GATE_OPTIONS: string[] = ["roles", "desk"];

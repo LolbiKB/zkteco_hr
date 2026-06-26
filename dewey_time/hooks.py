@@ -40,6 +40,41 @@ add_to_apps_screen = [
     },
 ]
 
+# Home-launcher registry. Each app contributes tiles here; the after_migrate
+# reconcile (launcher_sync) upserts them into Launcher Tile rows, and
+# get_launcher gates each tile. `gate` is a built-in (desk, roles) or a dotted
+# path to a () -> bool callable the registering app owns. dewey_time registers
+# itself like any other app — including the ADMS bundle it hosts.
+dewey_launcher_tiles = [
+    {
+        "key": "dewey_time",
+        "title": "Dewey Time",
+        "route": "/hr-attendance",
+        "icon": ATTENDANCE_APP_LOGO,
+        "order": 10,
+        "is_admin": False,
+        "gate": "dewey_time.attendance_engine.launcher_gates.can_see_attendance",
+    },
+    {
+        "key": "adms",
+        "title": "ADMS",
+        "route": "/adms",
+        "icon": ADMS_APP_LOGO,
+        "order": 20,
+        "is_admin": True,
+        "gate": "dewey_time.attendance_engine.launcher_gates.can_see_adms",
+    },
+    {
+        "key": "desk",
+        "title": "Frappe Desk",
+        "route": "/desk",
+        "icon": SITE_FAVICON_LOGO,
+        "order": 30,
+        "is_admin": True,
+        "gate": "desk",
+    },
+]
+
 # Website SPA entry (Doppio-style) for ergonomic SPA routing.
 # This lets you open the app at /hr-attendance and have client-side routing work.
 website_route_rules = [
@@ -62,6 +97,7 @@ after_migrate = [
     "dewey_time.utils.sync_adms_assets.sync_adms_assets",
     "dewey_time.attendance_engine.dashboard_auth.ensure_adms_roles",
     "dewey_time.webpush.ensure_vapid_keys",
+    "dewey_time.attendance_engine.launcher_sync.sync_launcher_tiles",
 ]
 
 # Scheduled job: company fallback UNNOTIFIED_ABSENCE (~03:00 per company timezone)

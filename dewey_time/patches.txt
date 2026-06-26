@@ -15,4 +15,3 @@ dewey_time.patches.resync_hr_attendance_assets_v9
 dewey_time.patches.add_adms_admin_role
 dewey_time.patches.cleanup_adms_bridge_desk_artifacts
 dewey_time.patches.cleanup_zkteco_hr_desk_artifacts
-dewey_time.patches.reset_broken_website_theme

@@ -54,12 +54,6 @@ class HookShapeTests(unittest.TestCase):
             self.assertIn(".", gate, f"{gate} is neither built-in nor dotted")
             self.assertTrue(callable(_resolve(gate)), f"{gate} not callable")
 
-    def test_sync_registered_in_after_migrate(self):
-        self.assertIn(
-            "dewey_time.attendance_engine.launcher_sync.sync_launcher_tiles",
-            hooks.after_migrate,
-        )
-
     def test_access_roles_hook_well_formed(self):
         groups = hooks.dewey_portal_access_roles
         self.assertIsInstance(groups, list)

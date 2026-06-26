@@ -4,3 +4,89 @@
 @import "@lolbikb/dewey-ui/theme.css";
 @import "../../hr_attendance/src/brand/tokens.css";
 @source "../node_modules/@lolbikb/dewey-ui/dist";
+
+/* ── /home launcher (Dewey International portal) ──────────────────────────
+   Structural bits that are awkward in Tailwind: the masked DI backdrop, the
+   connected app-grid hairlines (responsive 1↔2 col), the hover accent bar,
+   and the panel scrollbar. Everything else is Tailwind in Launcher.tsx. */
+
+.di-home-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.di-home-backdrop::after {
+  content: "";
+  position: absolute;
+  right: -110px;
+  top: -150px;
+  width: 740px;
+  height: 740px;
+  background: url("/assets/dewey_time/images/DI-logo.svg") no-repeat center / contain;
+  filter: grayscale(0.78) brightness(1.03);
+  opacity: 0.16;
+  -webkit-mask-image: radial-gradient(140% 140% at 100% 0%, #000 0%, rgba(0, 0, 0, 0.72) 52%, transparent 86%);
+  mask-image: radial-gradient(140% 140% at 100% 0%, #000 0%, rgba(0, 0, 0, 0.72) 52%, transparent 86%);
+}
+
+.app-panel {
+  scrollbar-width: thin;
+}
+.app-panel::-webkit-scrollbar {
+  width: 10px;
+}
+.app-panel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid var(--card);
+  border-radius: 999px;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: minmax(104px, auto);
+  /* keep rows at their natural height (top-aligned); leftover panel height
+     becomes scroll headroom instead of stretching a few rows grotesquely. */
+  align-content: start;
+}
+@media (min-width: 768px) {
+  .app-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.app-grid > .app-row {
+  border-top: 1px solid var(--border);
+}
+.app-grid > .app-row:first-child {
+  border-top: none;
+}
+@media (min-width: 768px) {
+  .app-grid > .app-row {
+    border-left: 1px solid var(--border);
+  }
+  .app-grid > .app-row:nth-child(2) {
+    border-top: none;
+  }
+  .app-grid > .app-row:nth-child(odd) {
+    border-left: none;
+  }
+}
+.app-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.18s ease;
+}
+.app-row:hover::before,
+.app-row:focus-visible::before {
+  transform: scaleY(1);
+}

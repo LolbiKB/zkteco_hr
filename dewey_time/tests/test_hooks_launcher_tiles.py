@@ -60,6 +60,16 @@ class HookShapeTests(unittest.TestCase):
             hooks.after_migrate,
         )
 
+    def test_access_roles_hook_well_formed(self):
+        groups = hooks.dewey_portal_access_roles
+        self.assertIsInstance(groups, list)
+        labels = {g["label"] for g in groups}
+        self.assertIn("HR", labels)
+        self.assertIn("ADMS", labels)
+        for g in groups:
+            self.assertIsInstance(g["roles"], (list, tuple))
+            self.assertTrue(g["roles"])
+
 
 if __name__ == "__main__":
     unittest.main()

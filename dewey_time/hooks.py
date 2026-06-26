@@ -4,6 +4,12 @@ from dewey_time.utils.sync_hr_attendance_assets import (
     SITE_FAVICON_LOGO,
 )
 
+# Role sets surfaced in the dewey_portal Access overview (published via the
+# dewey_portal_access_roles hook below — kept here so the role lists stay DRY
+# with their source of truth).
+from dewey_time.attendance_engine.dashboard_auth import ALLOWED_ROLES as _ADMS_ROLES
+from dewey_time.attendance_engine.hr_calendar import HR_STAFF_ROLES as _HR_ROLES
+
 app_name = "dewey_time"
 app_title = "Dewey Time"
 app_publisher = "Dewey Time"
@@ -73,6 +79,14 @@ dewey_launcher_tiles = [
         "is_admin": True,
         "gate": "desk",
     },
+]
+
+# Role groups the dewey_portal Access overview labels users by. The portal
+# aggregates this hook (frappe.get_hooks) so it needs no import of dewey_time's
+# role sets — same publish→aggregate pattern as dewey_launcher_tiles.
+dewey_portal_access_roles = [
+    {"label": "HR", "roles": sorted(_HR_ROLES)},
+    {"label": "ADMS", "roles": sorted(_ADMS_ROLES)},
 ]
 
 # Website SPA entry (Doppio-style) for ergonomic SPA routing.

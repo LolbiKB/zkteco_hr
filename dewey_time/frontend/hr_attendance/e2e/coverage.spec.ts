@@ -25,8 +25,8 @@ test("weekly-hours view groups assigned employees into nearest-30-min buckets", 
 }, testInfo) => {
   await page.goto("/hr-schedule/coverage");
 
-  const toggle = page.getByRole("tablist", { name: "Coverage views" });
-  await toggle.getByRole("tab", { name: /Weekly hours/ }).click();
+  const toggle = page.getByRole("group", { name: "Coverage views" });
+  await toggle.getByRole("button", { name: /Weekly hours/ }).click();
 
   // Buckets, highest first; the unresolvable row collects in a trailing bucket.
   await expect(page.getByText("40h", { exact: true })).toBeVisible();

@@ -25,6 +25,10 @@ from dewey_time.attendance_engine.schedule_resolver import week_pattern_from_ssa
 _CACHE_KEY = "schedule_coverage:v1"
 _CACHE_TTL_SECONDS = 120
 
+# Upper bound on active employees scanned for coverage. Higher than the calendar
+# picker's 500 (this is meant to be an exhaustive roster); `truncated` flags when hit.
+COVERAGE_EMPLOYEE_LIMIT = 2000
+
 # Keys copied verbatim from the calendar employee rows into the coverage payload.
 _EMPLOYEE_FIELDS = ("id", "employee_name", "department", "employment_type", "title", "image")
 
@@ -44,7 +48,7 @@ def _employee_weekly_minutes(employee: str) -> int:
 
 
 def _build_coverage_payload() -> dict:
-    rows = _list_calendar_employee_rows(None, include_all=True)
+    rows = _list_calendar_employee_rows(None, include_all=True, limit=COVERAGE_EMPLOYEE_LIMIT)
 
     unassigned: list[dict] = []
     assigned: list[dict] = []
@@ -62,8 +66,17 @@ def _build_coverage_payload() -> dict:
             "active": len(rows),
             "unassigned": len(unassigned),
             "assigned": len(assigned),
+            # True when the scan hit the cap, so the UI can flag the roster as partial.
+            "truncated": len(rows) >= COVERAGE_EMPLOYEE_LIMIT,
         },
     }
+
+
+def invalidate_coverage_cache(doc=None, method=None):
+    """Drop the cached coverage payload. Wired to Shift Schedule Assignment doc events
+    (after_insert / on_update / on_trash) so applying or clearing a schedule is reflected
+    immediately rather than after the TTL."""
+    frappe.cache().delete_value(_CACHE_KEY)
 
 
 @frappe.whitelist()

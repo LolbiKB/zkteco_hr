@@ -52,11 +52,18 @@ export function ScheduleCoveragePage() {
                 {counts.active} active · {counts.unassigned} need a schedule ·{" "}
                 {counts.assigned} assigned
               </p>
+              {counts.truncated ? (
+                <p className="text-xs text-brand-accent">
+                  Showing the first {counts.active} employees — more exist.
+                </p>
+              ) : null}
             </div>
           </div>
 
+          {/* A view switcher, not document tabs — role=group + aria-pressed avoids the
+              ARIA Tabs keyboard contract (arrow keys / tabpanel) we don't implement. */}
           <div
-            role="tablist"
+            role="group"
             aria-label="Coverage views"
             className="flex w-full gap-1 rounded-lg bg-muted/40 p-1 sm:w-fit"
           >
@@ -67,8 +74,7 @@ export function ScheduleCoveragePage() {
                 <button
                   key={t.key}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
+                  aria-pressed={active}
                   onClick={() => setChosenView(t.key)}
                   className={cn(
                     "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none",
@@ -88,7 +94,7 @@ export function ScheduleCoveragePage() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-8">
-        <div className="mx-auto w-full max-w-4xl">
+        <div className="mx-auto w-full max-w-4xl" aria-live="polite">
           {isLoading ? (
             <p className="py-12 text-center text-sm text-muted-foreground">Loading coverage…</p>
           ) : error ? (

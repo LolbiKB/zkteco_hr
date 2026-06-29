@@ -30,6 +30,8 @@ export type CoverageCounts = {
   active: number;
   unassigned: number;
   assigned: number;
+  /** True when the active-employee scan hit its cap, so the roster is partial. */
+  truncated: boolean;
 };
 
 /** Shape returned by the get_schedule_coverage whitelisted method. */

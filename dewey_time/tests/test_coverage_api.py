@@ -56,7 +56,10 @@ class TestBuildCoveragePayload(unittest.TestCase):
         }
         payload = self._build(rows, patterns)
 
-        self.assertEqual(payload["counts"], {"active": 3, "unassigned": 1, "assigned": 2})
+        self.assertEqual(
+            payload["counts"],
+            {"active": 3, "unassigned": 1, "assigned": 2, "truncated": False},
+        )
         self.assertEqual([e["id"] for e in payload["unassigned"]], ["EMP-002"])
         self.assertEqual(sorted(e["id"] for e in payload["assigned"]), ["EMP-001", "EMP-003"])
 
@@ -88,6 +91,44 @@ class TestBuildCoveragePayload(unittest.TestCase):
         ), patch.object(coverage_api, "week_pattern_from_ssas", side_effect=RuntimeError("boom")):
             payload = coverage_api._build_coverage_payload()
         self.assertEqual(payload["assigned"][0]["weekly_minutes"], 0)
+
+
+class TestInvalidateCoverageCache(unittest.TestCase):
+    def test_invalidate_deletes_the_cache_key(self):
+        import frappe
+
+        from dewey_time.attendance_engine import coverage_api
+
+        frappe.cache.return_value.delete_value.reset_mock()
+        coverage_api.invalidate_coverage_cache()
+        frappe.cache.return_value.delete_value.assert_called_once_with("schedule_coverage:v1")
+
+    def test_invalidate_accepts_doc_event_args(self):
+        from dewey_time.attendance_engine import coverage_api
+
+        # Frappe doc_events call handlers as (doc, method); must not raise.
+        coverage_api.invalidate_coverage_cache(doc=object(), method="on_update")
+
+
+class TestCoverageTruncationFlag(unittest.TestCase):
+    def test_not_truncated_below_the_limit(self):
+        from dewey_time.attendance_engine import coverage_api
+
+        with patch.object(
+            coverage_api, "_list_calendar_employee_rows", return_value=[_row("EMP-1", "A", False)]
+        ), patch.object(coverage_api, "week_pattern_from_ssas", return_value=[]):
+            payload = coverage_api._build_coverage_payload()
+        self.assertFalse(payload["counts"]["truncated"])
+
+    def test_truncated_when_rows_hit_the_limit(self):
+        from dewey_time.attendance_engine import coverage_api
+
+        rows = [_row(f"EMP-{i}", f"E{i}", False) for i in range(3)]
+        with patch.object(coverage_api, "_list_calendar_employee_rows", return_value=rows), patch.object(
+            coverage_api, "week_pattern_from_ssas", return_value=[]
+        ), patch.object(coverage_api, "COVERAGE_EMPLOYEE_LIMIT", 3):
+            payload = coverage_api._build_coverage_payload()
+        self.assertTrue(payload["counts"]["truncated"])
 
 
 if __name__ == "__main__":

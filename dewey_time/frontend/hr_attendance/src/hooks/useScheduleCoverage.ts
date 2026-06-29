@@ -11,7 +11,12 @@ import {
 
 const COVERAGE_METHOD = "dewey_time.attendance_engine.coverage_api.get_schedule_coverage";
 
-const EMPTY_COUNTS: CoverageCounts = { active: 0, unassigned: 0, assigned: 0 };
+const EMPTY_COUNTS: CoverageCounts = {
+  active: 0,
+  unassigned: 0,
+  assigned: 0,
+  truncated: false,
+};
 
 export type ScheduleCoverage = {
   unassigned: CoverageEmployee[];

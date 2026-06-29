@@ -99,7 +99,7 @@ const COVERAGE = {
     { id: "EMP-015", employee_name: "Ivy Chen", department: "Retail", employment_type: "Intern", title: "Trainee", image: null, weekly_minutes: 1200 },
     { id: "EMP-017", employee_name: "Jonas Berg", department: "Warehouse", employment_type: "Full-time", title: "Picker", image: null, weekly_minutes: 0 },
   ],
-  counts: { active: 13, unassigned: 3, assigned: 10 },
+  counts: { active: 13, unassigned: 3, assigned: 10, truncated: false },
 };
 
 export async function stubFrappe(page: Page): Promise<void> {

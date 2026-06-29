@@ -384,7 +384,19 @@ def apply_weekly_schedule(
     confirm = bool(confirm)
 
     plan = build_resolve_plan(employee=employee, week_pattern=pattern)
-    reconcile = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective)
+    if is_edit:
+        reconcile = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective)
+    else:
+        # Fresh setup: nothing to reconcile, and don't touch the SSA-listing path at all.
+        reconcile = {
+            "effective_from": str(effective),
+            "disable_ssas": [],
+            "add_identities": [],
+            "unchanged_identities": [],
+            "add_labels": [],
+            "leaving_labels": [],
+            "affected_assignments": [],
+        }
     edit_changes = bool(
         reconcile.get("disable_ssas")
         or reconcile.get("add_identities")
@@ -407,7 +419,9 @@ def apply_weekly_schedule(
 
     try:
         # Retire leaving schedules + their future assignments FIRST (overlap-safe).
-        reconciled = reconcile_orphan_ssas(employee=employee, plan=plan, effective_from=effective)
+        reconciled = reconcile_orphan_ssas(
+            employee=employee, plan=plan, effective_from=effective, preview=reconcile
+        )
 
         for group in plan.get("groups") or []:
             if group_identity_key(group) in unchanged:

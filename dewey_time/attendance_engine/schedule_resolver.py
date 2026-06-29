@@ -635,8 +635,9 @@ def _future_assignments_for_ssa(*, ssa_name, effective_from):
     return out
 
 
-def reconcile_orphan_ssas(*, employee, plan, effective_from):
-    preview = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective_from)
+def reconcile_orphan_ssas(*, employee, plan, effective_from, preview=None):
+    if preview is None:
+        preview = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective_from)
 
     disabled = []
     trimmed = []

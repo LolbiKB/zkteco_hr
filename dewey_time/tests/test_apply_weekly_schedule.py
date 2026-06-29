@@ -129,5 +129,33 @@ class TestApplyEditPath(unittest.TestCase):
             )
 
 
+    def test_fresh_create_does_not_call_build_reconcile_preview(self):
+        # A fresh setup (no enabled SSAs) must NOT traverse the reconcile / SSA-listing path,
+        # so unpatched fresh-create tests stay isolated from real frappe under `bench run-tests`.
+        import frappe
+        from dewey_time.attendance_engine import schedule_api
+
+        plan = {"groups": [], "needs_create": True, "warnings": []}
+        frappe.session = type("S", (), {"user": "Administrator"})()
+        with patch.object(schedule_api, "_require_hr_role"), patch.object(
+            schedule_api, "_employee_header", return_value=_ctx()
+        ), patch.object(schedule_api, "validate_week_pattern", return_value=[]), patch.object(
+            schedule_api, "resolve_apply_employment_type", return_value=("noop", None)
+        ), patch.object(schedule_api, "employee_has_enabled_ssas", return_value=False), patch.object(
+            schedule_api, "build_resolve_plan", return_value=plan
+        ), patch.object(schedule_api, "build_reconcile_preview") as preview, patch.object(
+            schedule_api, "nowdate", return_value="2026-06-01"
+        ):
+            result = schedule_api.apply_weekly_schedule(
+                employee="EMP-1",
+                week_pattern=VALID_PATTERN,
+                create_shifts_after="2026-07-01",
+                generate_through="",
+                confirm_create=False,
+            )
+        self.assertTrue(result.get("needs_confirm"))  # needs_create drives confirm
+        preview.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

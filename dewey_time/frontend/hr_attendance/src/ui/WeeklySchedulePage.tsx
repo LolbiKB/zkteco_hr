@@ -2,7 +2,7 @@ import { addDays, parseISO } from "date-fns";
 import { CheckIcon, Loader2Icon } from "lucide-react";
 import { useFrappeAuth } from "frappe-react-sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useOutletContext } from "react-router-dom";
+import { Link, Navigate, useNavigate, useOutletContext } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -65,10 +65,7 @@ import { ClearAllSchedulesDialog } from "@/ui/ClearAllSchedulesDialog";
 import { ClearSitePatternsDialog } from "@/ui/ClearSitePatternsDialog";
 import { ClearEmployeeScheduleDialog } from "@/ui/ClearEmployeeScheduleDialog";
 import { ScheduleEmployeePicker } from "@/ui/ScheduleEmployeePicker";
-import {
-  SpreadsheetImportDialog,
-  SpreadsheetImportTrigger,
-} from "@/ui/SpreadsheetImportDialog";
+import { SpreadsheetImportTrigger } from "@/ui/schedule-import/SpreadsheetImportTrigger";
 import { WeekPatternGroupEditor } from "@/ui/WeekPatternGroupEditor";
 import {
   WeeklyScheduleTemplatePickerDialog,
@@ -79,6 +76,7 @@ import type { HrAccessOutletContext } from "@/lib/hrAccess";
 export function WeeklySchedulePage() {
   const { hrStaff, sessionLoading } = useOutletContext<HrAccessOutletContext>();
   const { currentUser, isLoading: authLoading } = useFrappeAuth();
+  const navigate = useNavigate();
 
   const [shiftBlocks, setShiftBlocks] = useState<ShiftBlock[]>([]);
   const [effectiveFrom, setEffectiveFrom] = useState("");
@@ -91,7 +89,6 @@ export function WeeklySchedulePage() {
   >([]);
   const [saveSuccessUrl, setSaveSuccessUrl] = useState<string | null>(null);
   const [templateKey, setTemplateKey] = useState<string>("manual");
-  const [importOpen, setImportOpen] = useState(false);
   const appliedTemplateFingerprint = useRef<string | null>(null);
   const [employeeLoading, setEmployeeLoading] = useState(false);
 
@@ -334,7 +331,7 @@ export function WeeklySchedulePage() {
                       compact
                     />
                     <SpreadsheetImportTrigger
-                      onClick={() => setImportOpen(true)}
+                      onClick={() => navigate("/hr-schedule/import")}
                       className="w-full sm:w-auto"
                     />
                     <ClearEmployeeScheduleDialog
@@ -557,13 +554,6 @@ export function WeeklySchedulePage() {
           ) : null}
         </div>
       </div>
-
-      <SpreadsheetImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        defaultEffectiveFrom={effectiveFrom}
-        onSuccess={() => void refreshContext()}
-      />
 
       <SchedulePlanPreviewDialog
         open={previewOpen}

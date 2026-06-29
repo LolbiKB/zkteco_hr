@@ -92,6 +92,11 @@ export function useImportSchedulePlanSummary(
   const [debouncedKey, setDebouncedKey] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestId = useRef(0);
+  // The fetch effect keys ONLY on the debounced key; the live inputs are read
+  // from this ref so identity churn (buildImportPatternBuckets returns a fresh
+  // array each render) can't bypass the debounce and re-fire resolve calls.
+  const latest = useRef({ buckets, effectiveFrom, call });
+  latest.current = { buckets, effectiveFrom, call };
 
   const bucketKey = useMemo(() => {
     if (!effectiveFrom || !buckets.length) return null;
@@ -111,6 +116,7 @@ export function useImportSchedulePlanSummary(
   }, [bucketKey, debounceMs]);
 
   useEffect(() => {
+    const { buckets, effectiveFrom, call } = latest.current;
     if (!debouncedKey || !effectiveFrom || !buckets.length) {
       setPlans([]);
       setLoading(false);
@@ -154,7 +160,7 @@ export function useImportSchedulePlanSummary(
         if (requestId.current === id) setLoading(false);
       }
     })();
-  }, [debouncedKey, buckets, call, effectiveFrom]);
+  }, [debouncedKey]);
 
   const stats = useMemo(() => collectStats(plans), [plans]);
 

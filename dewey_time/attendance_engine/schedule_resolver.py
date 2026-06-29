@@ -658,8 +658,19 @@ def create_shift_type(profile: dict, *, name: str | None = None) -> str:
         doc.enable_early_exit_marking = 1
     if frappe.db.has_column("Shift Type", "enable_auto_attendance"):
         doc.enable_auto_attendance = 0
-    doc.insert(ignore_permissions=True)
-    return doc.name
+    try:
+        doc.insert(ignore_permissions=True)
+        return doc.name
+    except Exception:
+        # Concurrency: bulk import applies distinct day-patterns in parallel, and the
+        # Shift Type name is keyed on clock hours only (FT_{start}_{end}), so two
+        # patterns sharing hours can both resolve "create" and race on insert. The
+        # loser re-matches and reuses the winner's record instead of failing the
+        # employee — mirrors create_shift_schedule below.
+        rematch = match_shift_type(profile)
+        if rematch.get("action") == "use" and rematch.get("name"):
+            return rematch["name"]
+        raise
 
 
 def create_shift_schedule(

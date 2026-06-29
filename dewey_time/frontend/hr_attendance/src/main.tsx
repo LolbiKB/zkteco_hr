@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./ui/App";
 import { HrAppShell } from "./ui/HrAppShell";
 import { WeeklySchedulePage } from "./ui/WeeklySchedulePage";
+import { ScheduleImportPage } from "./ui/schedule-import/ScheduleImportPage";
 import { DeweyTimeIntro } from "./brand/DeweyTimeIntro";
 import "./index.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route element={<HrAppShell />}>
               <Route path="/hr-attendance" element={<App />} />
               <Route path="/hr-schedule" element={<WeeklySchedulePage />} />
+              <Route path="/hr-schedule/import" element={<ScheduleImportPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/hr-attendance" replace />} />
           </Routes>

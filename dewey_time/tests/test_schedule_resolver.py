@@ -530,5 +530,61 @@ class TestScheduleTemplates(unittest.TestCase):
         self.assertEqual(templates[1]["count"], 1)
 
 
+class TestCreateShiftTypeIdempotency(unittest.TestCase):
+    """Bulk import applies distinct day-patterns in parallel; two that share clock
+    hours both resolve create for the SAME Shift Type (FT_{start}_{end}, hours only).
+    The loser of the insert race must fall back to the existing record, mirroring
+    create_shift_schedule — not propagate a DuplicateEntry that rolls the employee back.
+    """
+
+    PROFILE = {
+        "start_time": "08:00:00",
+        "end_time": "17:00:00",
+        "lunch_start": "12:00:00",
+        "lunch_end": "13:00:00",
+        "grace_minutes": 10,
+    }
+
+    class _RaisingDoc:
+        def __init__(self):
+            self.name = None
+
+        def insert(self, *args, **kwargs):
+            raise Exception("Duplicate entry 'FT_0800_1700' for key 'PRIMARY'")
+
+    def test_duplicate_insert_falls_back_to_existing(self):
+        import frappe
+        from dewey_time.attendance_engine import schedule_resolver
+
+        frappe.db.exists = MagicMock(return_value=False)  # not present at decision time
+        frappe.db.has_column = MagicMock(return_value=False)
+        frappe.new_doc = MagicMock(return_value=self._RaisingDoc())
+
+        with patch.object(
+            schedule_resolver,
+            "match_shift_type",
+            return_value={"action": "use", "name": "FT_0800_1700"},
+        ):
+            name = schedule_resolver.create_shift_type(self.PROFILE)
+
+        self.assertEqual(name, "FT_0800_1700")
+
+    def test_insert_error_without_existing_match_reraises(self):
+        import frappe
+        from dewey_time.attendance_engine import schedule_resolver
+
+        frappe.db.exists = MagicMock(return_value=False)
+        frappe.db.has_column = MagicMock(return_value=False)
+        frappe.new_doc = MagicMock(return_value=self._RaisingDoc())
+
+        with patch.object(
+            schedule_resolver,
+            "match_shift_type",
+            return_value={"action": "create", "proposed_name": "FT_0800_1700"},
+        ):
+            with self.assertRaises(Exception):
+                schedule_resolver.create_shift_type(self.PROFILE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -132,5 +132,74 @@ class TestFutureAssignmentsForSsa(unittest.TestCase):
         self.assertEqual(by_name["SA-FUTURE"]["action"], "inactivate")
 
 
+class TestBuildReconcilePreview(unittest.TestCase):
+    def _plan(self, groups):
+        return {"groups": groups}
+
+    def _group(self, days, profile):
+        return {"days": days, "profile": profile, "shift_type": {}, "shift_schedule": {}}
+
+    def _run(self, current, plan, affected=None):
+        from dewey_time.attendance_engine import schedule_resolver
+
+        affected = affected or []
+        with patch.object(schedule_resolver, "_current_schedule_identities", return_value=current), patch.object(
+            schedule_resolver, "_future_assignments_for_ssa", return_value=affected
+        ):
+            return schedule_resolver.build_reconcile_preview(
+                employee="EMP-1", plan=plan, effective_from=date(2026, 7, 1)
+            )
+
+    def _identity(self, days, profile):
+        from dewey_time.attendance_engine.schedule_resolver import _group_identity, _identity_key
+
+        return _identity_key(_group_identity(days, profile))
+
+    def test_pure_add_when_no_current(self):
+        plan = self._plan([self._group(["Monday"], _profile("09:00:00", "17:00:00"))])
+        out = self._run({}, plan)
+        self.assertEqual(len(out["add_identities"]), 1)
+        self.assertEqual(out["unchanged_identities"], [])
+        self.assertEqual(out["disable_ssas"], [])
+
+    def test_one_day_change_keeps_other_unchanged(self):
+        mon_thu = self._identity(
+            ["Monday", "Tuesday", "Wednesday", "Thursday"], _profile("09:00:00", "17:00:00")
+        )
+        old_fri = self._identity(["Friday"], _profile("09:00:00", "17:00:00"))
+        current = {
+            mon_thu: {"ssa": "SSA-A", "shift_schedule": "PAT_A", "shift_type": "FT", "label": "MON-THU"},
+            old_fri: {"ssa": "SSA-B", "shift_schedule": "PAT_B", "shift_type": "FT", "label": "FRI"},
+        }
+        plan = self._plan(
+            [
+                self._group(["Monday", "Tuesday", "Wednesday", "Thursday"], _profile("09:00:00", "17:00:00")),
+                self._group(["Friday"], _profile("09:00:00", "14:00:00")),  # Friday hours changed
+            ]
+        )
+        out = self._run(current, plan)
+        self.assertIn(mon_thu, out["unchanged_identities"])
+        self.assertEqual([d["name"] for d in out["disable_ssas"]], ["SSA-B"])
+        self.assertEqual(len(out["add_identities"]), 1)  # new Friday only
+
+    def test_grace_only_edit_is_leaving_plus_adding_not_unchanged(self):
+        old = self._identity(["Monday"], _profile("09:00:00", "17:00:00", grace=10))
+        current = {old: {"ssa": "SSA-A", "shift_schedule": "PAT_A", "shift_type": "FT", "label": "MON"}}
+        plan = self._plan([self._group(["Monday"], _profile("09:00:00", "17:00:00", grace=20))])
+        out = self._run(current, plan)
+        self.assertEqual([d["name"] for d in out["disable_ssas"]], ["SSA-A"])
+        self.assertEqual(len(out["add_identities"]), 1)
+        self.assertEqual(out["unchanged_identities"], [])
+
+    def test_noop_when_target_matches_current(self):
+        same = self._identity(["Monday"], _profile("09:00:00", "17:00:00"))
+        current = {same: {"ssa": "SSA-A", "shift_schedule": "PAT_A", "shift_type": "FT", "label": "MON"}}
+        plan = self._plan([self._group(["Monday"], _profile("09:00:00", "17:00:00"))])
+        out = self._run(current, plan)
+        self.assertEqual(out["disable_ssas"], [])
+        self.assertEqual(out["add_identities"], [])
+        self.assertEqual(out["unchanged_identities"], [same])
+
+
 if __name__ == "__main__":
     unittest.main()

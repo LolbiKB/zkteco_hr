@@ -152,6 +152,47 @@ def group_identity_key(group) -> str:
     return _identity_key(_group_identity(group.get("days") or [], group.get("profile") or {}))
 
 
+def _identity_label(days, profile):
+    start = (normalize_time(profile.get("start_time")) or "—")[:5]
+    end = (normalize_time(profile.get("end_time")) or "—")[:5]
+    day_label = compact_days_label(days, profile) if days else "—"
+    return f"{day_label} {start}–{end}"
+
+
+def _current_schedule_identities(employee):
+    """identity_key -> {ssa, shift_schedule, shift_type, label} for each ENABLED SSA."""
+    out = {}
+    for ssa in list_employee_ssas(employee):
+        if not is_ssa_enabled(ssa):
+            continue
+        pat = ssa.get("shift_schedule")
+        if not pat or not frappe.db.exists("Shift Schedule", pat):
+            continue
+        pat_doc = frappe.get_doc("Shift Schedule", pat)
+        if getattr(pat_doc, "docstatus", 0) != 1:
+            continue
+        shift_type_name = pat_doc.shift_type
+        meta = frappe.get_doc("Shift Type", shift_type_name) if shift_type_name else None
+        if not meta:
+            continue
+        profile = {
+            "start_time": normalize_time(meta.start_time),
+            "end_time": normalize_time(meta.end_time),
+            "lunch_start": normalize_time(getattr(meta, "custom_lunch_start", None)),
+            "lunch_end": normalize_time(getattr(meta, "custom_lunch_end", None)),
+            "grace_minutes": int(getattr(meta, "custom_grace_minutes", None) or 0),
+        }
+        days = sorted(_repeat_days_set(pat_doc), key=lambda d: WEEKDAY_TO_INDEX.get(d, 99))
+        key = _identity_key(_group_identity(days, profile))
+        out[key] = {
+            "ssa": ssa.get("name"),
+            "shift_schedule": pat,
+            "shift_type": shift_type_name,
+            "label": _identity_label(days, profile),
+        }
+    return out
+
+
 def group_week_pattern(days: list[dict]) -> list[dict]:
     """Group working days with identical time profiles."""
     groups: list[dict] = []
@@ -488,34 +529,46 @@ def list_employee_ssas(employee: str) -> list[dict]:
     return out
 
 
-def build_reconcile_preview(*, employee: str, plan: dict, effective_from) -> dict:
+def build_reconcile_preview(*, employee, plan, effective_from):
     effective_from = getdate(effective_from)
-    target_pats = target_pat_names(plan)
-    ssas = list_employee_ssas(employee)
+    current = _current_schedule_identities(employee)
 
-    disable_ssas: list[dict] = []
-    affected_assignments: list[dict] = []
+    target_keys = set()
+    target_label_by_key = {}
+    for group in plan.get("groups") or []:
+        key = group_identity_key(group)
+        target_keys.add(key)
+        target_label_by_key[key] = _identity_label(group.get("days") or [], group.get("profile") or {})
 
-    for ssa in ssas:
-        pat = ssa.get("shift_schedule")
-        if not pat or pat in target_pats:
-            continue
-        if not ssa.get("enabled") and (ssa.get("shift_status") or "").lower() == "inactive":
-            continue
+    current_keys = set(current.keys())
+    unchanged_keys = sorted(current_keys & target_keys)
+    add_keys = sorted(target_keys - current_keys)
+    leaving_keys = sorted(current_keys - target_keys)
+
+    disable_ssas = []
+    affected_assignments = []
+    leaving_labels = []
+    for key in leaving_keys:
+        info = current[key]
         disable_ssas.append(
             {
-                "name": ssa.get("name"),
-                "shift_schedule": pat,
-                "shift_type": ssa.get("shift_type"),
+                "name": info.get("ssa"),
+                "shift_schedule": info.get("shift_schedule"),
+                "shift_type": info.get("shift_type"),
             }
         )
+        leaving_labels.append(info.get("label") or info.get("shift_schedule") or "schedule")
         affected_assignments.extend(
-            _future_assignments_for_ssa(ssa_name=ssa.get("name"), effective_from=effective_from)
+            _future_assignments_for_ssa(ssa_name=info.get("ssa"), effective_from=effective_from)
         )
 
     return {
         "effective_from": str(effective_from),
         "disable_ssas": disable_ssas,
+        "add_identities": add_keys,
+        "unchanged_identities": unchanged_keys,
+        "add_labels": [target_label_by_key[k] for k in add_keys],
+        "leaving_labels": leaving_labels,
         "affected_assignments": affected_assignments,
     }
 

@@ -50,6 +50,8 @@ import {
   SchedulePreviewTrigger,
 } from "@/ui/SchedulePlanPreviewDialog";
 import { cn } from "@/lib/utils";
+import { summarizeReconcile } from "@/lib/scheduleEdit";
+import type { ApplyScheduleResult, ReconcilePreview } from "@/types/schedule";
 import {
   isWeeklyScheduleEligible,
   weeklyScheduleIneligibleMessage,
@@ -88,6 +90,9 @@ export function WeeklySchedulePage() {
     Array<{ name: string; doctype: string }>
   >([]);
   const [saveSuccessUrl, setSaveSuccessUrl] = useState<string | null>(null);
+  const [pendingReconcile, setPendingReconcile] = useState<ReconcilePreview | null>(null);
+  const [savedNonce, setSavedNonce] = useState(0);
+  const [lastReconciled, setLastReconciled] = useState<ApplyScheduleResult["reconciled"] | null>(null);
   const [templateKey, setTemplateKey] = useState<string>("manual");
   const appliedTemplateFingerprint = useRef<string | null>(null);
   const [employeeLoading, setEmployeeLoading] = useState(false);
@@ -139,7 +144,7 @@ export function WeeklySchedulePage() {
     setGenerateThrough(context.default_generate_through ?? "");
     setLimitGenerateThrough(false);
     setSaveSuccessUrl(null);
-  }, [context?.employee]);
+  }, [context?.employee, savedNonce]);
 
   const validationIssues = useMemo(() => validateWeekPattern(weekPattern), [weekPattern]);
   const { plan, resolving, resolveError } = useWeeklyScheduleResolve(
@@ -151,9 +156,9 @@ export function WeeklySchedulePage() {
   const { apply, applying, status, clearStatus } = useApplyWeeklySchedule();
   const { templates: dynamicTemplates, isLoading: templatesLoading } = useWeeklyScheduleTemplates(24);
 
-  const canApply = context?.can_apply ?? false;
-  const previewOnly = Boolean(context && !canApply);
-  const scheduleReadOnly = previewOnly;
+  const isEditing = (context?.enabled_ssa_count ?? 0) > 0;
+  const scheduleReadOnly = false;
+  const previewOnly = false;
   const isBootstrapping = employeesLoading && employees.length === 0;
   const isScheduleLoading = contextLoading && !!scheduleEmployeeId;
 
@@ -197,7 +202,7 @@ export function WeeklySchedulePage() {
   async function handleSave(confirmCreate = false) {
     if (!scheduleEmployeeId || !effectiveFrom) return;
     if (limitGenerateThrough && !generateThrough) return;
-    if (validationIssues.length || !canApply) return;
+    if (validationIssues.length) return;
 
     clearStatus();
     const result = await apply({
@@ -228,12 +233,15 @@ export function WeeklySchedulePage() {
         return items;
       });
       setPendingConfirmPlan(creates);
+      setPendingReconcile((result as ApplyScheduleResult).reconcile ?? null);
       setConfirmOpen(true);
       return;
     }
 
     if (result.ok) {
       setSaveSuccessUrl(result.attendance_url ?? `/hr-attendance?employee=${scheduleEmployeeId}`);
+      setSavedNonce((n) => n + 1);
+      setLastReconciled(result.reconciled ?? null);
       void refreshContext();
     }
   }
@@ -268,7 +276,6 @@ export function WeeklySchedulePage() {
 
   const saveDisabled =
     !scheduleEmployeeId ||
-    !canApply ||
     applying ||
     validationIssues.length > 0 ||
     !effectiveFrom ||
@@ -372,19 +379,16 @@ export function WeeklySchedulePage() {
               </Card>
             ) : null}
 
-            {previewOnly ? (
-              <Card className="border-brand-accent/30 bg-muted/40">
-                <CardContent className="py-2.5 text-sm text-foreground">
-                  Active schedule assignments exist — read-only preview. Use{" "}
-                  <strong>Clear schedule data</strong> above or edit in Desk to make changes.
-                </CardContent>
-              </Card>
-            ) : null}
-
             {saveSuccessUrl ? (
               <Card className="border-primary/30 bg-muted/40">
                 <CardContent className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
-                  <span className="text-primary">Schedule saved successfully.</span>
+                  <span className="text-primary">
+                    {lastReconciled &&
+                    (lastReconciled.inactivated_assignments.length ||
+                      lastReconciled.trimmed_assignments.length)
+                      ? `Schedule updated — ${lastReconciled.inactivated_assignments.length} inactivated, ${lastReconciled.trimmed_assignments.length} trimmed.`
+                      : "Schedule saved successfully."}
+                  </span>
                   <Button asChild size="sm" variant="outline">
                     <Link to={saveSuccessUrl}>Open attendance</Link>
                   </Button>
@@ -477,7 +481,7 @@ export function WeeklySchedulePage() {
                     label="Effective from"
                     value={effectiveFrom}
                     onChange={setEffectiveFrom}
-                    disabled={scheduleReadOnly}
+                    min={isEditing ? addDays(new Date(), 1) : undefined}
                   />
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -542,8 +546,8 @@ export function WeeklySchedulePage() {
                         <Loader2Icon className="size-3.5 animate-spin" />
                         Saving
                       </>
-                    ) : previewOnly ? (
-                      "Preview only"
+                    ) : isEditing ? (
+                      "Review changes"
                     ) : (
                       "Save schedule"
                     )}
@@ -583,6 +587,22 @@ export function WeeklySchedulePage() {
               </li>
             ))}
           </ul>
+          {(() => {
+            const summary = summarizeReconcile(pendingReconcile);
+            if (!summary.hasChanges) return null;
+            return (
+              <div className="mt-1 space-y-1 rounded-md border border-border/60 bg-muted/30 p-3">
+                <p className="text-xs font-medium text-foreground">
+                  What changes on {pendingReconcile?.effective_from}
+                </p>
+                <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  {summary.lines.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel

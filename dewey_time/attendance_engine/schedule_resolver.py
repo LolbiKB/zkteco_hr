@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import frappe
@@ -127,6 +128,73 @@ def profile_key(profile: dict) -> tuple:
         normalize_time(profile.get("lunch_end")),
         int(profile.get("grace_minutes") or 0),
     )
+
+
+def _group_identity(days, profile):
+    """Structural identity of a schedule group: ordered weekday names + full time profile.
+    Compared instead of PAT name strings, because PAT/Shift Type names drop grace_minutes and
+    may be non-canonical for the same structure."""
+    ordered = tuple(
+        sorted(
+            (d for d in (days or []) if d in WEEKDAY_TO_INDEX),
+            key=lambda d: WEEKDAY_TO_INDEX[d],
+        )
+    )
+    return (ordered, profile_key(profile or {}))
+
+
+def _identity_key(identity) -> str:
+    days, pkey = identity
+    return json.dumps([list(days), list(pkey)], separators=(",", ":"))
+
+
+def group_identity_key(group) -> str:
+    return _identity_key(_group_identity(group.get("days") or [], group.get("profile") or {}))
+
+
+def _identity_label(days, profile):
+    start = (normalize_time(profile.get("start_time")) or "—")[:5]
+    end = (normalize_time(profile.get("end_time")) or "—")[:5]
+    day_label = compact_days_label(days, profile) if days else "—"
+    return f"{day_label} {start}–{end}"
+
+
+def _current_schedule_identities(employee):
+    """identity_key -> list of {ssa, shift_schedule, shift_type, label} for each ENABLED SSA.
+    A list (not a single dict) so two enabled SSAs that resolve to the SAME structural identity
+    are both retired when that identity is leaving — never silently dropped (last-writer-wins)."""
+    out = {}
+    for ssa in list_employee_ssas(employee):
+        if not is_ssa_enabled(ssa):
+            continue
+        pat = ssa.get("shift_schedule")
+        if not pat or not frappe.db.exists("Shift Schedule", pat):
+            continue
+        pat_doc = frappe.get_doc("Shift Schedule", pat)
+        if getattr(pat_doc, "docstatus", 0) != 1:
+            continue
+        shift_type_name = pat_doc.shift_type
+        meta = frappe.get_doc("Shift Type", shift_type_name) if shift_type_name else None
+        if not meta:
+            continue
+        profile = {
+            "start_time": normalize_time(meta.start_time),
+            "end_time": normalize_time(meta.end_time),
+            "lunch_start": normalize_time(getattr(meta, "custom_lunch_start", None)),
+            "lunch_end": normalize_time(getattr(meta, "custom_lunch_end", None)),
+            "grace_minutes": int(getattr(meta, "custom_grace_minutes", None) or 0),
+        }
+        days = sorted(_repeat_days_set(pat_doc), key=lambda d: WEEKDAY_TO_INDEX.get(d, 99))
+        key = _identity_key(_group_identity(days, profile))
+        out.setdefault(key, []).append(
+            {
+                "ssa": ssa.get("name"),
+                "shift_schedule": pat,
+                "shift_type": shift_type_name,
+                "label": _identity_label(days, profile),
+            }
+        )
+    return out
 
 
 def group_week_pattern(days: list[dict]) -> list[dict]:
@@ -465,52 +533,78 @@ def list_employee_ssas(employee: str) -> list[dict]:
     return out
 
 
-def build_reconcile_preview(*, employee: str, plan: dict, effective_from) -> dict:
+def build_reconcile_preview(*, employee, plan, effective_from):
     effective_from = getdate(effective_from)
-    target_pats = target_pat_names(plan)
-    ssas = list_employee_ssas(employee)
+    current = _current_schedule_identities(employee)
 
-    disable_ssas: list[dict] = []
-    affected_assignments: list[dict] = []
+    target_keys = set()
+    target_label_by_key = {}
+    for group in plan.get("groups") or []:
+        key = group_identity_key(group)
+        target_keys.add(key)
+        target_label_by_key[key] = _identity_label(group.get("days") or [], group.get("profile") or {})
 
-    for ssa in ssas:
-        pat = ssa.get("shift_schedule")
-        if not pat or pat in target_pats:
-            continue
-        if not ssa.get("enabled") and (ssa.get("shift_status") or "").lower() == "inactive":
-            continue
-        disable_ssas.append(
-            {
-                "name": ssa.get("name"),
-                "shift_schedule": pat,
-                "shift_type": ssa.get("shift_type"),
-            }
-        )
-        affected_assignments.extend(
-            _future_assignments_for_shift_type(
-                employee=employee,
-                shift_type=ssa.get("shift_type"),
-                effective_from=effective_from,
+    current_keys = set(current.keys())
+    unchanged_keys = sorted(current_keys & target_keys)
+    add_keys = sorted(target_keys - current_keys)
+    leaving_keys = sorted(current_keys - target_keys)
+
+    disable_ssas = []
+    affected_assignments = []
+    leaving_labels = []
+    for key in leaving_keys:
+        infos = current[key]
+        leaving_labels.append(infos[0].get("label") or infos[0].get("shift_schedule") or "schedule")
+        for info in infos:
+            disable_ssas.append(
+                {
+                    "name": info.get("ssa"),
+                    "shift_schedule": info.get("shift_schedule"),
+                    "shift_type": info.get("shift_type"),
+                }
             )
-        )
+            affected_assignments.extend(
+                _future_assignments_for_ssa(ssa_name=info.get("ssa"), effective_from=effective_from)
+            )
 
     return {
         "effective_from": str(effective_from),
         "disable_ssas": disable_ssas,
+        "add_identities": add_keys,
+        "unchanged_identities": unchanged_keys,
+        "add_labels": [target_label_by_key[k] for k in add_keys],
+        "leaving_labels": leaving_labels,
         "affected_assignments": affected_assignments,
     }
 
 
-def _future_assignments_for_shift_type(*, employee: str, shift_type: str | None, effective_from) -> list[dict]:
-    if not shift_type or not frappe.db.table_exists("Shift Assignment"):
+def _classify_future_assignment(start_date, end_date, effective_from):
+    """Pure: how to retire one assignment relative to the effective date.
+    Returns (action, proposed_end_date). action is 'inactivate' (whole row is on/after E),
+    'end_before' (row straddles E — trim its tail), or None (entirely before E — leave it)."""
+    if not start_date:
+        return None, None
+    if end_date and end_date < effective_from:
+        return None, None
+    if start_date >= effective_from:
+        return "inactivate", None
+    return "end_before", str(effective_from - timedelta(days=1))
+
+
+def _future_assignments_for_ssa(*, ssa_name, effective_from):
+    """Future Active Shift Assignments generated by ONE SSA, classified for retirement.
+    Scoped by the engine's shift_schedule_assignment back-link so a shared Shift Type cannot
+    drag a kept schedule's assignments into retirement."""
+    if not ssa_name or not frappe.db.table_exists("Shift Assignment"):
         return []
+    if not frappe.db.has_column("Shift Assignment", "shift_schedule_assignment"):
+        frappe.throw(
+            "Shift Assignment lacks the shift_schedule_assignment back-link; cannot safely "
+            "scope schedule retirement on this engine version."
+        )
 
     effective_from = getdate(effective_from)
-    filters: dict = {
-        "employee": employee,
-        "shift_type": shift_type,
-        "docstatus": 1,
-    }
+    filters = {"shift_schedule_assignment": ssa_name, "docstatus": 1}
     if frappe.db.has_column("Shift Assignment", "status"):
         filters["status"] = "Active"
 
@@ -521,15 +615,13 @@ def _future_assignments_for_shift_type(*, employee: str, shift_type: str | None,
         order_by="start_date asc",
     ) or []
 
-    out: list[dict] = []
+    out = []
     for row in rows:
         start_date = getdate(row.get("start_date")) if row.get("start_date") else None
         end_date = getdate(row.get("end_date")) if row.get("end_date") else None
-        if not start_date:
+        action, proposed_end_date = _classify_future_assignment(start_date, end_date, effective_from)
+        if action is None:
             continue
-        if end_date and end_date < effective_from:
-            continue
-        action = "cancel" if start_date >= effective_from else "end_before"
         out.append(
             {
                 "name": row.get("name"),
@@ -537,32 +629,28 @@ def _future_assignments_for_shift_type(*, employee: str, shift_type: str | None,
                 "start_date": str(start_date),
                 "end_date": str(end_date) if end_date else None,
                 "action": action,
-                "proposed_end_date": str(add_days(effective_from, -1)) if action == "end_before" else None,
+                "proposed_end_date": proposed_end_date,
             }
         )
     return out
 
 
-def reconcile_orphan_ssas(*, employee: str, plan: dict, effective_from) -> dict:
-    preview = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective_from)
-    effective_from = getdate(effective_from)
+def reconcile_orphan_ssas(*, employee, plan, effective_from, preview=None):
+    if preview is None:
+        preview = build_reconcile_preview(employee=employee, plan=plan, effective_from=effective_from)
 
-    disabled: list[str] = []
-    trimmed: list[str] = []
-    cancelled: list[str] = []
+    disabled = []
+    trimmed = []
+    inactivated = []
 
     for ssa_info in preview.get("disable_ssas") or []:
         ssa_name = ssa_info.get("name")
         if not ssa_name:
             continue
-        doc = frappe.get_doc("Shift Schedule Assignment", ssa_name)
-        if frappe.db.has_column("Shift Schedule Assignment", "enabled"):
-            doc.enabled = 0
-        if frappe.db.has_column("Shift Schedule Assignment", "shift_status"):
-            doc.shift_status = "Inactive"
-        doc.save(ignore_permissions=True)
+        _disable_ssa(ssa_name)
         disabled.append(ssa_name)
 
+    has_status = frappe.db.has_column("Shift Assignment", "status")
     for item in preview.get("affected_assignments") or []:
         name = item.get("name")
         if not name:
@@ -572,15 +660,16 @@ def reconcile_orphan_ssas(*, employee: str, plan: dict, effective_from) -> dict:
             doc.end_date = getdate(item["proposed_end_date"])
             doc.save(ignore_permissions=True)
             trimmed.append(name)
-        elif item.get("action") == "cancel":
-            if doc.docstatus == 1:
-                doc.cancel()
-            cancelled.append(name)
+        elif item.get("action") == "inactivate":
+            if has_status:
+                doc.status = "Inactive"
+                doc.save(ignore_permissions=True)
+            inactivated.append(name)
 
     return {
         "disabled_ssas": disabled,
         "trimmed_assignments": trimmed,
-        "cancelled_assignments": cancelled,
+        "inactivated_assignments": inactivated,
     }
 
 

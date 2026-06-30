@@ -58,12 +58,16 @@ export type ReconcilePreview = {
     shift_schedule: string;
     shift_type?: string | null;
   }>;
+  add_identities: string[];
+  unchanged_identities: string[];
+  add_labels: string[];
+  leaving_labels: string[];
   affected_assignments: Array<{
     name: string;
     shift_type?: string;
     start_date: string;
     end_date?: string | null;
-    action: "cancel" | "end_before";
+    action: "inactivate" | "end_before";
     proposed_end_date?: string | null;
   }>;
 };
@@ -120,6 +124,12 @@ export type ApplyScheduleResult = {
   };
   assignments_generated_through?: string;
   attendance_url?: string;
+  reconcile?: ReconcilePreview;
+  reconciled?: {
+    disabled_ssas: string[];
+    trimmed_assignments: string[];
+    inactivated_assignments: string[];
+  };
 };
 
 export type WeeklyScheduleTemplate = {

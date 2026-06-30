@@ -152,24 +152,43 @@ export async function stubFrappe(page: Page): Promise<void> {
         employee_name: "Jane Doe",
         company: "DIS",
         branch: "BRANCH-A",
-        ssas: [],
-        enabled_ssa_count: 0,
-        can_apply: true,
-        assignment_summary: {},
+        ssas: [{ name: "HR-SHSA-1", shift_schedule: "PAT_MON-FRI", enabled: 1, repeat_days: WEEKDAYS.slice(0, 5), shift_type: "FT_0900_1700" }],
+        enabled_ssa_count: 1,
+        can_apply: false,
+        assignment_summary: { earliest_start_date: "2026-01-01", latest_end_date: "2026-12-31" },
         week_pattern: {
           frequency: "Every Week",
           days: WEEKDAYS.map((w) => ({
             weekday: w,
             works: w !== "Saturday" && w !== "Sunday",
-            start_time: "08:00",
+            start_time: "09:00",
             end_time: "17:00",
             lunch_start: "12:00",
             lunch_end: "13:00",
-            grace_minutes: 0,
+            grace_minutes: 10,
           })),
         },
         default_effective_from: "2026-07-01",
         default_generate_through: "2026-09-29",
+      };
+    } else if (p.includes("resolve_weekly_schedule_plan")) {
+      message = { employee: "EMP-001", groups: [], warnings: [], needs_create: false };
+    } else if (p.includes("apply_weekly_schedule")) {
+      message = {
+        needs_confirm: true,
+        plan: { employee: "EMP-001", groups: [], warnings: [], needs_create: false },
+        reconcile: {
+          effective_from: "2026-07-01",
+          disable_ssas: [{ name: "HR-SHSA-1", shift_schedule: "PAT_MON-FRI", shift_type: "FT_0900_1700" }],
+          add_identities: ["k-new"],
+          unchanged_identities: [],
+          add_labels: ["MON-SAT 09–17"],
+          leaving_labels: ["MON-FRI 09–17"],
+          affected_assignments: [
+            { name: "A1", start_date: "2026-07-05", action: "inactivate" },
+            { name: "A2", start_date: "2026-06-20", action: "end_before", proposed_end_date: "2026-06-30" },
+          ],
+        },
       };
     }
 

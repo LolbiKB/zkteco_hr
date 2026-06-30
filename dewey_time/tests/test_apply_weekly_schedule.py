@@ -44,8 +44,11 @@ class TestApplyEditPath(unittest.TestCase):
         ), patch.object(schedule_api, "create_shift_schedule", return_value="PAT_NEW"), patch.object(
             schedule_api, "upsert_ssa", return_value="SSA-NEW"
         ), patch.object(schedule_api, "generate_shifts_for_ssa") as gen, patch.object(
+            schedule_api, "record_schedule_change", return_value="SCL-1"
+        ) as record, patch.object(
             schedule_api, "shift_generation_end_date", return_value="2026-09-29"
         ):
+            self._record = record
             result = schedule_api.apply_weekly_schedule(
                 employee="EMP-1",
                 week_pattern=VALID_PATTERN,
@@ -155,6 +158,28 @@ class TestApplyEditPath(unittest.TestCase):
             )
         self.assertTrue(result.get("needs_confirm"))  # needs_create drives confirm
         preview.assert_not_called()
+
+
+    def test_confirmed_apply_records_a_change(self):
+        add_group = {
+            "days": ["Monday"],
+            "profile": {"start_time": "09:00:00", "end_time": "17:00:00"},
+            "shift_type": {"action": "use", "name": "FT"},
+            "shift_schedule": {"action": "use", "name": "PAT_USE"},
+        }
+        plan = {"groups": [add_group], "needs_create": False, "warnings": []}
+        reconcile = {
+            "effective_from": "2026-07-01",
+            "disable_ssas": [],
+            "add_identities": ["k1"],
+            "unchanged_identities": [],
+            "add_labels": ["MON 09-17"],
+            "leaving_labels": [],
+            "affected_assignments": [],
+        }
+        result, _, _ = self._apply(enabled=True, plan=plan, reconcile=reconcile, confirm=True)
+        self.assertTrue(result.get("ok"))
+        self._record.assert_called_once()
 
 
 if __name__ == "__main__":

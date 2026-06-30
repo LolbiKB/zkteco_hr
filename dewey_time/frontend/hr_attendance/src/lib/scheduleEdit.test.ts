@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { summarizeReconcile } from "@/lib/scheduleEdit";
+import { summarizeReconcile, reconcileRetiresShifts, confirmNameMatches } from "@/lib/scheduleEdit";
 import type { ReconcilePreview } from "@/types/schedule";
 
 const EMPTY: ReconcilePreview = {
@@ -45,4 +45,39 @@ test("counts inactivated and trimmed with pluralization", () => {
   assert.deepEqual(s.addingLabels, ["SAT 08–12"]);
   assert.ok(s.lines.some((l) => l.includes("2 future shifts inactivated")));
   assert.ok(s.lines.some((l) => l.includes("1 shift trimmed")));
+});
+
+test("reconcileRetiresShifts: true when SSAs are disabled", () => {
+  assert.equal(
+    reconcileRetiresShifts({ ...EMPTY, disable_ssas: [{ name: "S", shift_schedule: "P" }] }),
+    true,
+  );
+});
+
+test("reconcileRetiresShifts: true when assignments are affected", () => {
+  assert.equal(
+    reconcileRetiresShifts({
+      ...EMPTY,
+      affected_assignments: [{ name: "A", start_date: "2026-07-05", action: "inactivate" }],
+    }),
+    true,
+  );
+});
+
+test("reconcileRetiresShifts: false for add-only / empty / null", () => {
+  assert.equal(reconcileRetiresShifts({ ...EMPTY, add_identities: ["k"], add_labels: ["X"] }), false);
+  assert.equal(reconcileRetiresShifts(EMPTY), false);
+  assert.equal(reconcileRetiresShifts(null), false);
+});
+
+test("confirmNameMatches: exact, case-insensitive, trimmed", () => {
+  assert.equal(confirmNameMatches("Jane Doe", "Jane Doe"), true);
+  assert.equal(confirmNameMatches("  jane doe ", "Jane Doe"), true);
+  assert.equal(confirmNameMatches("JANE DOE", "Jane Doe"), true);
+});
+
+test("confirmNameMatches: empty and mismatch are false", () => {
+  assert.equal(confirmNameMatches("", "Jane Doe"), false);
+  assert.equal(confirmNameMatches("Jane", "Jane Doe"), false);
+  assert.equal(confirmNameMatches("Jane Doe", null), false);
 });

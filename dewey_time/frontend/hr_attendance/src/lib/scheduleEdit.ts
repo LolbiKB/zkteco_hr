@@ -44,3 +44,25 @@ export function summarizeReconcile(
 
   return { hasChanges, leavingLabels, addingLabels, inactivatedCount, trimmedCount, lines };
 }
+
+/** True when the edit will retire existing future shifts (disable an SSA or trim/inactivate
+ * an assignment) — the case that warrants a typed confirmation. */
+export function reconcileRetiresShifts(
+  reconcile: ReconcilePreview | null | undefined,
+): boolean {
+  return Boolean(
+    (reconcile?.disable_ssas?.length ?? 0) > 0 ||
+      (reconcile?.affected_assignments?.length ?? 0) > 0,
+  );
+}
+
+/** Trimmed, case-insensitive equality of the typed text against the employee's name.
+ * Empty input never matches. */
+export function confirmNameMatches(
+  typed: string,
+  employeeName: string | null | undefined,
+): boolean {
+  const a = (typed ?? "").trim().toLowerCase();
+  const b = (employeeName ?? "").trim().toLowerCase();
+  return a.length > 0 && a === b;
+}

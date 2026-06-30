@@ -36,6 +36,7 @@ from dewey_time.attendance_engine.schedule_resolver import (
     upsert_ssa,
     week_pattern_from_ssas,
 )
+from dewey_time.attendance_engine.schedule_change_log import record_schedule_change
 
 
 def _parse_json(value, default=None):
@@ -460,6 +461,13 @@ def apply_weekly_schedule(
             generated_any = True
             ssas_out.append({"name": ssa_name, "shift_schedule": pat_name})
 
+        record_schedule_change(
+            employee=employee,
+            effective_from=effective,
+            reconcile=reconcile,
+            created={"shift_types": created_shift_types, "shift_schedules": created_shift_schedules},
+            ssas=ssas_out,
+        )
         frappe.db.commit()
     except frappe.ValidationError as exc:
         frappe.db.rollback()

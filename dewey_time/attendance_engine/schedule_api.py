@@ -1,9 +1,29 @@
 from __future__ import annotations
 
 import json
+import time
 
 import frappe
 from frappe.utils import add_days, getdate, nowdate
+
+# Bulk imports apply several employees at once, so HRMS create_shifts + the shared
+# autoname counter make transient InnoDB deadlocks (1213) / lock-wait timeouts (1205)
+# likely. Each apply is a self-contained transaction that rolls back cleanly, so we
+# retry the whole thing a few times with a short backoff before surfacing the error.
+_MAX_APPLY_LOCK_RETRIES = 4
+_APPLY_RETRY_BACKOFF_SECONDS = 0.1
+
+
+def _is_transient_lock_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "1213" in message
+        or "deadlock" in message
+        or "1205" in message
+        or "lock wait timeout" in message
+        or "try restarting transaction" in message
+    )
+
 
 def _default_effective_from() -> str:
     """July 1st of the current year when today is before it; otherwise tomorrow."""
@@ -412,86 +432,95 @@ def apply_weekly_schedule(
         frappe.db.set_value("Employee", employee, "employment_type", employment_to_set)
         employee_info["employment_type"] = employment_to_set
 
-    created_shift_types: list[str] = []
-    created_shift_schedules: list[str] = []
-    ssas_out: list[dict] = []
     unchanged = set(reconcile.get("unchanged_identities") or [])
-    generated_any = False
 
-    try:
-        # Retire leaving schedules + their future assignments FIRST (overlap-safe).
-        reconciled = reconcile_orphan_ssas(
-            employee=employee, plan=plan, effective_from=effective, preview=reconcile
-        )
+    # The whole apply is one transaction, retried on transient lock errors. Accumulators
+    # are reset each attempt because a rollback undoes everything the prior attempt did.
+    attempt = 0
+    while True:
+        created_shift_types: list[str] = []
+        created_shift_schedules: list[str] = []
+        ssas_out: list[dict] = []
+        generated_any = False
+        try:
+            # Retire leaving schedules + their future assignments FIRST (overlap-safe).
+            reconciled = reconcile_orphan_ssas(
+                employee=employee, plan=plan, effective_from=effective, preview=reconcile
+            )
 
-        for group in plan.get("groups") or []:
-            if group_identity_key(group) in unchanged:
-                continue  # employee already on this schedule — do not regenerate
+            for group in plan.get("groups") or []:
+                if group_identity_key(group) in unchanged:
+                    continue  # employee already on this schedule — do not regenerate
 
-            profile = group.get("profile") or {}
-            shift_type_info = group.get("shift_type") or {}
-            shift_schedule_info = group.get("shift_schedule") or {}
+                profile = group.get("profile") or {}
+                shift_type_info = group.get("shift_type") or {}
+                shift_schedule_info = group.get("shift_schedule") or {}
 
-            shift_type_name = shift_type_info.get("name")
-            if shift_type_info.get("action") == "create":
-                shift_type_name = create_shift_type(profile, name=shift_type_info.get("proposed_name"))
-                created_shift_types.append(shift_type_name)
-            elif not shift_type_name:
-                frappe.throw("Shift Type match failed for a group")
+                shift_type_name = shift_type_info.get("name")
+                if shift_type_info.get("action") == "create":
+                    shift_type_name = create_shift_type(profile, name=shift_type_info.get("proposed_name"))
+                    created_shift_types.append(shift_type_name)
+                elif not shift_type_name:
+                    frappe.throw("Shift Type match failed for a group")
 
-            pat_name = shift_schedule_info.get("name")
-            if shift_schedule_info.get("action") == "create":
-                pat_name = create_shift_schedule(
-                    days=group.get("days") or [],
-                    shift_type=shift_type_name,
-                    profile=profile,
-                    name=shift_schedule_info.get("proposed_name"),
+                pat_name = shift_schedule_info.get("name")
+                if shift_schedule_info.get("action") == "create":
+                    pat_name = create_shift_schedule(
+                        days=group.get("days") or [],
+                        shift_type=shift_type_name,
+                        profile=profile,
+                        name=shift_schedule_info.get("proposed_name"),
+                    )
+                    created_shift_schedules.append(pat_name)
+                elif not pat_name:
+                    frappe.throw("Shift Schedule match failed for a group")
+
+                ssa_name = upsert_ssa(
+                    employee=employee,
+                    shift_schedule=pat_name,
+                    create_shifts_after=effective,
+                    company=employee_info.get("company"),
                 )
-                created_shift_schedules.append(pat_name)
-            elif not pat_name:
-                frappe.throw("Shift Schedule match failed for a group")
+                generate_shifts_for_ssa(ssa_name, effective, generation_end)
+                generated_any = True
+                ssas_out.append({"name": ssa_name, "shift_schedule": pat_name})
 
-            ssa_name = upsert_ssa(
+            record_schedule_change(
                 employee=employee,
-                shift_schedule=pat_name,
-                create_shifts_after=effective,
-                company=employee_info.get("company"),
+                effective_from=effective,
+                reconcile=reconcile,
+                created={"shift_types": created_shift_types, "shift_schedules": created_shift_schedules},
+                ssas=ssas_out,
             )
-            generate_shifts_for_ssa(ssa_name, effective, generation_end)
-            generated_any = True
-            ssas_out.append({"name": ssa_name, "shift_schedule": pat_name})
-
-        record_schedule_change(
-            employee=employee,
-            effective_from=effective,
-            reconcile=reconcile,
-            created={"shift_types": created_shift_types, "shift_schedules": created_shift_schedules},
-            ssas=ssas_out,
-        )
-        frappe.db.commit()
-    except frappe.ValidationError as exc:
-        frappe.db.rollback()
-        message = str(exc)
-        lowered = message.lower()
-        if "overlap" in lowered or "multiple shift" in lowered:
-            frappe.throw(
-                "This schedule change overlaps existing future shifts. Re-open Review and pick "
-                f"a later effective date. ({message})"
-            )
-        if "validate_existing_shift_assignments" in lowered:
-            frappe.throw(
-                "Cannot move the effective date earlier while later assignments exist. "
-                "Pick a later effective date or adjust assignments in Desk."
-            )
-        raise
-    except Exception as exc:
-        frappe.db.rollback()
-        message = str(exc)
-        if "duplicate" in message.lower() or "already exists" in message.lower():
-            frappe.throw(
-                f"Pattern may already exist on site. Re-run Preview and use the existing PAT. ({message})"
-            )
-        raise
+            frappe.db.commit()
+            break
+        except frappe.ValidationError as exc:
+            frappe.db.rollback()
+            message = str(exc)
+            lowered = message.lower()
+            if "overlap" in lowered or "multiple shift" in lowered:
+                frappe.throw(
+                    "This schedule change overlaps existing future shifts. Re-open Review and pick "
+                    f"a later effective date. ({message})"
+                )
+            if "validate_existing_shift_assignments" in lowered:
+                frappe.throw(
+                    "Cannot move the effective date earlier while later assignments exist. "
+                    "Pick a later effective date or adjust assignments in Desk."
+                )
+            raise
+        except Exception as exc:
+            frappe.db.rollback()
+            if _is_transient_lock_error(exc) and attempt < _MAX_APPLY_LOCK_RETRIES:
+                attempt += 1
+                time.sleep(_APPLY_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            message = str(exc)
+            if "duplicate" in message.lower() or "already exists" in message.lower():
+                frappe.throw(
+                    f"Pattern may already exist on site. Re-run Preview and use the existing PAT. ({message})"
+                )
+            raise
 
     return {
         "ok": True,

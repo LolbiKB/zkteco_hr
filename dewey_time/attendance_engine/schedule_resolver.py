@@ -1039,6 +1039,66 @@ def _sample_names(names: list[str], cap: int = _CLEAR_SAMPLE_CAP) -> list[str]:
     return list(names[:cap])
 
 
+def _raw_delete_row(doctype: str, name: str) -> None:
+    """Last-resort removal: raw SQL delete of a row + its child-table rows.
+
+    Bypasses every controller hook (on_trash / on_cancel), link check, permission
+    check, and docstatus guard. For a prelaunch wipe the only thing that matters is
+    that the row is gone; HRMS validation side effects are irrelevant.
+    """
+    try:
+        for df in frappe.get_meta(doctype).get_table_fields():
+            frappe.db.delete(df.options, {"parent": name, "parenttype": doctype})
+    except Exception:
+        # No child tables / meta unavailable — parent delete below still runs.
+        pass
+    frappe.db.delete(doctype, {"name": name})
+
+
+def _force_delete(doctype: str, name: str) -> None:
+    """Guaranteed removal of a single row, escalating through three tiers.
+
+    1. Graceful ORM delete (runs on_trash + link checks — cleanest when it works).
+    2. ORM delete skipping on_trash / permanent (defeats HRMS cancel/link guards).
+    3. Raw SQL delete (defeats everything).
+
+    This is why the wipe can now promise an empty end-state regardless of which
+    HRMS validation would otherwise block a submitted / linked document.
+    """
+    try:
+        frappe.delete_doc(doctype, name, force=1, ignore_permissions=True)
+        return
+    except Exception:
+        pass
+    try:
+        frappe.delete_doc(
+            doctype,
+            name,
+            force=1,
+            ignore_permissions=True,
+            ignore_on_trash=True,
+            delete_permanently=True,
+        )
+        return
+    except Exception:
+        pass
+    _raw_delete_row(doctype, name)
+
+
+def _cancel_if_submitted(doc) -> bool:
+    """Best-effort cancel of a submitted doc. Never raises — `_force_delete`
+    removes the row afterwards even if HRMS `on_cancel` refuses. Returns True
+    when a cancel was actually performed."""
+    if getattr(doc, "docstatus", 0) != 1:
+        return False
+    try:
+        doc.flags.ignore_permissions = True
+        doc.cancel()
+        return True
+    except Exception:
+        return False
+
+
 def preview_clear_employee_schedule(employee: str) -> dict:
     """Dev: counts of SSA, SA, and Attendance Flag rows for an employee."""
     assignment_names = _list_employee_shift_assignment_names(employee)
@@ -1096,7 +1156,7 @@ def _clear_hrms_blockers_for_shift_assignment(doc) -> None:
             pluck="name",
         )
         for checkin_name in checkins:
-            frappe.delete_doc("Employee Checkin", checkin_name, force=1, ignore_permissions=True)
+            _force_delete("Employee Checkin", checkin_name)
 
     if frappe.db.table_exists("Attendance"):
         attendance_names = frappe.get_all(
@@ -1106,39 +1166,25 @@ def _clear_hrms_blockers_for_shift_assignment(doc) -> None:
         )
         for attendance_name in attendance_names:
             attendance = frappe.get_doc("Attendance", attendance_name)
-            if attendance.docstatus == 1:
-                attendance.flags.ignore_permissions = True
-                attendance.cancel()
-            frappe.delete_doc("Attendance", attendance_name, force=1, ignore_permissions=True)
+            _cancel_if_submitted(attendance)
+            _force_delete("Attendance", attendance_name)
 
 
 def _delete_shift_assignment(name: str) -> tuple[str | None, str]:
-    """Returns (cancelled_name or None, deleted_name)."""
+    """Returns (cancelled_name or None, deleted_name). Guaranteed to remove the row."""
     doc = frappe.get_doc("Shift Assignment", name)
     _clear_hrms_blockers_for_shift_assignment(doc)
-    cancelled = None
-    if doc.docstatus == 1:
-        doc.flags.ignore_permissions = True
-        doc.cancel()
-        cancelled = name
-    frappe.delete_doc("Shift Assignment", name, force=1, ignore_permissions=True)
+    cancelled = name if _cancel_if_submitted(doc) else None
+    _force_delete("Shift Assignment", name)
     return cancelled, name
 
 
 def _delete_ssa(ssa_name: str) -> tuple[str | None, str | None]:
-    """Returns (deleted_name, disabled_name) — at most one set."""
-    try:
-        frappe.delete_doc("Shift Schedule Assignment", ssa_name, force=1, ignore_permissions=True)
-        return ssa_name, None
-    except frappe.LinkExistsError:
-        _disable_ssa(ssa_name)
-        return None, ssa_name
-    except Exception as exc:
-        message = str(exc).lower()
-        if "link" in message or "linked" in message:
-            _disable_ssa(ssa_name)
-            return None, ssa_name
-        raise
+    """Returns (deleted_name, disabled_name). Force-removes the SSA — a Desk link
+    no longer downgrades to disable-only, because `_force_delete` falls back to raw
+    SQL that link checks can't block."""
+    _force_delete("Shift Schedule Assignment", ssa_name)
+    return ssa_name, None
 
 
 def clear_employee_schedule(employee: str) -> dict:
@@ -1150,34 +1196,48 @@ def clear_employee_schedule(employee: str) -> dict:
     deleted_assignments: list[str] = []
     deleted_ssas: list[str] = []
     disabled_ssas: list[str] = []
+    errors: list[dict] = []
 
+    # Each row is removed independently: one row that somehow resists removal must
+    # not abort the rest of the employee's cleanup or zero out the real deletions.
     for name in _list_employee_shift_assignment_names(employee):
-        cancelled, deleted = _delete_shift_assignment(name)
-        if cancelled:
-            cancelled_assignments.append(cancelled)
-        deleted_assignments.append(deleted)
+        try:
+            cancelled, deleted = _delete_shift_assignment(name)
+            if cancelled:
+                cancelled_assignments.append(cancelled)
+            deleted_assignments.append(deleted)
+        except Exception as exc:
+            errors.append({"doctype": "Shift Assignment", "name": name, "error": str(exc)})
 
     for ssa_name in _list_employee_ssa_names(employee):
-        deleted, disabled = _delete_ssa(ssa_name)
-        if deleted:
-            deleted_ssas.append(deleted)
-        if disabled:
-            disabled_ssas.append(disabled)
+        try:
+            deleted, disabled = _delete_ssa(ssa_name)
+            if deleted:
+                deleted_ssas.append(deleted)
+            if disabled:
+                disabled_ssas.append(disabled)
+        except Exception as exc:
+            errors.append({"doctype": "Shift Schedule Assignment", "name": ssa_name, "error": str(exc)})
 
     deleted_flags = 0
     if frappe.db.table_exists("Attendance Flag"):
-        deleted_flags = _count_attendance_flags(employee)
-        if deleted_flags:
-            frappe.db.delete("Attendance Flag", {"employee": employee})
+        try:
+            deleted_flags = _count_attendance_flags(employee)
+            if deleted_flags:
+                frappe.db.delete("Attendance Flag", {"employee": employee})
+        except Exception as exc:
+            errors.append({"doctype": "Attendance Flag", "name": employee, "error": str(exc)})
+            deleted_flags = 0
 
     return {
-        "ok": True,
+        "ok": not errors,
         "employee": employee,
         "cancelled_assignments": cancelled_assignments,
         "deleted_assignments": deleted_assignments,
         "deleted_ssas": deleted_ssas,
         "disabled_ssas": disabled_ssas,
         "deleted_flags": deleted_flags,
+        "errors": errors,
     }
 
 
@@ -1242,14 +1302,23 @@ def clear_all_employee_schedules(*, include_all_active: bool = False) -> dict:
     for employee in employees:
         try:
             result = clear_employee_schedule(employee)
-            cleared_employees.append(employee)
-            totals["cancelled_assignments"] += len(result.get("cancelled_assignments") or [])
-            totals["deleted_assignments"] += len(result.get("deleted_assignments") or [])
-            totals["deleted_ssas"] += len(result.get("deleted_ssas") or [])
-            totals["disabled_ssas"] += len(result.get("disabled_ssas") or [])
-            totals["deleted_flags"] += int(result.get("deleted_flags") or 0)
         except Exception as exc:
+            # clear_employee_schedule swallows per-row errors, so this only fires on
+            # a hard failure (e.g. listing rows) — count it, keep going.
             errors.append({"employee": employee, "error": str(exc)})
+            continue
+
+        # Always bank what was actually removed, even for a partially-failed employee.
+        totals["cancelled_assignments"] += len(result.get("cancelled_assignments") or [])
+        totals["deleted_assignments"] += len(result.get("deleted_assignments") or [])
+        totals["deleted_ssas"] += len(result.get("deleted_ssas") or [])
+        totals["disabled_ssas"] += len(result.get("disabled_ssas") or [])
+        totals["deleted_flags"] += int(result.get("deleted_flags") or 0)
+
+        if result.get("ok"):
+            cleared_employees.append(employee)
+        else:
+            errors.append({"employee": employee, "errors": result.get("errors")})
 
     return {
         "ok": not errors,
@@ -1268,16 +1337,41 @@ CLEAR_SITE_PATTERNS_CONFIRM_PHRASE = "CLEAR SITE PATTERNS"
 
 def _delete_shift_schedule(name: str) -> str:
     doc = frappe.get_doc("Shift Schedule", name)
-    if doc.docstatus == 1:
-        doc.flags.ignore_permissions = True
-        doc.cancel()
-    frappe.delete_doc("Shift Schedule", name, force=1, ignore_permissions=True)
+    _cancel_if_submitted(doc)
+    _force_delete("Shift Schedule", name)
     return name
 
 
 def _delete_shift_type(name: str) -> str:
-    frappe.delete_doc("Shift Type", name, force=1, ignore_permissions=True)
+    _force_delete("Shift Type", name)
     return name
+
+
+# Tables the site wipe must leave empty, in dependency order (links before masters).
+# Employee Checkin / Attendance are intentionally excluded — punches are device data
+# the flag engine re-derives from, so a schedule wipe keeps them.
+_SITE_WIPE_TABLES = (
+    "Attendance Flag",
+    "Shift Assignment",
+    "Shift Schedule Assignment",
+    "Shift Schedule",
+    "Shift Type",
+)
+
+
+def _table_count(doctype: str) -> int:
+    return frappe.db.count(doctype) if frappe.db.table_exists(doctype) else 0
+
+
+def _hard_purge_residual(doctype: str) -> int:
+    """Raw-remove any rows still present after the graceful passes. Returns the
+    number of leftover rows it force-deleted (0 == graceful passes were complete)."""
+    if not frappe.db.table_exists(doctype):
+        return 0
+    remaining = frappe.get_all(doctype, pluck="name") or []
+    for name in remaining:
+        _force_delete(doctype, name)
+    return len(remaining)
 
 
 def _sweep_remaining_shift_links() -> dict:
@@ -1386,6 +1480,13 @@ def clear_site_schedule_patterns(*, clear_employee_data: bool = True) -> dict:
             except Exception as exc:
                 shift_type_errors.append({"name": name, "error": str(exc)})
 
+    # Backstop: raw-purge anything the graceful passes left behind, then read the
+    # real table counts. verified_empty is the single source of truth the caller
+    # can trust — not an inference from per-row bookkeeping.
+    residual_purged = {dt: _hard_purge_residual(dt) for dt in _SITE_WIPE_TABLES}
+    remaining_counts = {dt: _table_count(dt) for dt in _SITE_WIPE_TABLES}
+    verified_empty = all(count == 0 for count in remaining_counts.values())
+
     error_count = (
         len(sweep.get("assignment_errors") or [])
         + len(sweep.get("ssa_errors") or [])
@@ -1395,7 +1496,7 @@ def clear_site_schedule_patterns(*, clear_employee_data: bool = True) -> dict:
     )
 
     return {
-        "ok": error_count == 0,
+        "ok": verified_empty,
         "clear_employee_data": clear_employee_data,
         "employee_clear": employee_clear,
         "sweep": sweep,
@@ -1404,4 +1505,7 @@ def clear_site_schedule_patterns(*, clear_employee_data: bool = True) -> dict:
         "shift_schedule_errors": shift_schedule_errors[:_CLEAR_SAMPLE_CAP],
         "shift_type_errors": shift_type_errors[:_CLEAR_SAMPLE_CAP],
         "error_count": error_count,
+        "residual_purged": residual_purged,
+        "remaining_counts": remaining_counts,
+        "verified_empty": verified_empty,
     }

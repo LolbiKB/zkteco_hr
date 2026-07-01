@@ -137,13 +137,17 @@ class TestClearEmployeeSchedule(unittest.TestCase):
         return_value=[],
     )
     @patch("dewey_time.attendance_engine.schedule_resolver._disable_ssa")
-    def test_clear_ssa_delete_link_error_disables(self, disable_ssa, _sas, _ssas, _flags):
+    def test_clear_ssa_link_error_still_force_deletes(self, disable_ssa, _sas, _ssas, _flags):
+        """A Desk link used to downgrade the SSA to disable-only. It must now be
+        force-removed via the raw-SQL fallback so the wipe leaves nothing behind."""
         from dewey_time.attendance_engine.schedule_resolver import clear_employee_schedule
 
         frappe.get_all = MagicMock(return_value=[])
         frappe.db.table_exists = MagicMock(return_value=True)
+        frappe.db.delete = MagicMock()
 
-        def delete_side_effect(doctype, name, force=1, ignore_permissions=False):
+        def delete_side_effect(doctype, name, *args, **kwargs):
+            # ORM refuses at every tier — only the raw fallback can remove it.
             if doctype == "Shift Schedule Assignment":
                 raise frappe.LinkExistsError("linked")
 
@@ -151,9 +155,33 @@ class TestClearEmployeeSchedule(unittest.TestCase):
 
         result = clear_employee_schedule("DI-1138")
 
-        disable_ssa.assert_called_once_with("SSA-B")
-        self.assertEqual(result["disabled_ssas"], ["SSA-B"])
-        self.assertEqual(result["deleted_ssas"], [])
+        disable_ssa.assert_not_called()
+        self.assertEqual(result["deleted_ssas"], ["SSA-B"])
+        self.assertEqual(result["disabled_ssas"], [])
+        frappe.db.delete.assert_any_call("Shift Schedule Assignment", {"name": "SSA-B"})
+
+    @patch("dewey_time.attendance_engine.schedule_resolver._count_attendance_flags", return_value=0)
+    @patch(
+        "dewey_time.attendance_engine.schedule_resolver._list_employee_ssa_names",
+        return_value=[],
+    )
+    @patch(
+        "dewey_time.attendance_engine.schedule_resolver._list_employee_shift_assignment_names",
+        return_value=["SA-1", "SA-2"],
+    )
+    @patch("dewey_time.attendance_engine.schedule_resolver._delete_shift_assignment")
+    def test_one_bad_row_does_not_abort_the_rest(self, del_sa, _sas, _ssas, _flags):
+        """A single row that resists removal is recorded as an error but the
+        remaining rows are still deleted — the clear never aborts mid-employee."""
+        from dewey_time.attendance_engine.schedule_resolver import clear_employee_schedule
+
+        del_sa.side_effect = [Exception("stuck"), (None, "SA-2")]
+
+        result = clear_employee_schedule("DI-1138")
+
+        self.assertEqual(result["deleted_assignments"], ["SA-2"])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errors"][0]["name"], "SA-1")
 
 
 class TestClearEmployeeSchedulePermissionBypass(unittest.TestCase):
@@ -320,6 +348,35 @@ class TestClearAllEmployeeSchedules(unittest.TestCase):
         self.assertEqual(result["error_count"], 1)
         self.assertEqual(result["errors"][0]["employee"], "E-2")
 
+    @patch("dewey_time.attendance_engine.schedule_resolver._employees_for_schedule_clear")
+    @patch("dewey_time.attendance_engine.schedule_resolver.clear_employee_schedule")
+    def test_clear_all_banks_partial_deletions(self, clear_fn, list_fn):
+        """Regression for the '0 processed / N failed / but data is gone' report:
+        an employee that partially failed must still contribute its real deletions
+        to the totals, not be counted as a zero-deletion failure."""
+        from dewey_time.attendance_engine.schedule_resolver import clear_all_employee_schedules
+
+        list_fn.return_value = ["E-1"]
+        clear_fn.return_value = {
+            "ok": False,
+            "employee": "E-1",
+            "cancelled_assignments": [],
+            "deleted_assignments": ["SA-1", "SA-2"],
+            "deleted_ssas": ["SSA-1"],
+            "disabled_ssas": [],
+            "deleted_flags": 4,
+            "errors": [{"doctype": "Shift Assignment", "name": "SA-3", "error": "boom"}],
+        }
+
+        result = clear_all_employee_schedules()
+
+        self.assertEqual(result["deleted_assignments"], 2)
+        self.assertEqual(result["deleted_ssas"], 1)
+        self.assertEqual(result["deleted_flags"], 4)
+        self.assertEqual(result["cleared_count"], 0)
+        self.assertEqual(result["error_count"], 1)
+        self.assertFalse(result["ok"])
+
 
 class TestClearAllEmployeeSchedulesApi(unittest.TestCase):
     def setUp(self):
@@ -386,12 +443,13 @@ class TestClearSiteSchedulePatterns(unittest.TestCase):
         self.assertEqual(result["sample_shift_schedules"], ["PAT-1", "PAT-2"])
         employee_preview.assert_called_once()
 
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.count", return_value=0)
     @patch("dewey_time.attendance_engine.schedule_resolver._delete_shift_type")
     @patch("dewey_time.attendance_engine.schedule_resolver._delete_shift_schedule")
     @patch("dewey_time.attendance_engine.schedule_resolver._sweep_remaining_shift_links")
     @patch("dewey_time.attendance_engine.schedule_resolver.clear_all_employee_schedules")
     def test_clear_deletes_patterns_after_employee_clear(
-        self, clear_all, sweep, delete_schedule, delete_type
+        self, clear_all, sweep, delete_schedule, delete_type, _count
     ):
         from dewey_time.attendance_engine.schedule_resolver import clear_site_schedule_patterns
 
@@ -421,8 +479,38 @@ class TestClearSiteSchedulePatterns(unittest.TestCase):
         delete_schedule.assert_called_once_with("PAT-A")
         delete_type.assert_called_once_with("FT-A")
         self.assertTrue(result["ok"])
+        self.assertTrue(result["verified_empty"])
+        self.assertEqual(result["remaining_counts"]["Shift Type"], 0)
         self.assertEqual(result["deleted_shift_schedules"], ["PAT-A"])
         self.assertEqual(result["deleted_shift_types"], ["FT-A"])
+
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.count", return_value=4)
+    @patch("dewey_time.attendance_engine.schedule_resolver._delete_shift_type")
+    @patch("dewey_time.attendance_engine.schedule_resolver._delete_shift_schedule")
+    @patch("dewey_time.attendance_engine.schedule_resolver._sweep_remaining_shift_links")
+    @patch("dewey_time.attendance_engine.schedule_resolver.clear_all_employee_schedules")
+    def test_clear_not_ok_when_rows_remain(
+        self, clear_all, sweep, delete_schedule, delete_type, _count
+    ):
+        """verified_empty (and ok) must be False whenever a table still has rows,
+        even if every per-row delete reported success."""
+        from dewey_time.attendance_engine.schedule_resolver import clear_site_schedule_patterns
+
+        clear_all.return_value = {"ok": True, "cleared_count": 1, "error_count": 0}
+        sweep.return_value = {
+            "deleted_assignments": [],
+            "assignment_errors": [],
+            "deleted_ssas": [],
+            "disabled_ssas": [],
+            "ssa_errors": [],
+        }
+        frappe.get_all.side_effect = lambda doctype, **kwargs: []
+
+        result = clear_site_schedule_patterns(clear_employee_data=True)
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["verified_empty"])
+        self.assertEqual(result["remaining_counts"]["Shift Type"], 4)
 
 
 class TestClearSiteSchedulePatternsApi(unittest.TestCase):

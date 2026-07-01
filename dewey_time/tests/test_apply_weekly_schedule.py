@@ -5,6 +5,12 @@ from dewey_time.tests.test_closeout import _install_frappe_mock
 
 _install_frappe_mock()
 
+import frappe  # noqa: E402
+
+# The mock frappe is a MagicMock, so `except frappe.ValidationError` would try to
+# catch a non-class. Make it a real exception type (matches production semantics).
+frappe.ValidationError = type("ValidationError", (Exception,), {})
+
 VALID_PATTERN = {
     "frequency": "Every Week",
     "days": [{"weekday": "Monday", "works": True, "start_time": "09:00:00", "end_time": "17:00:00"}],
@@ -180,6 +186,89 @@ class TestApplyEditPath(unittest.TestCase):
         result, _, _ = self._apply(enabled=True, plan=plan, reconcile=reconcile, confirm=True)
         self.assertTrue(result.get("ok"))
         self._record.assert_called_once()
+
+
+class TestApplyDeadlockRetry(unittest.TestCase):
+    """Bulk import applies employees concurrently → transient InnoDB deadlocks (1213).
+    The apply must retry its own transaction rather than surface the raw DB error."""
+
+    def _run(self, gen_side_effect):
+        import frappe
+        from dewey_time.attendance_engine import schedule_api
+
+        add_group = {
+            "days": ["Monday"],
+            "profile": {"start_time": "09:00:00", "end_time": "17:00:00"},
+            "shift_type": {"action": "use", "name": "FT"},
+            "shift_schedule": {"action": "use", "name": "PAT_USE"},
+        }
+        plan = {"groups": [add_group], "needs_create": False, "warnings": []}
+        reconcile = {
+            "effective_from": "2026-07-01",
+            "disable_ssas": [],
+            "add_identities": ["k1"],
+            "unchanged_identities": [],
+            "add_labels": ["MON 09-17"],
+            "leaving_labels": [],
+            "affected_assignments": [],
+        }
+
+        frappe.session = type("S", (), {"user": "Administrator"})()
+        frappe.db.rollback.reset_mock()
+        frappe.db.commit.reset_mock()
+        with patch.object(schedule_api, "_require_hr_role"), patch.object(
+            schedule_api, "_employee_header", return_value=_ctx()
+        ), patch.object(schedule_api, "validate_week_pattern", return_value=[]), patch.object(
+            schedule_api, "resolve_apply_employment_type", return_value=("noop", None)
+        ), patch.object(schedule_api, "employee_has_enabled_ssas", return_value=True), patch.object(
+            schedule_api, "build_resolve_plan", return_value=plan
+        ), patch.object(schedule_api, "build_reconcile_preview", return_value=reconcile), patch.object(
+            schedule_api,
+            "reconcile_orphan_ssas",
+            return_value={"disabled_ssas": [], "trimmed_assignments": [], "inactivated_assignments": []},
+        ), patch.object(schedule_api, "nowdate", return_value="2026-06-01"), patch.object(
+            schedule_api, "upsert_ssa", return_value="SSA-NEW"
+        ), patch.object(
+            schedule_api, "generate_shifts_for_ssa", side_effect=gen_side_effect
+        ) as gen, patch.object(
+            schedule_api, "record_schedule_change", return_value="SCL-1"
+        ), patch.object(
+            schedule_api, "shift_generation_end_date", return_value="2026-09-29"
+        ), patch.object(schedule_api.time, "sleep") as sleep:
+            result = schedule_api.apply_weekly_schedule(
+                employee="EMP-1",
+                week_pattern=VALID_PATTERN,
+                create_shifts_after="2026-07-01",
+                confirm_create=True,
+            )
+        return result, gen, sleep
+
+    def test_retries_deadlock_then_succeeds(self):
+        import frappe
+
+        deadlock = Exception(
+            "(1213, 'Deadlock found when trying to get lock; try restarting transaction')"
+        )
+        result, gen, sleep = self._run([deadlock, None])
+
+        self.assertTrue(result.get("ok"))
+        self.assertEqual(gen.call_count, 2)  # failed once, retried, succeeded
+        sleep.assert_called_once()
+        frappe.db.rollback.assert_called_once()
+        frappe.db.commit.assert_called_once()
+
+    def test_gives_up_after_max_retries(self):
+        from dewey_time.attendance_engine import schedule_api
+
+        deadlock = Exception("1213 deadlock; try restarting transaction")
+        # Always deadlocks → exhausts retries and re-raises.
+        with self.assertRaises(Exception):
+            self._run([deadlock] * (schedule_api._MAX_APPLY_LOCK_RETRIES + 5))
+
+    def test_non_lock_error_is_not_retried(self):
+        boom = Exception("some other failure")
+        with self.assertRaises(Exception):
+            self._run([boom, None])
 
 
 if __name__ == "__main__":

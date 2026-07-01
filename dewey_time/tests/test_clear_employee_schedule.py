@@ -62,7 +62,9 @@ class TestClearEmployeeSchedule(unittest.TestCase):
         "dewey_time.attendance_engine.schedule_resolver._list_employee_shift_assignment_names",
         return_value=["SA-1"],
     )
-    def test_clear_deletes_linked_checkins_before_cancel(self, _sas, _ssas, _flags):
+    def test_clear_preserves_checkins_and_attendance(self, _sas, _ssas, _flags):
+        """Source punch data (Employee Checkin / HRMS Attendance) must survive a
+        schedule wipe. The assignment is force-removed without touching punches."""
         from dewey_time.attendance_engine.schedule_resolver import clear_employee_schedule
 
         doc = MagicMock()
@@ -72,23 +74,23 @@ class TestClearEmployeeSchedule(unittest.TestCase):
         doc.start_date = "2026-05-01"
         doc.end_date = "2026-05-31"
         frappe.get_doc.return_value = doc
-
-        def get_all_side_effect(doctype, filters=None, pluck=None):
-            if doctype == "Employee Checkin":
-                return ["EMP-CKIN-1"]
-            if doctype == "Attendance":
-                return []
-            return []
-
-        frappe.get_all = MagicMock(side_effect=get_all_side_effect)
+        frappe.get_all = MagicMock(return_value=[])
         frappe.db.table_exists = MagicMock(return_value=True)
 
         clear_employee_schedule("DI-1138")
 
+        # Assignment is removed and cancelled...
         frappe.delete_doc.assert_any_call(
-            "Employee Checkin", "EMP-CKIN-1", force=1, ignore_permissions=True
+            "Shift Assignment", "SA-1", force=1, ignore_permissions=True
         )
         doc.cancel.assert_called_once()
+        # ...but nothing ever deletes a checkin or attendance row.
+        deleted_doctypes = [
+            (c.args[0] if c.args else c.kwargs.get("doctype"))
+            for c in frappe.delete_doc.call_args_list
+        ]
+        self.assertNotIn("Employee Checkin", deleted_doctypes)
+        self.assertNotIn("Attendance", deleted_doctypes)
 
     @patch("dewey_time.attendance_engine.schedule_resolver._count_attendance_flags", return_value=3)
     @patch(

@@ -1124,56 +1124,16 @@ def _disable_ssa(ssa_name: str) -> None:
     doc.save(ignore_permissions=True)
 
 
-def _shift_assignment_checkin_filters(doc) -> dict:
-    """Match HRMS Shift Assignment.validate_employee_checkin."""
-    filters: dict = {"employee": doc.employee, "shift": doc.shift_type}
-    if doc.end_date:
-        filters["time"] = ["between", [doc.start_date, doc.end_date]]
-    else:
-        filters["time"] = [">=", doc.start_date]
-    return filters
-
-
-def _shift_assignment_attendance_filters(doc) -> dict:
-    """Match HRMS Shift Assignment.validate_attendance."""
-    filters: dict = {"employee": doc.employee, "shift": doc.shift_type}
-    if doc.end_date:
-        filters["attendance_date"] = ["between", [doc.start_date, doc.end_date]]
-    else:
-        filters["attendance_date"] = [">=", doc.start_date]
-    return filters
-
-
-def _clear_hrms_blockers_for_shift_assignment(doc) -> None:
-    """
-    Dev: delete HRMS rows that block Shift Assignment cancel
-    (Employee Checkin + Attendance in the assignment window).
-    """
-    if frappe.db.table_exists("Employee Checkin"):
-        checkins = frappe.get_all(
-            "Employee Checkin",
-            filters=_shift_assignment_checkin_filters(doc),
-            pluck="name",
-        )
-        for checkin_name in checkins:
-            _force_delete("Employee Checkin", checkin_name)
-
-    if frappe.db.table_exists("Attendance"):
-        attendance_names = frappe.get_all(
-            "Attendance",
-            filters=_shift_assignment_attendance_filters(doc),
-            pluck="name",
-        )
-        for attendance_name in attendance_names:
-            attendance = frappe.get_doc("Attendance", attendance_name)
-            _cancel_if_submitted(attendance)
-            _force_delete("Attendance", attendance_name)
-
-
 def _delete_shift_assignment(name: str) -> tuple[str | None, str]:
-    """Returns (cancelled_name or None, deleted_name). Guaranteed to remove the row."""
+    """Returns (cancelled_name or None, deleted_name). Guaranteed to remove the row.
+
+    Employee Checkin / HRMS Attendance are deliberately preserved. They used to be
+    deleted here to clear HRMS's cancel blockers, but `_force_delete` now removes the
+    assignment via raw SQL regardless of those links — so a schedule wipe no longer
+    destroys source punch data (which is device-origin and expensive/impossible to
+    recreate, whereas the flag engine re-derives everything else from it).
+    """
     doc = frappe.get_doc("Shift Assignment", name)
-    _clear_hrms_blockers_for_shift_assignment(doc)
     cancelled = name if _cancel_if_submitted(doc) else None
     _force_delete("Shift Assignment", name)
     return cancelled, name

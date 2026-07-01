@@ -142,6 +142,25 @@ class TestNaming(unittest.TestCase):
         )
         self.assertEqual(name, "PAT_MON-FRI_FT_0800_1700_L1200_1300")
 
+    def test_proposed_pat_name_no_double_lunch_for_identity_shift_type(self):
+        """When the Shift Type name already encodes lunch/grace (identity naming), the
+        PAT name must NOT repeat the lunch (regression: …_G10_L1200_1300)."""
+        from dewey_time.attendance_engine.schedule_resolver import proposed_pat_name
+
+        profile = {
+            "start_time": "07:00:00",
+            "end_time": "17:00:00",
+            "lunch_start": "12:00:00",
+            "lunch_end": "13:00:00",
+            "grace_minutes": 10,
+        }
+        name = proposed_pat_name(
+            ["Monday", "Tuesday", "Wednesday", "Thursday"],
+            "FT_0700_1700_L1200_1300_G10",
+            profile,
+        )
+        self.assertEqual(name, "PAT_MON-THU_FT_0700_1700_L1200_1300_G10")
+
     def test_compact_days_label_ranges(self):
         from dewey_time.attendance_engine.schedule_resolver import (
             WEEKDAYS,

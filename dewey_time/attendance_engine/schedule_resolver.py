@@ -322,7 +322,11 @@ def proposed_pat_name(days: list[str], shift_type_name: str, profile: dict) -> s
     lunch_end = profile.get("lunch_end")
     lunch_suffix = ""
     if lunch_start and lunch_end:
-        lunch_suffix = f"_L{time_to_hhmm(lunch_start)}_{time_to_hhmm(lunch_end)}"
+        encoded = f"_L{time_to_hhmm(lunch_start)}_{time_to_hhmm(lunch_end)}"
+        # shift_type_name already encodes lunch/grace (see proposed_shift_type_name), so
+        # only add the lunch suffix for a bare/legacy name — never double-encode it.
+        if encoded not in shift_type_name:
+            lunch_suffix = encoded
     return f"PAT_{compact}_{shift_type_name}{lunch_suffix}"
 
 

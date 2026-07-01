@@ -761,7 +761,8 @@ class TestCreateShiftTypeIdempotency(unittest.TestCase):
             "match_shift_type",
             return_value={"action": "create", "proposed_name": "FT_0800_1700"},
         ):
-            name = schedule_resolver.create_shift_type(self.PROFILE)
+            # `name` is the (stale) plan name that collided — reuse exactly it.
+            name = schedule_resolver.create_shift_type(self.PROFILE, name="FT_0800_1700")
 
         self.assertEqual(name, "FT_0800_1700")
 

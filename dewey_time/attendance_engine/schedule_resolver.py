@@ -799,11 +799,14 @@ def _reuse_shift_type_or_conflict(profile: dict, proposed: str) -> str | None:
 
 
 def _is_duplicate_entry_error(exc: Exception) -> bool:
-    text = str(exc).lower()
-    if "duplicate entry" in text or "1062" in text:
+    # Frappe's DuplicateEntryError stringifies as ('Doctype', 'name', IntegrityError(1062, ...))
+    # and MariaDB's own error carries "Duplicate entry ... 1062", so the text match is the
+    # reliable signal. Also accept the exception class name directly (checked via __name__ so
+    # we never pass a non-type to isinstance).
+    if type(exc).__name__ in ("DuplicateEntryError", "UniqueValidationError"):
         return True
-    dee = getattr(frappe.exceptions, "DuplicateEntryError", None)
-    return bool(dee is not None and isinstance(exc, dee))
+    text = str(exc).lower()
+    return "duplicate entry" in text or "1062" in text
 
 
 def create_shift_type(profile: dict, *, name: str | None = None) -> str:

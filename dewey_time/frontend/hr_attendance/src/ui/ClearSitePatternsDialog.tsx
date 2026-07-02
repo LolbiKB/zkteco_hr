@@ -25,9 +25,10 @@ import { Label } from "@/components/ui/label";
 import {
   CLEAR_SITE_PATTERNS_CONFIRM_PHRASE,
   useClearSitePatterns,
+  type WipeStep,
 } from "@/hooks/useClearSitePatterns";
 import { cn } from "@/lib/utils";
-import type { ClearSitePatternsPreview, ClearSitePatternsResult } from "@/types/schedule";
+import type { ClearSitePatternsPreview } from "@/types/schedule";
 
 export type ClearSitePatternsDialogProps = {
   onSuccess?: () => void;
@@ -38,11 +39,12 @@ export type ClearSitePatternsDialogProps = {
 export function ClearSitePatternsDialog(props: ClearSitePatternsDialogProps) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<ClearSitePatternsPreview | null>(null);
-  const [result, setResult] = useState<ClearSitePatternsResult | null>(null);
+  const [result, setResult] = useState<WipeStep | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [clearEmployeeData, setClearEmployeeData] = useState(true);
-  const { loadPreview, clearSitePatterns, loading, status, clearStatus } = useClearSitePatterns();
+  const { loadPreview, clearSitePatterns, loading, running, progress, status, clearStatus } =
+    useClearSitePatterns();
 
   const refreshPreview = useCallback(() => {
     setPreview(null);
@@ -143,23 +145,65 @@ export function ClearSitePatternsDialog(props: ClearSitePatternsDialogProps) {
             {result ? (
               <div className="space-y-3 rounded-lg border px-3 py-3">
                 <div className="flex items-start gap-2">
-                  <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                  {result.verified_empty ? (
+                    <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                  ) : (
+                    <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+                  )}
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-primary">
-                      {result.error_count ? "Partial wipe completed" : "Site patterns wiped"}
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        result.verified_empty ? "text-primary" : "text-destructive"
+                      )}
+                    >
+                      {result.verified_empty ? "Site wipe verified clean" : "Wipe incomplete — rows remain"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {result.verified_empty
+                        ? "All schedule tables confirmed empty."
+                        : "Some rows could not be removed. Re-run to finish."}
                     </p>
                   </div>
                 </div>
-                <ul className="space-y-1 text-xs text-muted-foreground">
-                  {result.employee_clear ? (
-                    <li>{result.employee_clear.cleared_count} employee(s) schedule data cleared</li>
-                  ) : null}
-                  <li>{result.deleted_shift_schedules.length} Shift Schedule(s) deleted</li>
-                  <li>{result.deleted_shift_types.length} Shift Type(s) deleted</li>
-                  {result.error_count ? (
-                    <li className="text-destructive">{result.error_count} error(s)</li>
-                  ) : null}
-                </ul>
+                {!result.verified_empty && result.remaining_counts ? (
+                  <ul className="space-y-1 text-xs text-destructive">
+                    {Object.entries(result.remaining_counts)
+                      .filter(([, count]) => count > 0)
+                      .map(([table, count]) => (
+                        <li key={table}>
+                          {count} {table} row(s) still present
+                        </li>
+                      ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : running ? (
+              <div className="space-y-3 rounded-lg border px-3 py-4">
+                <div className="flex items-center gap-2">
+                  <Loader2Icon className="size-4 animate-spin text-destructive" />
+                  <p className="text-sm font-medium">Wiping site patterns…</p>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-destructive transition-all duration-300"
+                    style={{
+                      width: `${
+                        progress && progress.total > 0
+                          ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
+                          : 5
+                      }%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {progress?.currentTable ? `Clearing ${progress.currentTable} · ` : ""}
+                  {(progress?.processed ?? 0).toLocaleString()} /{" "}
+                  {(progress?.total ?? 0).toLocaleString()} rows
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Runs in batches — keep this tab open until it finishes.
+                </p>
               </div>
             ) : (
               <>

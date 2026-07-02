@@ -1394,6 +1394,73 @@ def _hard_purge_residual(doctype: str) -> int:
     return len(remaining)
 
 
+# One bounded chunk per step call — keeps each HTTP request short (no gateway timeout)
+# and releases row locks between commits so the rest of the site stays responsive.
+_WIPE_BATCH = 2000
+
+
+def purge_site_wipe_table_batch(doctype: str, batch: int = _WIPE_BATCH) -> dict:
+    """Raw bulk-delete up to ``batch`` rows of ``doctype`` (child tables first).
+
+    Uses set-based SQL DELETE, not per-row ``delete_doc`` — a full-site prelaunch wipe
+    doesn't need controller/link/docstatus logic, and 30k+ generated Shift Assignments
+    are the whole reason the one-shot wipe timed out. Returns ``{deleted, remaining}``.
+    The caller commits between batches.
+    """
+    if not frappe.db.table_exists(doctype):
+        return {"deleted": 0, "remaining": 0}
+    names = frappe.get_all(doctype, pluck="name", limit_page_length=batch) or []
+    if names:
+        try:
+            for df in frappe.get_meta(doctype).get_table_fields():
+                frappe.db.delete(df.options, {"parent": ["in", names], "parenttype": doctype})
+        except Exception:
+            # No child tables / meta unavailable — parent delete below still runs.
+            pass
+        frappe.db.delete(doctype, {"name": ["in", names]})
+    return {"deleted": len(names), "remaining": _table_count(doctype)}
+
+
+def _site_wipe_tables(clear_employee_data: bool) -> list[str]:
+    """Tables to empty, in dependency order. Without employee-data clearing, only the
+    shared masters (Shift Schedule + Shift Type) are wiped."""
+    if clear_employee_data:
+        return list(_SITE_WIPE_TABLES)
+    return ["Shift Schedule", "Shift Type"]
+
+
+def clear_site_patterns_step(*, clear_employee_data: bool = True, batch: int = _WIPE_BATCH) -> dict:
+    """One bounded step of the site wipe, driven repeatedly by the client for progress.
+
+    Purges up to ``batch`` rows of the first non-empty wipe table. Returns per-table
+    counts (for a progress bar), the table it worked on, and ``done``/``verified_empty``
+    once every table is empty. Caller must commit.
+    """
+    tables = _site_wipe_tables(clear_employee_data)
+    counts = {table: _table_count(table) for table in tables}
+
+    target = next((table for table in tables if counts[table] > 0), None)
+    deleted = 0
+    if target is not None:
+        result = purge_site_wipe_table_batch(target, batch)
+        deleted = result["deleted"]
+        counts[target] = result["remaining"]
+
+    remaining_counts = {table: _table_count(table) for table in _SITE_WIPE_TABLES}
+    total_remaining = sum(counts.values())
+    done = total_remaining == 0
+    return {
+        "clear_employee_data": clear_employee_data,
+        "current_table": target,
+        "deleted": deleted,
+        "counts": counts,
+        "total_remaining": total_remaining,
+        "done": done,
+        "verified_empty": all(v == 0 for v in remaining_counts.values()) if done else False,
+        "remaining_counts": remaining_counts if done else None,
+    }
+
+
 def _sweep_remaining_shift_links() -> dict:
     """Remove any Shift Assignments / SSAs still on site after per-employee clear."""
     deleted_assignments: list[str] = []

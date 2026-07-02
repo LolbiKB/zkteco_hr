@@ -545,3 +545,83 @@ class TestClearSiteSchedulePatternsApi(unittest.TestCase):
         clear_fn.assert_called_once_with(clear_employee_data=True)
         frappe.db.commit.assert_called()
         self.assertTrue(result["ok"])
+
+
+class TestClearSitePatternsStep(unittest.TestCase):
+    """The wipe runs as bounded, committed steps so it never times out and can report
+    progress. Each step bulk-purges one batch of the first non-empty table."""
+
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.get_meta")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.get_all")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.count")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.delete")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.table_exists", return_value=True)
+    def test_purge_batch_bulk_deletes_and_reports(self, _te, delete, count, get_all, get_meta):
+        from dewey_time.attendance_engine.schedule_resolver import purge_site_wipe_table_batch
+
+        get_all.return_value = ["SA-1", "SA-2", "SA-3"]
+        count.return_value = 0  # empty after this batch
+        get_meta.return_value.get_table_fields.return_value = []  # no child tables
+
+        result = purge_site_wipe_table_batch("Shift Assignment", batch=2000)
+
+        self.assertEqual(result["deleted"], 3)
+        self.assertEqual(result["remaining"], 0)
+        delete.assert_any_call("Shift Assignment", {"name": ["in", ["SA-1", "SA-2", "SA-3"]]})
+
+    @patch("dewey_time.attendance_engine.schedule_resolver.purge_site_wipe_table_batch")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.count")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.table_exists", return_value=True)
+    def test_step_purges_first_nonempty_table(self, _te, count, purge):
+        import dewey_time.attendance_engine.schedule_resolver as sr
+
+        count.return_value = 4  # every table still has rows → not done
+        purge.return_value = {"deleted": 4, "remaining": 0}
+
+        result = sr.clear_site_patterns_step(clear_employee_data=True)
+
+        purge.assert_called_once_with("Attendance Flag", sr._WIPE_BATCH)
+        self.assertEqual(result["current_table"], "Attendance Flag")
+        self.assertEqual(result["deleted"], 4)
+        self.assertFalse(result["done"])
+
+    @patch("dewey_time.attendance_engine.schedule_resolver.purge_site_wipe_table_batch")
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.count", return_value=0)
+    @patch("dewey_time.attendance_engine.schedule_resolver.frappe.db.table_exists", return_value=True)
+    def test_step_reports_done_and_verified_when_empty(self, _te, _count, purge):
+        from dewey_time.attendance_engine.schedule_resolver import clear_site_patterns_step
+
+        result = clear_site_patterns_step(clear_employee_data=True)
+
+        purge.assert_not_called()  # nothing left to delete
+        self.assertTrue(result["done"])
+        self.assertTrue(result["verified_empty"])
+        self.assertIsNone(result["current_table"])
+        self.assertEqual(result["remaining_counts"]["Shift Type"], 0)
+
+
+class TestClearSitePatternsStepApi(unittest.TestCase):
+    def setUp(self):
+        frappe.get_roles.return_value = ["System Manager"]
+        frappe.session.user = "admin@example.com"
+        frappe.form_dict = {}
+        frappe.throw = MagicMock(side_effect=lambda msg, *a, **k: (_ for _ in ()).throw(Exception(msg)))
+
+    @patch("dewey_time.attendance_engine.dev_tools.clear_site_patterns_step")
+    def test_api_requires_confirm_phrase(self, step_fn):
+        import dewey_time.attendance_engine.dev_tools as dev_tools
+
+        with self.assertRaises(Exception):
+            dev_tools.clear_site_patterns_step_api(confirm_phrase="nope")
+        step_fn.assert_not_called()
+
+    @patch("dewey_time.attendance_engine.dev_tools.clear_site_patterns_step")
+    def test_api_with_phrase_runs_a_step_and_commits(self, step_fn):
+        import dewey_time.attendance_engine.dev_tools as dev_tools
+
+        step_fn.return_value = {"done": False, "current_table": "Shift Assignment", "total_remaining": 10}
+        result = dev_tools.clear_site_patterns_step_api(confirm_phrase="CLEAR SITE PATTERNS")
+
+        step_fn.assert_called_once_with(clear_employee_data=True)
+        frappe.db.commit.assert_called()
+        self.assertEqual(result["current_table"], "Shift Assignment")

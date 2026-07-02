@@ -13,6 +13,7 @@ from dewey_time.attendance_engine.schedule_resolver import (
     CLEAR_SITE_PATTERNS_CONFIRM_PHRASE,
     clear_all_employee_schedules,
     clear_employee_schedule,
+    clear_site_patterns_step,
     clear_site_schedule_patterns,
     preview_clear_all_employee_schedules,
     preview_clear_employee_schedule,
@@ -254,6 +255,33 @@ def clear_site_schedule_patterns_api(confirm=None, confirm_phrase=None, clear_em
 
     try:
         result = clear_site_schedule_patterns(clear_employee_data=clear_first)
+        frappe.db.commit()
+        return result
+    except Exception:
+        frappe.db.rollback()
+        raise
+
+
+@frappe.whitelist()
+def clear_site_patterns_step_api(confirm_phrase=None, clear_employee_data=None):
+    """Dev-only: one bounded, committed step of the site wipe. The client calls this
+    repeatedly (showing progress) until ``done`` — each call stays well under the
+    request timeout and releases locks, unlike the one-shot ``clear_site_schedule_patterns_api``.
+    The confirm phrase is re-checked on every call (it's destructive on every call)."""
+    _require_system_manager_for_clear()
+
+    phrase = (confirm_phrase or frappe.form_dict.get("confirm_phrase") or "").strip()
+    if phrase != CLEAR_SITE_PATTERNS_CONFIRM_PHRASE:
+        frappe.throw(f'Type "{CLEAR_SITE_PATTERNS_CONFIRM_PHRASE}" to confirm')
+
+    clear_first = _parse_include_all_active(
+        clear_employee_data
+        if clear_employee_data is not None
+        else frappe.form_dict.get("clear_employee_data", 1)
+    )
+
+    try:
+        result = clear_site_patterns_step(clear_employee_data=clear_first)
         frappe.db.commit()
         return result
     except Exception:
